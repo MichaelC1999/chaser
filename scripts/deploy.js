@@ -9,27 +9,44 @@ const ethers = require("ethers")
 
 async function main() {
   // STRATEGY CONTRACT DEPLOYED HERE
-  const strat = await hre.ethers.getContractAt("InvestmentStrategyLogic", "0xFa54f50C444d2EB1bC021aCf3d4f0bdE2cc9C037")
+  // const strat = await hre.ethers.getContractAt("InvestmentStrategyLogic", "0x571061a5190E096A76f76b843b511e9b962f3183")
+
+  // console.log(await strat.strategySourceCode())
 
 
+  // 0x9e6CED8aE154fFCaAB3Bb9dC6E9d78374E69C2a6
 
 
-  // const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  // const unlockTime = currentTimestampInSeconds + 60;
+  // const cons = await hre.ethers.getContractAt("FunctionsConsumer", "0x9823b0F589229527ec4E14E47cA6852E963D770e")
 
-  // const lockedAmount = hre.ethers.parseEther("0.001");
+  // console.log(await cons.donId())
 
-  // // const lock = await hre.ethers.deployContract("FunctionsConsumer", ["0xb83E47C2bC239B3bf370bc41e1459A34b41238D0", "0x66756e2d657468657265756d2d7365706f6c69612d3100000000000000000000"], {
-  // //   value: 0,
-  // // });
+  // const cons2 = await hre.ethers.getContractAt("FunctionsConsumer", "0xBfb4aA2f8B275105b87c60F820C5b47Eb8b761da")
 
-  // const lock = await hre.ethers.deployContract("InvestmentStrategyLogic", [], {
+  // console.log(await cons2.donId())
+
+  //Deploy the new bridgingConduit
+  // Manually deploy the FunctionConsumer with donid bytes 0x66756e2d657468657265756d2d7365706f6c69612d3100000000000000000000, manually provide the conduit address
+  // 
+  // const lock2 = await hre.ethers.deployContract("BridgingConduit", [], {
   //   value: 0,
   // });
+  // await lock2.waitForDeployment(); //0x571061a5190E096A76f76b843b511e9b962f3183 ;
 
-  // await lock.waitForDeployment();
 
-  // console.log(lock)
+
+  const lock1 = await hre.ethers.deployContract("FunctionsConsumer", ["0xb83E47C2bC239B3bf370bc41e1459A34b41238D0", "0x66756e2d657468657265756d2d7365706f6c69612d3100000000000000000000"], {
+    value: 0,
+  });
+
+
+  await lock1.waitForDeployment(); //0x84a824C2CDb6d6381E70767305d327B636cBCB23
+
+  console.log(lock1.target)
+  // const conduit = await hre.ethers.getContractAt("BridgingConduit", await cons2.bridgingConduit())
+  // console.log(await conduit.currentDepositPoolId())
+  // console.log(await conduit.graphFunctionAddress()) //0x86ACa2eDbD5B713d76648bbFe87a25eab22F4401
+  // BRIDGECONDUIT 0x19c43eB4AAeB16dBE87a4D4A3ACAe4FbA253B215
 
   // console.log(
   //   `Lock with ${ethers.formatEther(

@@ -62,6 +62,13 @@ interface IBridgingConduit is IAllocatorConduit {
     /*** State Variables                                                                        ***/
     /**********************************************************************************************/
 
+    function currentDepositPoolId() external view returns (string calldata);
+
+    function currentDepositProtocolSlug()
+        external
+        view
+        returns (string calldata);
+
     /**
      *  @notice Returns the pool associated with the spark conduit.
      *  @return The address of the pool.

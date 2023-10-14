@@ -6,6 +6,7 @@ import {IFunctionsConsumer} from "./interfaces/IFunctionsConsumer.sol";
 import {IStrategy} from "./interfaces/IStrategy.sol";
 import {IInterestRateDataSource} from "./interfaces/IInterestRateDataSource.sol";
 import {IERC20} from "./interfaces/IERC20.sol";
+import {FunctionsConsumer} from "./FunctionsConsumer.sol";
 
 interface PotLike {
     function dsr() external view returns (uint256);
@@ -24,7 +25,7 @@ interface RegistryLike {
     function buffers(bytes32 ilk) external view returns (address buffer);
 }
 
-abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
+contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
     /**********************************************************************************************/
     /*** Storage                                                                                ***/
     /**********************************************************************************************/
@@ -96,6 +97,8 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
 
     address public arranger;
 
+    address public DAI = address(0x6B175474E89094C44Da98b954EedeAC495271d0F);
+
     mapping(address => uint256) public totalDeposits;
     mapping(address => uint256) public totalRequestedFunds;
     mapping(address => uint256) public totalWithdrawableFunds;
@@ -117,7 +120,9 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
     // records how much has been sent back to conduit thru bridge
     mapping(uint256 => uint256) public cumulativeUnbridged;
 
-    mapping(uint256 => address) public chainToSecondaryRouter;
+    mapping(uint256 => address) public chainToSubconduit;
+
+    mapping(bytes32 => uint256) public hashedSlugToChainId;
 
     mapping(bytes32 => address) public hashedSlugToFunctionsContract;
 
@@ -126,10 +131,9 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
 
     string public currentDepositPoolId;
     string public currentDepositProtocolSlug;
+    address public currentDepositTokenAddress;
 
     address public strategyContract;
-
-    address public graphFunctionAddress;
 
     /**********************************************************************************************/
     /*** Modifiers                                                                              ***/
@@ -157,10 +161,8 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
     /*** Constructor                                                                            ***/
     /**********************************************************************************************/
 
-    constructor(address functionContractAddress, address strategyAddress) {
+    constructor() {
         currentFundsAddress = address(this);
-        graphFunctionAddress = functionContractAddress;
-        strategyContract = strategyAddress;
     }
 
     /**********************************************************************************************/
@@ -212,7 +214,7 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
         // It is assumed that deposits will be made to conduit even when funds are held elsewhere.
         if (
             currentFundsChain != 1 &&
-            chainToSecondaryRouter[currentFundsChain] != address(0)
+            chainToSubconduit[currentFundsChain] != address(0)
         ) {
             // update bridging metrics
             cumulativeBridged[currentFundsChain] += amount;
@@ -229,7 +231,7 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
 
         if (
             currentFundsChain != 1 &&
-            chainToSecondaryRouter[currentFundsChain] != address(0)
+            chainToSubconduit[currentFundsChain] != address(0)
         ) {
             // BRIDGE FUNDS
             // SHOULD FUNDS BE BRIDGED AT ALL IN THIS FUNCTION?
@@ -277,10 +279,58 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
         // *********
     }
 
-    function executeMovePosition() external {
+    function executeMovePosition(
+        string memory newPoolId
+    ) external // string memory newProtocolSlug,
+    // string memory newTokenAddress
+    {
+        // Instantiate FunctionsConsumer from msg.sender
+        // if (
+        //     keccak256(abi.encode(currentDepositPoolId)) ==
+        //     keccak256(abi.encode(newPoolId))
+        // ) {
+        //     // If the oracle returns the current Pool Id, no need to update states
+        // }
+
+        // uint256 newChainId = hashedSlugToChainId[
+        //     keccak256(abi.encode(newProtocolSlug))
+        // ];
+
+        // if (
+        //     IERC20(DAI).balanceOf(address(this)) > 0 &&
+        //     newChainId != currentFundsChain
+        // ) {
+        //     // How to get the chain of newPoolId?
+        //     // -FunctionsConsumer should cache the chainId of the
+        //     bridgeToSubconduit();
+        // }
+        currentDepositPoolId = newPoolId;
+        // Read poolId, tokenAddress, protocol-slug
+        // If poolId same as currentPoolId, RETURN HERE
+        // Check if current deposit is subconduit or if current protocol slug is empty
+        // If the deposit is in protocol, execute withdraw sequence
+        // ****************************
+        // WITHDRAW SEQUENCE
+        // read following values currentFundsChain; currentFundsAddress; currentDepositPoolId; currentDepositProtocolSlug; currentDepositTokenAddress;
+        // get the externalFunctionConstructor withdraw sequence
+        // ****************************
+        // RESOLVE BRIDGING DIFFERENCES (SEND FUNDS FROM CONDUIT TO SUBCONDUIT, MOVE FUNDS FROM SUBCONDUIT TO OTHER SUBCONDUIT ON DIFFERENT CHAIN)
+        // UPDATE CONDUIT STATES
+        // UPDATE SUBCONDUIT STATES (USING CCIP, UPDATE THE STATES TO REFLECT NEW POSITION TO MOVE FUNDS TO)
+        // INITIATE SUBCONDUIT DEPOSIT (USING CCIP, ATTEMPT TO DEPOSIT FUNDS INTO THE NEW POSITION IF SOME FUNDS ALREADY IN SUBCONDUIT. )
+        // *******************************
+        // *******************************
+        // *******************************
+        // *******************************
         // This is the callback to execute when the oracle has a result
         // The only data in the response is a poolId
         // If its not the same as currentPoolId nor address(0), then execute the move
+        // SET THE FOLLOWING STATE TO REFLECT NEW POSITION
+        //     uint public currentFundsChain = 1;
+        // address public currentFundsAddress;
+        // string public currentDepositPoolId;
+        // string public currentDepositProtocolSlug;
+        // address public currentDepositTokenAddress;
         // *******************************
         // Handle already deposited funds
         // THIS SECTION SHOULD BE ALL PSEUDOCODE, DONT PRIORITIZE THIS CASE
@@ -318,7 +368,7 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
 
         // Update deposit records to account for new balances
 
-        // CCIP interaction to destination chain secondaryRouter to wthdraw deposited funds and transfer back to 'destination' through acx bridge
+        // CCIP interaction to destination chain subconduit to wthdraw deposited funds and transfer back to 'destination' through acx bridge
 
         emit Withdraw(ilk, asset, destination, amount);
     }
@@ -398,18 +448,18 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
         emit CancelFundRequest(ilk, asset);
     }
 
-    function addSecondaryRouter(
+    function addSubconduit(
         uint256 chainId,
-        address secondaryRouterAddress
+        address subconduitAddress
     ) external {
-        chainToSecondaryRouter[chainId] = secondaryRouterAddress;
+        chainToSubconduit[chainId] = subconduitAddress;
     }
 
-    function bridgeToSecondaryRouter() external {
+    function bridgeToSubconduit() public {
         // Implementation
     }
 
-    function unbridgeFromSecondaryRouter() external {
+    function unbridgeFromSubconduit() public {
         // Implementation
     }
 
@@ -483,18 +533,16 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
 
     function addProtocolSupport(
         string[] memory slugs,
-        address[] memory externalFunctionConstructor
+        uint256[] memory chainIds,
+        address externalFunctionConstructor
     ) external {
-        // This function currently takes the slug without the network suffix
-        // The subgraph is queried with the network suffix
-        // Why not pass in array of protocol slugs with network suffixes?
-        // Makes chainIds redundant, cant flat approve a protocol by name regardless of chains
-        // Are the chain Ids really needed? Could be replaced by full protocol+network slug
-
+        // Slugs contain protocol+network
+        // For now caller manually passes in the
         // This function is to be called by subDAO after voting to add support for a protocol
+        // -when prtocol support is added the slug is fully protocol+network. slug => externalfunctionconstructor, slug => chainid, chainId => subconuit
         require(
-            slugs.length == externalFunctionConstructor.length,
-            "ChainIds and externalFunctionConstructors lengths must match"
+            slugs.length == chainIds.length,
+            "chainIds and slugs lengths must match"
         );
         require(
             slugs.length < 10,
@@ -503,9 +551,10 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
 
         for (uint256 i = 0; i < slugs.length; i++) {
             bytes32 slugHash = keccak256(abi.encodePacked(slugs[i]));
+            hashedSlugToChainId[slugHash] = chainIds[i];
             hashedSlugToFunctionsContract[
                 slugHash
-            ] = externalFunctionConstructor[i];
+            ] = externalFunctionConstructor;
         }
     }
 
@@ -555,6 +604,81 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
         maxWithdraw_ = withdrawableFunds[asset][ilk];
     }
 
+    function cancelFundRequest(bytes32 ilk, address asset) external override {}
+
+    function enabled(address asset) external view override returns (bool) {}
+
+    function getAssetData(
+        address asset
+    ) external view override returns (bool, uint256, uint256) {}
+
+    function getAvailableLiquidity(
+        address asset
+    ) external view override returns (uint256) {}
+
+    function getDeposits(address asset) external view returns (uint256) {}
+
+    function getInterestData(
+        address asset
+    ) external view override returns (InterestData memory data) {}
+
+    function getPosition(
+        address asset
+    ) external view returns (uint256, uint256) {}
+
+    function getRequestedFunds(address asset) external view returns (uint256) {}
+
+    function getTotalDeposits(
+        address asset
+    ) external view override returns (uint256) {}
+
+    function getTotalRequestedFunds(
+        address asset
+    ) external view override returns (uint256) {}
+
+    function pool() external view override returns (address) {}
+
+    function pot() external view override returns (address) {}
+
+    function requestFunds(
+        bytes32 ilk,
+        address asset,
+        uint256 amount
+    ) external override {}
+
+    function requestedShares(
+        address asset,
+        bytes32 ilk
+    ) external view returns (uint256) {}
+
+    function shares(
+        address asset,
+        bytes32 ilk
+    ) external view override returns (uint256) {}
+
+    function totalRequestedShares(
+        address asset
+    ) external view override returns (uint256) {}
+
+    function totalShares(
+        address asset
+    ) external view override returns (uint256) {}
+
+    function getDeposits(
+        address asset,
+        bytes32 ilk
+    ) external view returns (uint256) {}
+
+    function getPosition(
+        address asset,
+        bytes32 ilk
+    ) external view returns (uint256 deposits, uint256 requestedFunds) {}
+
+    function getRequestedFunds(
+        address asset,
+        bytes32 ilk
+    ) external view returns (uint256) {}
+
     /**********************************************************************************************/
     /*** Internal Functions                                                                     ***/
     /**********************************************************************************************/
@@ -576,5 +700,21 @@ abstract contract SparkConduit is IBridgingConduit, IInterestRateDataSource {
 
     function _rayDiv(uint256 x, uint256 y) internal pure returns (uint256 z) {
         z = (x * 1e27) / y;
+    }
+
+    function toString(address _addr) internal pure returns (string memory) {
+        bytes32 value = bytes32(uint256(uint160(_addr)));
+        bytes memory alphabet = "0123456789abcdef";
+
+        bytes memory str = new bytes(42);
+        str[0] = "0";
+        str[1] = "x";
+
+        for (uint256 i = 0; i < 20; i++) {
+            str[2 + i * 2] = alphabet[uint8(value[i + 12] >> 4)];
+            str[3 + i * 2] = alphabet[uint8(value[i + 12] & 0x0f)];
+        }
+
+        return string(str);
     }
 }

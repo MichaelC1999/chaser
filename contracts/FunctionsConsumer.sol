@@ -6,6 +6,7 @@ import {ConfirmedOwner} from "@chainlink/contracts/src/v0.8/shared/access/Confir
 import {FunctionsRequest} from "@chainlink/contracts/src/v0.8/functions/dev/v1_0_0/libraries/FunctionsRequest.sol";
 import {IFunctionsConsumer} from "./interfaces/IFunctionsConsumer.sol";
 import {IBridgingConduit} from "./interfaces/IBridgingConduit.sol";
+import {BridgingConduit} from "./BridgingConduit.sol";
 
 contract FunctionsConsumer is
     IFunctionsConsumer,
@@ -20,16 +21,18 @@ contract FunctionsConsumer is
     bytes public s_lastResponse;
     bytes public s_lastError;
 
+    string public requestProtocolSlug;
+    string public requestTokenAddress;
+
     address public bridgingConduit;
 
     constructor(
         address router,
-        bytes32 _donId,
-        address _bridgingConduit
+        bytes32 _donId
     ) FunctionsClient(router) ConfirmedOwner(msg.sender) {
         donId = _donId;
-        bridgingConduit = _bridgingConduit;
-        // This contract will be deployed by factory after BridgingConduit
+        bridgingConduit = address(0x909EF9150fef193b5e00B967A3430E05903d861F);
+        // This contract will be deployed by BridgingConduit for security purposes
         // Pass BridgingConduit address in constructor to call conduit functions upon request fullfillment
     }
 
@@ -66,14 +69,32 @@ contract FunctionsConsumer is
             FunctionsRequest.CodeLanguage.JavaScript,
             source
         );
-        req.secretsLocation = secretsLocation;
-        req.encryptedSecretsReference = encryptedSecretsReference;
+
+        string memory currentPoolId = IBridgingConduit(bridgingConduit)
+            .currentDepositPoolId();
+        string memory currentProtocolSlug = IBridgingConduit(bridgingConduit)
+            .currentDepositProtocolSlug();
+        string[] memory argsToPass = new string[](4);
         if (args.length > 0) {
-            req.setArgs(args);
+            argsToPass[0] = currentPoolId;
+            argsToPass[1] = currentProtocolSlug;
+            argsToPass[2] = args[2];
+            argsToPass[3] = args[3];
+
+            requestProtocolSlug = args[2];
+            requestTokenAddress = args[3];
+            req.setArgs(argsToPass);
         }
-        if (bytesArgs.length > 0) {
-            req.setBytesArgs(bytesArgs);
-        }
+        // if (
+        //     keccak256(abi.encodePacked(requestProtocolSlug)) !=
+        //     keccak256(abi.encodePacked(args[0]))
+        // ) {
+        //     requestProtocolSlug = args[0];
+        // }
+        // if (requestTokenAddress != address(bytes20(bytes(args[1])))) {
+        //     requestTokenAddress = address(bytes20(bytes(args[1])));
+        // }
+
         s_lastRequestId = _sendRequest(
             req.encodeCBOR(),
             subscriptionId,
@@ -91,52 +112,12 @@ contract FunctionsConsumer is
         s_lastResponse = response;
         s_lastError = err;
 
+        BridgingConduit(bridgingConduit).executeMovePosition(
+            string(response)
+            // requestProtocolSlug,
+            // requestTokenAddress
+        );
+
         // call executeMovePosition, passing in response
-    }
-
-    function bytesToString() public view returns (string memory stringData) {
-        uint256 blank = 0; //blank 32 byte value
-        uint256 length = s_lastResponse.length;
-
-        uint cycles = s_lastResponse.length / 0x20;
-        uint requiredAlloc = length;
-
-        if (
-            length % 0x20 > 0
-        ) //optimise copying the final part of the bytes - to avoid looping with single byte writes
-        {
-            cycles++;
-            requiredAlloc += 0x20; //expand memory to allow end blank, so we don't smack the next stack entry
-        }
-
-        stringData = new string(requiredAlloc);
-
-        //copy data in 32 byte blocks
-        bytes memory local_response = s_lastResponse;
-        assembly {
-            let cycle := 0
-
-            for {
-                let mc := add(stringData, 0x20) //pointer into bytes we're writing to
-                let cc := add(local_response, 0x20) //pointer to where we're reading from
-            } lt(cycle, cycles) {
-                mc := add(mc, 0x20)
-                cc := add(cc, 0x20)
-                cycle := add(cycle, 0x01)
-            } {
-                mstore(mc, mload(cc))
-            }
-        }
-
-        //finally blank final bytes and shrink size (part of the optimisation to avoid looping adding blank bytes1)
-        if (length % 0x20 > 0) {
-            uint offsetStart = 0x20 + length;
-            assembly {
-                let mc := add(stringData, offsetStart)
-                mstore(mc, mload(add(blank, 0x20)))
-                //now shrink the memory back so the returned object is the correct size
-                mstore(stringData, length)
-            }
-        }
     }
 }

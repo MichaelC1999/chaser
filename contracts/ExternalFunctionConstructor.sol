@@ -28,4 +28,6 @@ contract ExternalFunctionConstructor {
     // function updateWithdrawInputs() external {
     //     // This function updates the hardcoded inputs saved to make the interactions depositing from external protocol
     // }
+
+    // function readPoolTokenAddress
 }
