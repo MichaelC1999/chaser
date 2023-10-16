@@ -5,7 +5,9 @@ import {IBridgingConduit} from "./interfaces/IBridgingConduit.sol";
 import {IFunctionsConsumer} from "./interfaces/IFunctionsConsumer.sol";
 import {IStrategy} from "./interfaces/IStrategy.sol";
 import {IInterestRateDataSource} from "./interfaces/IInterestRateDataSource.sol";
+import {SpokePoolInterface} from "./interfaces/ISpokePoolInterface.sol";
 import {IERC20} from "./interfaces/IERC20.sol";
+import {TestToken} from "./TestToken.sol";
 import {FunctionsConsumer} from "./FunctionsConsumer.sol";
 
 interface PotLike {
@@ -97,7 +99,8 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
 
     address public arranger;
 
-    address public DAI = address(0x6B175474E89094C44Da98b954EedeAC495271d0F);
+    address public daiAddress =
+        address(0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6);
 
     mapping(address => uint256) public totalDeposits;
     mapping(address => uint256) public totalRequestedFunds;
@@ -120,13 +123,13 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
     // records how much has been sent back to conduit thru bridge
     mapping(uint256 => uint256) public cumulativeUnbridged;
 
-    mapping(uint256 => address) public chainToSubconduit;
+    mapping(uint256 => address) public chainIdToSubconduit;
 
     mapping(bytes32 => uint256) public hashedSlugToChainId;
 
     mapping(bytes32 => address) public hashedSlugToFunctionsContract;
 
-    uint public currentFundsChain = 1;
+    uint256 public currentFundsChain = 1;
     address public currentFundsAddress;
 
     string public currentDepositPoolId;
@@ -134,6 +137,11 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
     address public currentDepositTokenAddress;
 
     address public strategyContract;
+
+    address public spokePoolAddress =
+        address(0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96);
+
+    address public testTokenAddress;
 
     /**********************************************************************************************/
     /*** Modifiers                                                                              ***/
@@ -163,6 +171,8 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
 
     constructor() {
         currentFundsAddress = address(this);
+        // TestToken testToken = new TestToken();
+        testTokenAddress = address(0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9);
     }
 
     /**********************************************************************************************/
@@ -214,7 +224,7 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         // It is assumed that deposits will be made to conduit even when funds are held elsewhere.
         if (
             currentFundsChain != 1 &&
-            chainToSubconduit[currentFundsChain] != address(0)
+            chainIdToSubconduit[currentFundsChain] != address(0)
         ) {
             // update bridging metrics
             cumulativeBridged[currentFundsChain] += amount;
@@ -231,7 +241,7 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
 
         if (
             currentFundsChain != 1 &&
-            chainToSubconduit[currentFundsChain] != address(0)
+            chainIdToSubconduit[currentFundsChain] != address(0)
         ) {
             // BRIDGE FUNDS
             // SHOULD FUNDS BE BRIDGED AT ALL IN THIS FUNCTION?
@@ -279,32 +289,40 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         // *********
     }
 
-    function executeMovePosition(
-        string memory newPoolId
-    ) external // string memory newProtocolSlug,
-    // string memory newTokenAddress
-    {
+    function executeMovePosition(string memory newPoolId) external {
+        FunctionsConsumer consumer = FunctionsConsumer(
+            //msg.sender
+            0x9F41D138657Dd79a0eae80ecff2aC3d64E3F35d8
+        );
+        string memory newProtocolSlug = consumer.requestProtocolSlug();
+        // string memory newTokenAddress = consumer.requestTokenAddress();
+        // address tokenAddress = stringToAddress((newTokenAddress));
+        // *********tokenAddress set to testToken while on testnet
+
         // Instantiate FunctionsConsumer from msg.sender
-        // if (
-        //     keccak256(abi.encode(currentDepositPoolId)) ==
-        //     keccak256(abi.encode(newPoolId))
-        // ) {
-        //     // If the oracle returns the current Pool Id, no need to update states
-        // }
+        if (
+            keccak256(abi.encode(currentDepositPoolId)) ==
+            keccak256(abi.encode(newPoolId))
+        ) {
+            // If the oracle returns the current Pool Id, no need to update states
+        }
 
         // uint256 newChainId = hashedSlugToChainId[
         //     keccak256(abi.encode(newProtocolSlug))
         // ];
+        uint256 newChainId = 421613;
 
-        // if (
-        //     IERC20(DAI).balanceOf(address(this)) > 0 &&
-        //     newChainId != currentFundsChain
-        // ) {
-        //     // How to get the chain of newPoolId?
-        //     // -FunctionsConsumer should cache the chainId of the
-        //     bridgeToSubconduit();
-        // }
+        uint256 conduitBalance = IERC20(testTokenAddress).balanceOf(
+            address(this)
+        );
+
+        if (conduitBalance > 0 && newChainId != currentFundsChain) {
+            // How to get the chain of newPoolId?
+            // -FunctionsConsumer should cache the chainId of the
+            bridgeToSubconduit(newChainId, testTokenAddress, conduitBalance);
+        }
         currentDepositPoolId = newPoolId;
+
         // Read poolId, tokenAddress, protocol-slug
         // If poolId same as currentPoolId, RETURN HERE
         // Check if current deposit is subconduit or if current protocol slug is empty
@@ -452,11 +470,30 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         uint256 chainId,
         address subconduitAddress
     ) external {
-        chainToSubconduit[chainId] = subconduitAddress;
+        chainIdToSubconduit[chainId] = subconduitAddress;
     }
 
-    function bridgeToSubconduit() public {
-        // Implementation
+    function bridgeToSubconduit(
+        uint256 destinationChainId,
+        address tokenAddress,
+        uint256 amount
+    ) public {
+        // UPDATE LEDGERS AND BALANCES
+        uint256 maxuint = 2 ** 256 - 1;
+        SpokePoolInterface spokePool = SpokePoolInterface(spokePoolAddress);
+        // ERC20 APPROVE
+        IERC20(tokenAddress).approve(spokePoolAddress, amount);
+        address subconduitAddress = chainIdToSubconduit[destinationChainId];
+        spokePool.deposit(
+            address(0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E),
+            tokenAddress,
+            amount,
+            destinationChainId,
+            49114542100000000,
+            uint32(block.timestamp),
+            "",
+            maxuint
+        );
     }
 
     function unbridgeFromSubconduit() public {

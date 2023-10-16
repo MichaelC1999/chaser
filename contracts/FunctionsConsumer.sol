@@ -112,12 +112,6 @@ contract FunctionsConsumer is
         s_lastResponse = response;
         s_lastError = err;
 
-        BridgingConduit(bridgingConduit).executeMovePosition(
-            string(response)
-            // requestProtocolSlug,
-            // requestTokenAddress
-        );
-
-        // call executeMovePosition, passing in response
+        BridgingConduit(bridgingConduit).executeMovePosition(string(response));
     }
 }

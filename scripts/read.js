@@ -23,8 +23,8 @@ async function main() {
 
     const cons2 = await hre.ethers.getContractAt("FunctionsConsumer", "0x9F41D138657Dd79a0eae80ecff2aC3d64E3F35d8")
 
-    const conduit = await hre.ethers.getContractAt("BridgingConduit", await cons2.bridgingConduit())
-    console.log(await cons2.s_lastResponse(), await conduit.currentDepositPoolId())
+    const conduit = await hre.ethers.getContractAt("BridgingConduit", "0x5641e9fD6CE3E8E8e4f23c6d939777fE616e5369")
+    console.log(await conduit.executeMovePosition("fdsf"))
     // console.log(await conduit.graphFunctionAddress()) //0x86ACa2eDbD5B713d76648bbFe87a25eab22F4401
     // BRIDGECONDUIT 0x19c43eB4AAeB16dBE87a4D4A3ACAe4FbA253B215
 
