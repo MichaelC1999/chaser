@@ -28,10 +28,11 @@ contract FunctionsConsumer is
 
     constructor(
         address router,
-        bytes32 _donId
+        bytes32 _donId,
+        address _bridgingConduit
     ) FunctionsClient(router) ConfirmedOwner(msg.sender) {
         donId = _donId;
-        bridgingConduit = address(0x909EF9150fef193b5e00B967A3430E05903d861F);
+        bridgingConduit = _bridgingConduit;
         // This contract will be deployed by BridgingConduit for security purposes
         // Pass BridgingConduit address in constructor to call conduit functions upon request fullfillment
     }

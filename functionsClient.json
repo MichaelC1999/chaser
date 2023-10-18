@@ -10,6 +10,11 @@
                 "internalType": "bytes32",
                 "name": "_donId",
                 "type": "bytes32"
+            },
+            {
+                "internalType": "address",
+                "name": "_bridgingConduit",
+                "type": "address"
             }
         ],
         "stateMutability": "nonpayable",
@@ -121,19 +126,6 @@
     },
     {
         "inputs": [],
-        "name": "bytesToString",
-        "outputs": [
-            {
-                "internalType": "string",
-                "name": "stringData",
-                "type": "string"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
         "name": "donId",
         "outputs": [
             {
@@ -199,9 +191,9 @@
         "name": "requestTokenAddress",
         "outputs": [
             {
-                "internalType": "address",
+                "internalType": "string",
                 "name": "",
-                "type": "address"
+                "type": "string"
             }
         ],
         "stateMutability": "view",

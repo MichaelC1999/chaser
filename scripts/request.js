@@ -16,7 +16,7 @@ const strategyAbi = require("../strategy.json");
 const ethers = require("ethers");
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') })
 
-const consumerAddress = "0x9F41D138657Dd79a0eae80ecff2aC3d64E3F35d8"; // REPLACE this with your Functions consumer address
+const consumerAddress = "0x7a475B488bDbA9EAe56812F7aeCf84b8949B9379"; // REPLACE this with your Functions consumer address
 const subscriptionId = 843; // REPLACE this with your subscription ID
 
 const makeRequestMumbai = async () => {
@@ -44,6 +44,7 @@ const makeRequestMumbai = async () => {
     args.push("aave-v3-ethereum");
     args.push("compound-v3-ethereum");
     args.push("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48");
+    // Cannot be higher than 300000
     const gasLimit = 300000;
 
     // Initialize ethers signer and provider to interact with the contracts onchain

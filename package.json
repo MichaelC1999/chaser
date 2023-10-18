@@ -9,6 +9,7 @@
     "@chainlink/env-enc": "^1.0.5",
     "@chainlink/functions-toolkit": "^0.2.5",
     "@openzeppelin/contracts": "^5.0.0",
+    "@uma/core": "^2.56.1",
     "dotenv": "^16.3.1",
     "ethers": "^6.8.0",
     "hardhat-deploy": "^0.11.42"

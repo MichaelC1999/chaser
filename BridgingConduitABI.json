@@ -244,7 +244,7 @@
             },
             {
                 "internalType": "address",
-                "name": "externalFunctionConstructor",
+                "name": "ExternalIntegrationFunctions",
                 "type": "address"
             }
         ],
@@ -277,6 +277,19 @@
         "outputs": [
             {
                 "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "assertionsUMA",
+        "outputs": [
+            {
+                "internalType": "contract DataAsserter",
                 "name": "",
                 "type": "address"
             }
@@ -519,12 +532,12 @@
     },
     {
         "inputs": [],
-        "name": "daiAddress",
+        "name": "currentStrategyScriptURL",
         "outputs": [
             {
-                "internalType": "address",
+                "internalType": "string",
                 "name": "",
-                "type": "address"
+                "type": "string"
             }
         ],
         "stateMutability": "view",
@@ -551,6 +564,19 @@
         "name": "deposit",
         "outputs": [],
         "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "depositTokenAddress",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -1121,13 +1147,13 @@
         "inputs": [
             {
                 "internalType": "string",
-                "name": "destinationProtocolSlug",
+                "name": "requestProtocolSlug",
                 "type": "string"
             },
             {
-                "internalType": "string",
-                "name": "marketTokenAddress",
-                "type": "string"
+                "internalType": "address",
+                "name": "requestTokenAddress",
+                "type": "address"
             }
         ],
         "name": "queryMovePosition",
@@ -1380,38 +1406,12 @@
     },
     {
         "inputs": [],
-        "name": "strategyContract",
-        "outputs": [
-            {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
         "name": "subsidySpread",
         "outputs": [
             {
                 "internalType": "uint256",
                 "name": "",
                 "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "testTokenAddress",
-        "outputs": [
-            {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
             }
         ],
         "stateMutability": "view",
@@ -1543,6 +1543,19 @@
         "name": "updateBridgedLedger",
         "outputs": [],
         "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "viewAssertionsAddress",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
         "type": "function"
     },
     {

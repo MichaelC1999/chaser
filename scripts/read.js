@@ -17,14 +17,19 @@ async function main() {
     // 0x9e6CED8aE154fFCaAB3Bb9dC6E9d78374E69C2a6
 
 
-    // const cons = await hre.ethers.getContractAt("FunctionsConsumer", "0x9823b0F589229527ec4E14E47cA6852E963D770e")
+    // const cons = await hre.ethers.getContractAt("FunctionsConsumer", "0xdedba98c80a1767200d137dbd11fbd815f692561")
 
     // console.log(await cons.donId())
 
-    const cons2 = await hre.ethers.getContractAt("FunctionsConsumer", "0x9F41D138657Dd79a0eae80ecff2aC3d64E3F35d8")
+    const cons2 = await hre.ethers.getContractAt("SubConduit", "0x4D3fa9E212a9CF7108c6d5fF83C1d42A426F6272")
 
-    const conduit = await hre.ethers.getContractAt("BridgingConduit", "0x5641e9fD6CE3E8E8e4f23c6d939777fE616e5369")
-    console.log(await conduit.executeMovePosition("fdsf"))
+    const conduit = await hre.ethers.getContractAt("AaveIntegration", "0xC0be97A09FED62Fc125f0Da721EBEc154a27DBe8")
+
+    console.log(await conduit.deposit("0xff34b3d4aee8ddcd6f9afffb6fe49bd371b8a357", "100000000000000000000", "0x4D3fa9E212a9CF7108c6d5fF83C1d42A426F6272"))
+    // function deposit(
+    //     address asset,
+    //     uint256 amount,
+    //     address subconduitAddress
     // console.log(await conduit.graphFunctionAddress()) //0x86ACa2eDbD5B713d76648bbFe87a25eab22F4401
     // BRIDGECONDUIT 0x19c43eB4AAeB16dBE87a4D4A3ACAe4FbA253B215
 

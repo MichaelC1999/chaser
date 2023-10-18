@@ -7,8 +7,8 @@ import {IStrategy} from "./interfaces/IStrategy.sol";
 import {IInterestRateDataSource} from "./interfaces/IInterestRateDataSource.sol";
 import {SpokePoolInterface} from "./interfaces/ISpokePoolInterface.sol";
 import {IERC20} from "./interfaces/IERC20.sol";
-import {TestToken} from "./TestToken.sol";
 import {FunctionsConsumer} from "./FunctionsConsumer.sol";
+import {DataAsserter, OptimisticOracleV3Interface} from "./DataAsserter.sol";
 
 interface PotLike {
     function dsr() external view returns (uint256);
@@ -99,9 +99,6 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
 
     address public arranger;
 
-    address public daiAddress =
-        address(0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6);
-
     mapping(address => uint256) public totalDeposits;
     mapping(address => uint256) public totalRequestedFunds;
     mapping(address => uint256) public totalWithdrawableFunds;
@@ -134,14 +131,13 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
 
     string public currentDepositPoolId;
     string public currentDepositProtocolSlug;
-    address public currentDepositTokenAddress;
+    string public currentStrategyScriptURL =
+        "https://github.com/MichaelC1999/chaser";
 
-    address public strategyContract;
+    address public currentDepositTokenAddress;
 
     address public spokePoolAddress =
         address(0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96);
-
-    address public testTokenAddress;
 
     /**********************************************************************************************/
     /*** Modifiers                                                                              ***/
@@ -168,11 +164,15 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
     /**********************************************************************************************/
     /*** Constructor                                                                            ***/
     /**********************************************************************************************/
+    DataAsserter public assertionsUMA;
+    address public depositTokenAddress =
+        address(0x07865c6E87B9F70255377e024ace6630C1Eaa37F);
+    address oracle = address(0x9923D42eF695B5dd9911D05Ac944d4cAca3c4EAB);
 
     constructor() {
         currentFundsAddress = address(this);
-        // TestToken testToken = new TestToken();
-        testTokenAddress = address(0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9);
+        // Send USDC to assertionUMA address
+        assertionsUMA = new DataAsserter(depositTokenAddress, oracle);
     }
 
     /**********************************************************************************************/
@@ -181,13 +181,11 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
 
     function setRoles(address _roles) external override auth {
         roles = _roles;
-
         emit SetRoles(_roles);
     }
 
     function setRegistry(address _registry) external override auth {
         registry = _registry;
-
         emit SetRegistry(_registry);
     }
 
@@ -239,65 +237,37 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         // Record amount bridged to chain
         IERC20(asset).transferFrom(source, address(this), amount);
 
-        if (
-            currentFundsChain != 1 &&
-            chainIdToSubconduit[currentFundsChain] != address(0)
-        ) {
-            // BRIDGE FUNDS
-            // SHOULD FUNDS BE BRIDGED AT ALL IN THIS FUNCTION?
-            // FOR THE SAKE OF NOT BRIDGING FUNDS TO A CHAIN THAT WILL BE MOVED AWAY FROM SOON, BRIDGING SHOULD ONLY BE DONE IN queryMovePosition
-            // EASIER TO MANAGE THE BRIDGING BALANCES IF IT IS ONLY ONE FUNCTION
-        }
-
         emit Deposit(ilk, asset, source, amount);
     }
 
     function queryMovePosition(
-        string memory destinationProtocolSlug,
-        string memory marketTokenAddress
-    ) external {
-        // REORIENT THIS FUNCTION TO TAKE MAKE THE REQUEST FROM THE FRONT END, THEN THE ORACLE CALLBACK EXECUTES THE BRIDGE/MOVE IF APPLICABLE
-        // IFunctionsConsumer functionsConsumerInstance = IFunctionsConsumer(
-        //     graphFunctionAddress
-        // );
-        // IStrategy strategyContractInstance = IStrategy(strategyContract);
-        // string[] memory args = new string[](4);
-        // args[0] = currentDepositPoolId;
-        // args[1] = currentDepositProtocolSlug;
-        // args[2] = destinationProtocolSlug;
-        // args[3] = marketTokenAddress;
-        // // bytes[] memory bytesArgs = [0x];
-        // bytes[] memory emptyArray = new bytes[](0);
-        // functionsConsumerInstance.sendRequest(
-        //     strategyContractInstance.strategySourceCode(),
-        //     FunctionsRequest.Location,
-        //     0,
-        //     args,
-        //     emptyArray,
-        //     843,
-        //     300000
-        // );
-        // THe request needs to be processed, then will call separate callback function with the response
-        // Response only needs the poolId
-        // The slug is already available, value not needed
-        // -Conduit state holds the current chain/address of funds
-        // This function gets called by a user to call the oracle proposing a new chain/market with a better yield
-        // User Passes into oracle new protocolSlug+chain and an input token address (USDC, DAI, etc address), contract passes in both currentDepositProtocolSlug and currentDepositPoolId string
-        // Receive result from oracle
-        // JSON returned from oracle: [{protocolSlug+chain, subgraphPoolId, value}, {protocolSlug+chain, subgraphPoolId, value}] with the first element being the more efficient/better investment
-        // If the new, user passed market is more efficient than  the current market, save  as currentDepositPoolId. Save the new subgraph slug as currentDepositProtocolSlug
-        // *********
+        string memory requestProtocolSlug,
+        address requestTokenAddress
+    ) public {
+        // This is the function a user calls to make an assertion/propose moving funds
+        bytes memory data = abi.encode(
+            "The market on ",
+            requestProtocolSlug,
+            " for token at address ",
+            requestTokenAddress,
+            " yields a better investment according to the current strategy at ",
+            currentStrategyScriptURL,
+            " - compared to the current market on ",
+            currentDepositProtocolSlug,
+            " with an id of ",
+            currentDepositPoolId
+        );
+        bytes32 dataId = bytes32(abi.encode(currentStrategyScriptURL));
+        // string storage data = string("The market on " + requestProtocolSlug f);
+        uint balance = IERC20(depositTokenAddress).balanceOf(address(this));
+        IERC20(depositTokenAddress).approve(address(assertionsUMA), balance);
+        assertionsUMA.assertDataFor(dataId, data, msg.sender);
     }
 
     function executeMovePosition(string memory newPoolId) external {
-        FunctionsConsumer consumer = FunctionsConsumer(
-            //msg.sender
-            0x9F41D138657Dd79a0eae80ecff2aC3d64E3F35d8
-        );
-        string memory newProtocolSlug = consumer.requestProtocolSlug();
+        // FunctionsConsumer consumer = FunctionsConsumer(msg.sender);
+        // string memory newProtocolSlug = consumer.requestProtocolSlug();
         // string memory newTokenAddress = consumer.requestTokenAddress();
-        // address tokenAddress = stringToAddress((newTokenAddress));
-        // *********tokenAddress set to testToken while on testnet
 
         // Instantiate FunctionsConsumer from msg.sender
         if (
@@ -305,6 +275,8 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
             keccak256(abi.encode(newPoolId))
         ) {
             // If the oracle returns the current Pool Id, no need to update states
+        } else {
+            currentDepositPoolId = newPoolId;
         }
 
         // uint256 newChainId = hashedSlugToChainId[
@@ -312,54 +284,18 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         // ];
         uint256 newChainId = 421613;
 
-        uint256 conduitBalance = IERC20(testTokenAddress).balanceOf(
+        uint256 conduitBalance = IERC20(depositTokenAddress).balanceOf(
             address(this)
         );
 
         if (conduitBalance > 0 && newChainId != currentFundsChain) {
             // How to get the chain of newPoolId?
             // -FunctionsConsumer should cache the chainId of the
-            bridgeToSubconduit(newChainId, testTokenAddress, conduitBalance);
+            bridgeToSubconduit(newChainId, depositTokenAddress, conduitBalance);
         }
-        currentDepositPoolId = newPoolId;
 
-        // Read poolId, tokenAddress, protocol-slug
-        // If poolId same as currentPoolId, RETURN HERE
-        // Check if current deposit is subconduit or if current protocol slug is empty
-        // If the deposit is in protocol, execute withdraw sequence
-        // ****************************
-        // WITHDRAW SEQUENCE
-        // read following values currentFundsChain; currentFundsAddress; currentDepositPoolId; currentDepositProtocolSlug; currentDepositTokenAddress;
-        // get the externalFunctionConstructor withdraw sequence
-        // ****************************
-        // RESOLVE BRIDGING DIFFERENCES (SEND FUNDS FROM CONDUIT TO SUBCONDUIT, MOVE FUNDS FROM SUBCONDUIT TO OTHER SUBCONDUIT ON DIFFERENT CHAIN)
-        // UPDATE CONDUIT STATES
-        // UPDATE SUBCONDUIT STATES (USING CCIP, UPDATE THE STATES TO REFLECT NEW POSITION TO MOVE FUNDS TO)
-        // INITIATE SUBCONDUIT DEPOSIT (USING CCIP, ATTEMPT TO DEPOSIT FUNDS INTO THE NEW POSITION IF SOME FUNDS ALREADY IN SUBCONDUIT. )
-        // *******************************
-        // *******************************
-        // *******************************
-        // *******************************
-        // This is the callback to execute when the oracle has a result
-        // The only data in the response is a poolId
-        // If its not the same as currentPoolId nor address(0), then execute the move
-        // SET THE FOLLOWING STATE TO REFLECT NEW POSITION
-        //     uint public currentFundsChain = 1;
-        // address public currentFundsAddress;
-        // string public currentDepositPoolId;
-        // string public currentDepositProtocolSlug;
-        // address public currentDepositTokenAddress;
-        // *******************************
-        // Handle already deposited funds
-        // THIS SECTION SHOULD BE ALL PSEUDOCODE, DONT PRIORITIZE THIS CASE
-        // Get the subconduit address on currentFundsChain, make IRouterClient.ccipSend() call to bridge funds from current subconduit chain and send to chain resulting from oracle
-        // If the deposited funds are already on the target chain, make IRouterClient.ccipSend() call to withdraw position and let funds sit in subconduit
-        // *********
-        // Get the subconduit address for the chain returned in the oracle call
-        // Send Bridge call to send conduit funds to appropriate subconduit
-        // *********
         // Set currentFundsChain currentFundsAddress states to result of oracle
-        // If Bridge Call is successful, submit CCIP interaction to subconduit to set the destination in subconduit state, also    passing in bytes for the deposit function from externalFunctionConstructor
+        // If Bridge Call is successful, submit CCIP interaction to subconduit to set the destination in subconduit state, also    passing in bytes for the deposit function from ExternalIntegrationFunctions
         // Call router contract initiated with IRouterClient interface
         // IRouterClient.getFee()
         // IRouterClient.ccipSend()
@@ -571,12 +507,12 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
     function addProtocolSupport(
         string[] memory slugs,
         uint256[] memory chainIds,
-        address externalFunctionConstructor
+        address ExternalIntegrationFunctions
     ) external {
         // Slugs contain protocol+network
         // For now caller manually passes in the
         // This function is to be called by subDAO after voting to add support for a protocol
-        // -when prtocol support is added the slug is fully protocol+network. slug => externalfunctionconstructor, slug => chainid, chainId => subconuit
+        // -when prtocol support is added the slug is fully protocol+network. slug => ExternalIntegrationFunctions, slug => chainid, chainId => subconuit
         require(
             slugs.length == chainIds.length,
             "chainIds and slugs lengths must match"
@@ -591,13 +527,18 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
             hashedSlugToChainId[slugHash] = chainIds[i];
             hashedSlugToFunctionsContract[
                 slugHash
-            ] = externalFunctionConstructor;
+            ] = ExternalIntegrationFunctions;
         }
     }
 
     /**********************************************************************************************/
     /*** View Functions                                                                         ***/
     /**********************************************************************************************/
+
+    function viewAssertionsAddress() public view returns (address) {
+        return address(assertionsUMA);
+    }
+
     function availableFunds(
         address asset
     ) public view returns (uint256 availableFunds_) {

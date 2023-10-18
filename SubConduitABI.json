@@ -1,0 +1,170 @@
+[
+    {
+        "inputs": [],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "destinationAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "destinationChainId",
+                "type": "uint256"
+            }
+        ],
+        "name": "bridgeToNewChain",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "action",
+                "type": "uint256"
+            }
+        ],
+        "name": "ccipReceive",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "currentDepositWithdrawBytes",
+        "outputs": [
+            {
+                "internalType": "bytes",
+                "name": "",
+                "type": "bytes"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "currentPoolAddress",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "depositTokenAddress",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "developmentWithdraw",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes",
+                "name": "depositDataSig",
+                "type": "bytes"
+            },
+            {
+                "internalType": "bytes",
+                "name": "withdrawDataSig",
+                "type": "bytes"
+            },
+            {
+                "internalType": "address",
+                "name": "spenderAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "newPositionTokenAddress",
+                "type": "address"
+            }
+        ],
+        "name": "moveToCurrentPosition",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "returnToSpark",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "newPoolAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "newDepositToken",
+                "type": "address"
+            }
+        ],
+        "name": "setCurrentPosition",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "spokePoolAddress",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "updateLedger",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes",
+                "name": "dataSig",
+                "type": "bytes"
+            }
+        ],
+        "name": "withdrawPosition",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]

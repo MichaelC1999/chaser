@@ -31,14 +31,29 @@ async function main() {
   const lock2 = await hre.ethers.deployContract("BridgingConduit", [], {
     value: 0
   });
-  console.log(lock2)
   await lock2.waitForDeployment(); //0x571061a5190E096A76f76b843b511e9b962f3183 ;
+
+  console.log(lock2.target) // 0xE655d159745E695fC96D538d267Fa49A83E8c08F
+
+  // const lock1 = await hre.ethers.deployContract("AaveIntegration", [], {
+  //   value: 0,
+  // });
+
+  // const lock2 = await hre.ethers.deployContract("SubConduit", [], {
+  //   value: 0,
+  // });
+
+
+
+  // await lock1.waitForDeployment(); //0x84a824C2CDb6d6381E70767305d327B636cBCB23
+
+  // console.log(lock1.target)
+
+  await lock2.waitForDeployment(); //0x84a824C2CDb6d6381E70767305d327B636cBCB23
 
   console.log(lock2.target)
 
-
-
-  // const lock1 = await hre.ethers.deployContract("FunctionsConsumer", ["0xb83E47C2bC239B3bf370bc41e1459A34b41238D0", "0x66756e2d657468657265756d2d7365706f6c69612d3100000000000000000000"], {
+  // const lock1 = await hre.ethers.deployContract("FunctionsConsumer", ["0xb83E47C2bC239B3bf370bc41e1459A34b41238D0", "0x66756e2d657468657265756d2d7365706f6c69612d3100000000000000000000", "0xAAcd5cF2C81C8765ea4893F5A0DF36370d0AfEdc"], {
   //   value: 0,
   // });
 
