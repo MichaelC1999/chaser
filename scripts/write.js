@@ -59,7 +59,7 @@ const makeRequestMumbai = async () => {
 
 
     const bridgingConduit = new ethers.Contract(
-        "0x7112FeD17B2Bd44E9122DA58F1Ad2C2c6B636B37",
+        "0x8dFb49332ac866350460FA825cE631a0d723e2cE",
         BridgingConduitABI,
         signer
     );

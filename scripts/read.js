@@ -21,11 +21,11 @@ async function main() {
 
     // console.log(await cons.donId())
 
-    const cons2 = await hre.ethers.getContractAt("SubConduit", "0x4D3fa9E212a9CF7108c6d5fF83C1d42A426F6272")
+    // const cons2 = await hre.ethers.getContractAt("BridConduit", "0x4D3fa9E212a9CF7108c6d5fF83C1d42A426F6272")
 
-    const conduit = await hre.ethers.getContractAt("AaveIntegration", "0xC0be97A09FED62Fc125f0Da721EBEc154a27DBe8")
+    const conduit = await hre.ethers.getContractAt("BridgingConduit", "0x8dFb49332ac866350460FA825cE631a0d723e2cE")
 
-    console.log(await conduit.deposit("0xff34b3d4aee8ddcd6f9afffb6fe49bd371b8a357", "100000000000000000000", "0x4D3fa9E212a9CF7108c6d5fF83C1d42A426F6272"))
+    console.log(await conduit.currentDepositPoolId())
     // function deposit(
     //     address asset,
     //     uint256 amount,

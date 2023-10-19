@@ -146,7 +146,7 @@ contract DataAsserter {
                 assertionId
             );
             BridgingConduit(bridgingConduit).executeMovePosition(
-                string(abi.encode(dataAssertion.data))
+                string((dataAssertion.data))
             );
         } else delete assertionsData[assertionId];
     }

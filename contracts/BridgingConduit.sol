@@ -95,6 +95,9 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         address indexed destination,
         uint256 amount
     );
+
+    event CallbackExecuted(bytes newPoolId, uint256 balance);
+
     FundRequest[] internal fundRequests;
 
     address public arranger;
@@ -131,8 +134,7 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
 
     string public currentDepositPoolId;
     string public currentDepositProtocolSlug;
-    string public currentStrategyScriptURL =
-        "https://github.com/MichaelC1999/chaser";
+    address public currentStrategyScriptAddress;
 
     address public currentDepositTokenAddress;
 
@@ -165,14 +167,17 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
     /*** Constructor                                                                            ***/
     /**********************************************************************************************/
     DataAsserter public assertionsUMA;
+
+    // For demonstration, the depositToken will be Goerli WETH
     address public depositTokenAddress =
-        address(0x07865c6E87B9F70255377e024ace6630C1Eaa37F);
+        address(0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6);
     address oracle = address(0x9923D42eF695B5dd9911D05Ac944d4cAca3c4EAB);
 
     constructor() {
         currentFundsAddress = address(this);
         // Send USDC to assertionUMA address
         assertionsUMA = new DataAsserter(depositTokenAddress, oracle);
+        currentStrategyScriptAddress = address(0);
     }
 
     /**********************************************************************************************/
@@ -200,9 +205,6 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         bool enabled_
     ) external override auth {
         assetEnabled[asset] = enabled_;
-        // MAYBE APPROVE BRIDGE?
-        // IERC20(asset).approve(pool, enabled_ ? type(uint256).max : 0);
-
         emit SetAssetEnabled(asset, enabled_);
     }
 
@@ -250,14 +252,14 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
             requestProtocolSlug,
             " for token at address ",
             requestTokenAddress,
-            " yields a better investment according to the current strategy at ",
-            currentStrategyScriptURL,
-            " - compared to the current market on ",
+            " yields a better investment than the current market on ",
             currentDepositProtocolSlug,
             " with an id of ",
-            currentDepositPoolId
+            currentDepositPoolId,
+            ". This is according to the current strategy whose Javascript logic that can be read from the 'strategySourceCode()' value on address ",
+            currentStrategyScriptAddress
         );
-        bytes32 dataId = bytes32(abi.encode(currentStrategyScriptURL));
+        bytes32 dataId = bytes32(abi.encode(currentStrategyScriptAddress));
         // string storage data = string("The market on " + requestProtocolSlug f);
         uint balance = IERC20(depositTokenAddress).balanceOf(address(this));
         IERC20(depositTokenAddress).approve(address(assertionsUMA), balance);
@@ -294,8 +296,13 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
             bridgeToSubconduit(newChainId, depositTokenAddress, conduitBalance);
         }
 
+        emit CallbackExecuted(abi.encode(newPoolId), conduitBalance);
+
         // Set currentFundsChain currentFundsAddress states to result of oracle
         // If Bridge Call is successful, submit CCIP interaction to subconduit to set the destination in subconduit state, also    passing in bytes for the deposit function from ExternalIntegrationFunctions
+
+        // HERE THE CONTRACT WILL CCIP CALL THE SUBCONDUIT TO UPDATE STATE ON L2s
+
         // Call router contract initiated with IRouterClient interface
         // IRouterClient.getFee()
         // IRouterClient.ccipSend()

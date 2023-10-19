@@ -1,104 +1,74 @@
+const curPoolId = args[0];
+try {
+    const marketTokenAddress = args[3];
+    const base = `https://api.thegraph.com/subgraphs/name/messari/`;
+    const curSubgraphURL = base + args[1];
+    const desSubgraphURL = base + args[2];
 
+    const curPositionDataResponse = await fetch(curSubgraphURL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            query: `{
+                \x09\x6D\x61\x72\x6B\x65\x74\x44\x61\x69\x6C\x79\x53\x6E\x61\x70\x73\x68\x6F\x74\x73\x28\x66\x69\x72\x73\x74\x3A\x20\x33\x30\x2C\x20\x6F\x72\x64\x65\x72\x42\x79\x3A\x20\x74\x69\x6D\x65\x73\x74\x61\x6D\x70\x2C\x20\x6F\x72\x64\x65\x72\x44\x69\x72\x65\x63\x74\x69\x6F\x6E\x3A\x20\x64\x65\x73\x63\x2C\x20\x77\x68\x65\x72\x65\x3A\x20\x7B\x6D\x61\x72\x6B\x65\x74\x3A\x22\x24\x7B\x63\x75\x72\x50\x6F\x6F\x6C\x49\x64\x7D\x22\x7D\x29\x20\x7B\x0A
+                totalDepositBalanceUSD
+            dailySupplySideRevenueUSD
+        }
+    }`
+        })
+    });
+    const curPositionData = await curPositionDataResponse.json();
 
-// Function for lowVolHighYield comparison oracle
-// Needs 2 sets of inputs, chain provided protocol data for current deposit pool, user provided protocol data for a pool to possibly transfer to 
+    const positionDesDataResponse = await fetch(desSubgraphURL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            query: `{
+                markets (where: {inputToken:"${marketTokenAddress}"}) {
+                    id
+                } 
+                \x09\x6D\x61\x72\x6B\x65\x74\x44\x61\x69\x6C\x79\x53\x6E\x61\x70\x73\x68\x6F\x74\x73\x28\x66\x69\x72\x73\x74\x3A\x20\x33\x30\x2C\x20\x6F\x72\x64\x65\x72\x42\x79\x3A\x20\x74\x69\x6D\x65\x73\x74\x61\x6D\x70\x2C\x20\x6F\x72\x64\x65\x72\x44\x69\x72\x65\x63\x74\x69\x6F\x6E\x3A\x20\x64\x65\x73\x63\x2C\x20\x77\x68\x65\x72\x65\x3A\x20\x7B\x6D\x61\x72\x6B\x65\x74\x5F\x3A\x7B\x69\x6E\x70\x75\x74\x54\x6F\x6B\x65\x6E\x3A\x22\x24\x7B\x6D\x61\x72\x6B\x65\x74\x54\x6F\x6B\x65\x6E\x41\x64\x64\x72\x65\x73\x73\x7D\x22\x7D\x7D\x29\x20\x7B\x0A
+            totalDepositBalanceUSD
+            dailySupplySideRevenueUSD
+        }
+    }`
+        })
+    });
+    const positionDesData = await positionDesDataResponse.json();
 
-// For each position to compare needs protocol slug, chain name, token address of input token 
-
-// If the funds are not currently deposited, just check that pool to transfer to is above 0
-
-// Input args [currentPoolId, currentProtocolSlug, destinationProtocolSlug, marketTokenAddress]
-
-
-const currentPoolId = args[0]
-const marketTokenAddress = args[3]
-
-const currentSubgraphURL = `https://api.thegraph.com/subgraphs/name/messari/` + args[1];
-
-const destinationSubgraphURL = `https://api.thegraph.com/subgraphs/name/messari/` + args[2];
-
-const timeframe = 30;
-
-// Loop through valid subgraphs and query for each of them
-const currentPositionData = await Functions.makeHttpRequest({
-    url: currentSubgraphURL,
-    method: "POST",
-    headers: {
-        "Content-Type": "application/json",
-    },
-    data: {
-        query: `{
-	marketDailySnapshots(first: ${timeframe}, orderBy: timestamp, orderDirection: desc, where: {market:"${currentPoolId}"}) {
-
-        totalDepositBalanceUSD
-        dailySupplySideRevenueUSD
+    let currentCumulative = 0;
+    let currentRate = 0;
+    curPositionData.data.data.marketDailySnapshots.forEach((instance, index) => {
+        const instanceApy = Number(((Number(instance.dailySupplySideRevenueUSD) * 365) / Number(Number(instance.totalDepositBalanceUSD)).toFixed(4)));
+        if (instanceApy) {
+            currentRate = (currentCumulative + instanceApy) / (index + 1);
+            currentCumulative += instanceApy;
+        }
     }
-}`
-    }
-});
+    );
 
-const positionDestinationData = await Functions.makeHttpRequest({
-    url: destinationSubgraphURL,
-    method: "POST",
-    headers: {
-        "Content-Type": "application/json",
-    },
-    data: {
-        query: `{
-            markets (where: {inputToken:"${marketTokenAddress}"}) {
-                id
-            } 
-	marketDailySnapshots(first: ${timeframe}, orderBy: timestamp, orderDirection: desc, where: {market_:{inputToken:"${marketTokenAddress}"}}) {
-        totalDepositBalanceUSD
-        dailySupplySideRevenueUSD
+    const desPoolId = positionDesData?.data?.data?.markets?.[0]?.id;
+    if (!desPoolId) return (curPoolId);
+    let destinationCumulative = 0;
+    let destinationRate = 0;
+    positionDesData.data.data.marketDailySnapshots.forEach((instance, index) => {
+        const instanceApy = Number(((Number(instance.dailySupplySideRevenueUSD) * 365) / Number(Number(instance.totalDepositBalanceUSD)).toFixed(4)));
+        if (instanceApy) {
+            destinationRate = (destinationCumulative + instanceApy) / (index + 1)
+            destinationCumulative += instanceApy;
+        }
     }
-}`
-    }
-});
+    );
 
-// console.log(currentSubgraphURL, JSON.stringify(positionDestinationData.data))
-let currentCumulative = 0;
-let currentRate = 0;
-currentPositionData.data.data.marketDailySnapshots.forEach((instance, index) => {
-    const instanceApy = Number(((Number(instance.dailySupplySideRevenueUSD) * 365) / Number(Number(instance.totalDepositBalanceUSD)).toFixed(4)))
-    if (instanceApy) {
-        currentRate = (currentCumulative + instanceApy) / (index + 1)
-        currentCumulative += instanceApy
-    }
-}
-);
+    if (destinationRate > currentRate && destinationRate > 0) return (desPoolId);
+    return curPoolId;
 
-let returnJson = {
-    slug: args[1],
-    value: currentRate,
-    subgraphPoolId: currentPoolId
+} catch (err) {
+    console.log("Error caught - ", err.message);
 }
 
-const destinationPoolId = positionDestinationData.data.data.markets?.[0]?.id
-if (!destinationPoolId) {
-    return Functions.encodeString(JSON.stringify(returnJson))
-}
-
-let destinationCumulative = 0;
-let destinationRate = 0;
-positionDestinationData.data.data.marketDailySnapshots.forEach((instance, index) => {
-    const instanceApy = Number(((Number(instance.dailySupplySideRevenueUSD) * 365) / Number(Number(instance.totalDepositBalanceUSD)).toFixed(4)))
-    if (instanceApy) {
-
-        destinationRate = (destinationCumulative + instanceApy) / (index + 1)
-        destinationCumulative += instanceApy
-    }
-}
-);
-
-const destinationObject = {
-    slug: args[2],
-    value: destinationRate,
-    subgraphPoolId: destinationPoolId
-}
-
-if (destinationRate > currentRate && destinationRate > 0) {
-    returnJson = destinationObject;
-}
-
-return Functions.encodeString(JSON.stringify(returnJson))
+return (curPoolId);

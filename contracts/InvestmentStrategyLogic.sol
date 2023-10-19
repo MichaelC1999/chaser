@@ -4,6 +4,8 @@ import {IStrategy} from "./interfaces/IStrategy.sol";
 
 contract InvestmentStrategyLogic is IStrategy {
     // Initiate Strategy as lowVolHighYield
+
+    // The following lines were replaced UTF8
     // '	marketDailySnapshots(first: 30, orderBy: timestamp, orderDirection: desc, where: {market:"${curPoolId}"}) {'
     // '	marketDailySnapshots(first: 30, orderBy: timestamp, orderDirection: desc, where: {market_:{inputToken:"${marketTokenAddress}"}}) {'
 
