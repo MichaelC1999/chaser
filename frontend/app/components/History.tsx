@@ -38,13 +38,8 @@ const History = ({ setErrorMessage }: HistoryProps) => {
             const resultTransactions = (await res.json()).result;
             const transactions = resultTransactions.filter((x: any) => x.functionName.includes('buy(') && x.isError === "0");
             const transactionsToRender = transactions.map((x: any) => {
-                const contractInterface = new Interface(abi);
-                const decoded = contractInterface.decodeFunctionData('buy', x.input);
-                const price: BigNumber = new BigNumber(x.value).dividedBy(new BigNumber(decoded.toString()));
-                const date: Date = new Date(parseInt(x.timeStamp) * 1000);
-                const amount: string = formatEther(decoded.toString());
                 // Construct the object that will be set in state
-                return { block: x.blockNumber, txHash: x.hash, priceInEth: price.toString(), amount, date };
+                return {};
             })
             setHistoryObjects(transactionsToRender);
         } catch (err: any) {
