@@ -77,16 +77,7 @@ contract DataAsserter {
         return (true, assertionsData[assertionId].data);
     }
 
-    // dataId POINTS TO THE METHOD TO CALCULATE THE ASSERTION RESULT
-    // data IS THE ASSERTED RESULT
-    // WHAT DATA NEEDS TO BE PROVIDED BY THE ASSERTER? new protocol slug
-    // strategy + current protocol + current pool id held and read on chain
-    // token id can be changed on bridging conduit but maybe should stay consistent
-    // ASSERTION SHOULD ONLY BE MADE IF THE NEW PROTOCOL/POOL IS BETTER INVESTMENT THAN
-    // dataId points to url of strategy script to execute (this script should be adjusted to read the appropriate data from chain)
-
-    // dataId is the strategy name in bytes32
-    // data contains the instructions to access and execute the script, and all the inputs currentPoolId, currentProtocolSlug, requestProtocolSlug, requestTokenAddress
+    ///  @dev assertDataFor Opens the UMA assertion that must be verified using the strategy script provided
     function assertDataFor(
         bytes32 dataId,
         bytes memory data,
@@ -145,6 +136,7 @@ contract DataAsserter {
                 dataAssertion.asserter,
                 assertionId
             );
+            ///  @dev Execute logic on BridgingConduit to move funds and update states
             BridgingConduit(bridgingConduit).executeMovePosition(assertionId);
         } else delete assertionsData[assertionId];
     }

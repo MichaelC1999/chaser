@@ -13,7 +13,7 @@ const BridgingConduitABI = require("../BridgingConduitABI.json");
 const OracleABI = require("../OracleABI.json");
 
 const subConduitAbi = require("../SubConduitABI.json");
-const functionsConsumerAbi = require("../functionsClient.json");
+const functionsConsumerAbi = require("../FunctionsClient.json");
 
 const strategyAbi = require("../strategy.json");
 

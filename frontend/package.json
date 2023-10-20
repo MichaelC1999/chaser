@@ -1,0 +1,38 @@
+{
+  "name": "chaser",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.14.8",
+    "@mui/lab": "^5.0.0-alpha.143",
+    "@mui/material": "^5.14.8",
+    "@mui/styled-engine": "^5.14.8",
+    "@mui/styled-engine-sc": "^5.14.8",
+    "@mui/styles": "^5.14.7",
+    "@mui/system": "^5.14.8",
+    "@types/node": "20.5.4",
+    "@types/react": "18.2.21",
+    "@types/react-dom": "18.2.7",
+    "bignumber.js": "^9.1.2",
+    "chart.js": "^2.9.4",
+    "eslint": "8.47.0",
+    "eslint-config-next": "13.4.19",
+    "ethers": "^6.7.1",
+    "next": "13.4.19",
+    "next-transpile-modules": "^10.0.1",
+    "react": "18.2.0",
+    "react-chartjs-2": "^2.11.2",
+    "react-dom": "18.2.0",
+    "react-flip-move": "^3.0.5",
+    "react-transition-group": "^4.4.5",
+    "typescript": "5.1.6"
+  }
+}

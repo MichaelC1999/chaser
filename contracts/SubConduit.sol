@@ -27,6 +27,8 @@ contract SubConduit {
     // Function to call cross chain to move funds sitting in subconduit to deposit target via ExternalIntegrationFunctions contract function signature
     // WithdrawToSpark function that bridges funds back to mainnet and sends to the appropriate spark address, sends cross chain call to conduit for adjusting appropriate state
 
+    ///  @dev moveToCurrentPosition takes funds sitting in this subconduit and moves it to the current pool held in state
+    ///  @dev Can be after the position has changed, or new funds have been moved to the subconduit
     function moveToCurrentPosition(
         bytes calldata depositDataSig,
         bytes calldata withdrawDataSig,
@@ -40,18 +42,19 @@ contract SubConduit {
         currentPositionTokenAddress = newPositionTokenAddress;
         currentSpenderAddress = spenderAddress;
         IERC20(depositTokenAddress).approve(spenderAddress, subConduitBalance);
+        // depositDataSig is the constructor function signature + data bytes to execute call() to make deposit to currentPoolAddress
         (bool success, bytes memory returnData) = currentPoolAddress.call(
             depositDataSig
         );
 
         return returnData;
-        // dataSig is the constructor function signature + data bytes to execute call() to make deposit to currentPoolAddress
         // This function is indifferent to whether or not there are already deposits in current porition
         // Push funds sitting in address(this) to currentPoolAddress, calling the appropriate protocol functions to deposit()
         // Presumed that this is called after bridging funds to this contract
         // In cases funds are bridged to this subconduit with a specified position to deposit funds, it is assumed that the currentPoolAddress etc state have been updated, therefore this function will push to the "new" pool
     }
 
+    ///  @dev Unwind current position and move funds to this subconduit
     function withdrawPosition(bytes memory dataSig) public {
         uint positionTokenBalance = IERC20(currentPositionTokenAddress)
             .balanceOf(address(this));
@@ -59,14 +62,15 @@ contract SubConduit {
             currentSpenderAddress,
             positionTokenBalance
         );
-        currentPoolAddress.call(dataSig);
         // dataSig is the constructor function signature + data bytes to execute call() to make withdraw from currentPoolAddress
+        currentPoolAddress.call(dataSig);
         // Withdraw funds from current position to this subconduit
         // Instantiate the currentPoolAddress with the ExternalIntegrationFunctions Interface
         // Call the ExternalIntegrationFunctions withdraw method
         // should be called before updating current position in case of moving to new position
     }
 
+    ///  @dev Unwind position and send it directly to Spark on mainnet
     function returnToSpark() public {
         // Withdraw funds from current position to this subconduit (if current position has funds)
         // Within same tx, unbridge funds sitting in subconduit back to conduit
@@ -76,6 +80,7 @@ contract SubConduit {
         bridgeToNewChain(sparkMainnetAddress, 1);
     }
 
+    ///  @dev Update position state values
     function setCurrentPosition(
         address newPoolAddress,
         address newDepositToken
@@ -85,6 +90,7 @@ contract SubConduit {
         depositTokenAddress = newDepositToken;
     }
 
+    ///  @dev Function to brdge through accross to other chain or back to mainnet
     function bridgeToNewChain(
         address destinationAddress,
         uint256 destinationChainId
@@ -124,7 +130,6 @@ contract SubConduit {
         // SetCurrentPosition
         // ReceiveReturnToConduit
         // BridgeToNewChain
-        // **** NICE TO HAVE CCIP INTEGRATION
         // if (action == 1) {
         //     moveToCurrentPosition();
         // }
@@ -142,9 +147,9 @@ contract SubConduit {
         // }
     }
 
+    // function to withdraw bridged funds
+    // ONLY FOR DEVELOPMENT, REMOVE IN PRODUCTION
     function developmentWithdraw() external {
-        // function to withdraw bridged funds
-        // ONLY FOR DEVELOPMENT, REMOVE IN PRODUCTION
         uint depositTokenBalance = IERC20(depositTokenAddress).balanceOf(
             address(this)
         );

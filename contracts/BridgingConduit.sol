@@ -173,17 +173,22 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
     /**********************************************************************************************/
     /*** Constructor                                                                            ***/
     /**********************************************************************************************/
+
+    ///  @dev assertionsUMA is the instance of the contract that sends assertions and executes callbacks when UMA verifies/rejects a move proposal
     DataAsserter public assertionsUMA;
 
-    // For demonstration, the depositToken will be Goerli WETH
+    ///  @dev For demonstration, the depositToken will be Goerli WETH
     address public depositTokenAddress =
         address(0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6);
+
+    ///  @dev UMA OO v3 Goerli Address
     address oracle = address(0x9923D42eF695B5dd9911D05Ac944d4cAca3c4EAB);
 
     constructor() {
         currentFundsAddress = address(this);
-        // Send USDC to assertionUMA address
         assertionsUMA = new DataAsserter(depositTokenAddress, oracle);
+
+        ///  @dev hardcoded strategy script address
         currentStrategyScriptAddress = address(
             0xaa73850EC018f49e5b0f8A902FBAf8e35a5471d0
         );
@@ -221,6 +226,7 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
     /*** Operator Functions                                                                     ***/
     /**********************************************************************************************/
 
+    ///  @dev Spark protocol Deposit function. SubDAOs can push liquidity to Chaser through this function
     function deposit(
         bytes32 ilk,
         address asset,
@@ -257,6 +263,7 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         emit Deposit(ilk, asset, source, amount);
     }
 
+    ///  @dev userDeposit is for individual users to deposit funds into Chaser
     function userDeposit(address asset, uint256 amount) external {
         // This function does not update currentFundsChain nor currentFundsAddress to conduit
         // It is assumed that deposits will be made to conduit even when funds are held elsewhere.
@@ -283,11 +290,11 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         }
     }
 
+    ///  @dev queryMovePosition is used to propose a new pool that is currently a better investment according to the strategy
     function queryMovePosition(
         string memory requestProtocolSlug,
         string memory requestPoolId
     ) public {
-        // This is the function a user calls to make an assertion/propose moving funds
         bytes memory data = abi.encode(
             "The market on ",
             requestProtocolSlug,
@@ -301,9 +308,10 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
             currentStrategyScriptAddress
         );
         bytes32 dataId = bytes32(abi.encode(currentStrategyScriptAddress));
-        // string storage data = string("The market on " + requestProtocolSlug f);
         uint balance = IERC20(depositTokenAddress).balanceOf(address(this));
         IERC20(depositTokenAddress).approve(address(assertionsUMA), balance);
+
+        // Submit UMA assertion proposing the move
         bytes32 assertionId = assertionsUMA.assertDataFor(
             dataId,
             data,
@@ -313,12 +321,14 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         assertionToRequestedProtocol[assertionId] = requestProtocolSlug;
     }
 
+    ///  @dev executeMovePosition is a callback function that is executed by UMA oracle after a successful assertion
+    ///  @dev Also callback for Chainlink Functions Client after a node has completed the computation
     function executeMovePosition(bytes32 assertionId) external {
+        // Instantiate FunctionsConsumer from msg.sender
         // FunctionsConsumer consumer = FunctionsConsumer(msg.sender);
         // string memory newProtocolSlug = consumer.requestProtocolSlug();
         // string memory newTokenAddress = consumer.requestTokenAddress();
         string memory newPoolId = assertionToRequestedPool[assertionId];
-        // Instantiate FunctionsConsumer from msg.sender
         if (
             keccak256(abi.encode(currentDepositPoolId)) ==
             keccak256(abi.encode(newPoolId))
@@ -341,8 +351,7 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         );
 
         if (conduitBalance > 0 && newChainId != currentFundsChain) {
-            // How to get the chain of newPoolId?
-            // -FunctionsConsumer should cache the chainId of the
+            ///  @dev If applicable, bridge the funds to subconduit
             // bridgeToSubconduit(newChainId, depositTokenAddress, conduitBalance);
         }
 
@@ -352,16 +361,14 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
             conduitBalance
         );
 
-        // Set currentFundsChain currentFundsAddress states to result of oracle
-        // If Bridge Call is successful, submit CCIP interaction to subconduit to set the destination in subconduit state, also    passing in bytes for the deposit function from ExternalIntegrationFunctions
-
         // HERE THE CONTRACT WILL CCIP CALL THE SUBCONDUIT TO UPDATE STATE ON L2s
-
+        // If Bridge Call is successful, submit CCIP interaction to subconduit to set the destination in subconduit state, also    passing in bytes for the deposit function from ExternalIntegrationFunctions
         // Call router contract initiated with IRouterClient interface
         // IRouterClient.getFee()
         // IRouterClient.ccipSend()
     }
 
+    ///  @dev Spark SubDAO compatible conduit withdraw function
     function withdraw(
         bytes32 ilk,
         address asset,
@@ -440,6 +447,15 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         }
     }
 
+    ///  @dev Spark compatible request for liquidity. Needs to interact with subconduits on other chains to bridge funds back to Spark
+    function requestFunds(
+        bytes32 ilk,
+        address asset,
+        uint256 amount
+    ) external override {
+        // CCIP INTERACTION TO SUBCONDUIT TO BRIDGE FUNDS BACK TO SPARK ON MAINNET
+    }
+
     function cancelFundRequest(uint256 fundRequestId) external {
         FundRequest memory fundRequest = fundRequests[fundRequestId];
 
@@ -463,6 +479,8 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         emit CancelFundRequest(ilk, asset);
     }
 
+    ///  @dev Function to add support on another network. Address must point to a subconduit on another chain
+    ///  @dev In production this function will be access controlled
     function addSubconduit(
         uint256 chainId,
         address subconduitAddress
@@ -470,19 +488,19 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         chainIdToSubconduit[chainId] = subconduitAddress;
     }
 
+    ///  @dev Function to send funds through Across Bridge to subconduit on other chains
     function bridgeToSubconduit(
         uint256 destinationChainId,
         address tokenAddress,
         uint256 amount
     ) public {
-        // UPDATE LEDGERS AND BALANCES
         uint256 maxuint = 2 ** 256 - 1;
         SpokePoolInterface spokePool = SpokePoolInterface(spokePoolAddress);
         // ERC20 APPROVE
         IERC20(tokenAddress).approve(spokePoolAddress, amount);
         address subconduitAddress = chainIdToSubconduit[destinationChainId];
         spokePool.deposit(
-            address(0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E),
+            subconduitAddress,
             tokenAddress,
             amount,
             destinationChainId,
@@ -678,12 +696,6 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
     function pool() external view override returns (address) {}
 
     function pot() external view override returns (address) {}
-
-    function requestFunds(
-        bytes32 ilk,
-        address asset,
-        uint256 amount
-    ) external override {}
 
     function requestedShares(
         address asset,

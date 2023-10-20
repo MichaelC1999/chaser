@@ -10,7 +10,7 @@ const {
     FulfillmentCode,
 } = require("@chainlink/functions-toolkit");
 
-const functionsConsumerAbi = require("../functionsClient.json");
+const functionsConsumerAbi = require("../FunctionsClient.json");
 const strategyAbi = require("../strategy.json");
 
 const ethers = require("ethers");
