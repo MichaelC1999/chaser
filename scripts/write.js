@@ -59,7 +59,7 @@ const makeRequestMumbai = async () => {
 
 
     const bridgingConduit = new ethers.Contract(
-        "0x8dFb49332ac866350460FA825cE631a0d723e2cE",
+        "0xFE85D55c9f0625Ff1e486D52616133E6d4541396",
         BridgingConduitABI,
         signer
     );
@@ -77,7 +77,7 @@ const makeRequestMumbai = async () => {
     // Actual transaction call
     // const tx1 = await bridgingConduit.approveOracleSpend()
     // await tx1.wait()
-    const transaction = await bridgingConduit.queryMovePosition('aave-v3-ethereum', "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+    const transaction = await bridgingConduit.queryMovePosition('aave-v3-ethereum', "0x98c23e9d8f34fefb1b7bd6a91b7ff122f4e16f5c")
     // const transaction1 = await bridgingConduit.setCurrentPosition("0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951", "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357", { gasLimit: 1000000 })
     // const transaction = await bridgingConduit.moveToCurrentPosition(
     //     "0x617ba037000000000000000000000000ff34b3d4aee8ddcd6f9afffb6fe49bd371b8a3570000000000000000000000000000000000000000000000056bc75e2d631000000000000000000000000000004d3fa9e212a9cf7108c6d5ff83c1d42a426f62720000000000000000000000000000000000000000000000000000000000000000",

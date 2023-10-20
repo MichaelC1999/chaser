@@ -112,7 +112,11 @@ contract FunctionsConsumer is
     ) internal virtual override {
         s_lastResponse = response;
         s_lastError = err;
+        bytes32 res;
+        assembly {
+            res := mload(add(response, 32))
+        }
 
-        BridgingConduit(bridgingConduit).executeMovePosition(string(response));
+        BridgingConduit(bridgingConduit).executeMovePosition(res);
     }
 }

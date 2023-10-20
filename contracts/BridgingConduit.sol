@@ -96,7 +96,11 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         uint256 amount
     );
 
-    event CallbackExecuted(bytes newPoolId, uint256 balance);
+    event CallbackExecuted(
+        string newPoolId,
+        string protocolSlug,
+        uint256 balance
+    );
 
     FundRequest[] internal fundRequests;
 
@@ -128,6 +132,9 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
     mapping(bytes32 => uint256) public hashedSlugToChainId;
 
     mapping(bytes32 => address) public hashedSlugToFunctionsContract;
+
+    mapping(bytes32 => string) public assertionToRequestedPool;
+    mapping(bytes32 => string) public assertionToRequestedProtocol;
 
     uint256 public currentFundsChain = 1;
     address public currentFundsAddress;
@@ -177,7 +184,9 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         currentFundsAddress = address(this);
         // Send USDC to assertionUMA address
         assertionsUMA = new DataAsserter(depositTokenAddress, oracle);
-        currentStrategyScriptAddress = address(0);
+        currentStrategyScriptAddress = address(
+            0xaa73850EC018f49e5b0f8A902FBAf8e35a5471d0
+        );
     }
 
     /**********************************************************************************************/
@@ -238,20 +247,52 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         // Update ledgers and balances to record how much is now in conduit and how much is deposited elsewhere
         // Record amount bridged to chain
         IERC20(asset).transferFrom(source, address(this), amount);
+        if (
+            currentFundsChain != 1 &&
+            chainIdToSubconduit[currentFundsChain] != address(0)
+        ) {
+            bridgeToSubconduit(currentFundsChain, asset, amount);
+        }
 
         emit Deposit(ilk, asset, source, amount);
     }
 
+    function userDeposit(address asset, uint256 amount) external {
+        // This function does not update currentFundsChain nor currentFundsAddress to conduit
+        // It is assumed that deposits will be made to conduit even when funds are held elsewhere.
+        if (
+            currentFundsChain != 1 &&
+            chainIdToSubconduit[currentFundsChain] != address(0)
+        ) {
+            // update bridging metrics
+            cumulativeBridged[currentFundsChain] += amount;
+            currentBridged[currentFundsChain] += amount;
+        }
+
+        // Update these metrics regardless if funds will stay in conduit or be bridged
+        totalDeposits[asset] += amount;
+
+        // Update ledgers and balances to record how much is now in conduit and how much is deposited elsewhere
+        // Record amount bridged to chain
+        IERC20(asset).transferFrom(msg.sender, address(this), amount);
+        if (
+            currentFundsChain != 1 &&
+            chainIdToSubconduit[currentFundsChain] != address(0)
+        ) {
+            bridgeToSubconduit(currentFundsChain, asset, amount);
+        }
+    }
+
     function queryMovePosition(
         string memory requestProtocolSlug,
-        address requestTokenAddress
+        string memory requestPoolId
     ) public {
         // This is the function a user calls to make an assertion/propose moving funds
         bytes memory data = abi.encode(
             "The market on ",
             requestProtocolSlug,
-            " for token at address ",
-            requestTokenAddress,
+            " for pool with an id of ",
+            requestPoolId,
             " yields a better investment than the current market on ",
             currentDepositProtocolSlug,
             " with an id of ",
@@ -263,14 +304,20 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         // string storage data = string("The market on " + requestProtocolSlug f);
         uint balance = IERC20(depositTokenAddress).balanceOf(address(this));
         IERC20(depositTokenAddress).approve(address(assertionsUMA), balance);
-        assertionsUMA.assertDataFor(dataId, data, msg.sender);
+        bytes32 assertionId = assertionsUMA.assertDataFor(
+            dataId,
+            data,
+            msg.sender
+        );
+        assertionToRequestedPool[assertionId] = requestPoolId;
+        assertionToRequestedProtocol[assertionId] = requestProtocolSlug;
     }
 
-    function executeMovePosition(string memory newPoolId) external {
+    function executeMovePosition(bytes32 assertionId) external {
         // FunctionsConsumer consumer = FunctionsConsumer(msg.sender);
         // string memory newProtocolSlug = consumer.requestProtocolSlug();
         // string memory newTokenAddress = consumer.requestTokenAddress();
-
+        string memory newPoolId = assertionToRequestedPool[assertionId];
         // Instantiate FunctionsConsumer from msg.sender
         if (
             keccak256(abi.encode(currentDepositPoolId)) ==
@@ -279,6 +326,9 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
             // If the oracle returns the current Pool Id, no need to update states
         } else {
             currentDepositPoolId = newPoolId;
+            currentDepositProtocolSlug = assertionToRequestedProtocol[
+                assertionId
+            ];
         }
 
         // uint256 newChainId = hashedSlugToChainId[
@@ -293,10 +343,14 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         if (conduitBalance > 0 && newChainId != currentFundsChain) {
             // How to get the chain of newPoolId?
             // -FunctionsConsumer should cache the chainId of the
-            bridgeToSubconduit(newChainId, depositTokenAddress, conduitBalance);
+            // bridgeToSubconduit(newChainId, depositTokenAddress, conduitBalance);
         }
 
-        emit CallbackExecuted(abi.encode(newPoolId), conduitBalance);
+        emit CallbackExecuted(
+            newPoolId,
+            currentDepositProtocolSlug,
+            conduitBalance
+        );
 
         // Set currentFundsChain currentFundsAddress states to result of oracle
         // If Bridge Call is successful, submit CCIP interaction to subconduit to set the destination in subconduit state, also    passing in bytes for the deposit function from ExternalIntegrationFunctions

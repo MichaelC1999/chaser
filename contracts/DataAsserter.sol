@@ -34,7 +34,7 @@ contract DataAsserter {
     IERC20 public immutable defaultCurrency;
     OptimisticOracleV3Interface public immutable oo;
     // 3 minute liveness
-    uint64 public constant assertionLiveness = 180;
+    uint64 public constant assertionLiveness = 30;
     bytes32 public immutable defaultIdentifier;
     address public bridgingConduit;
 
@@ -145,9 +145,7 @@ contract DataAsserter {
                 dataAssertion.asserter,
                 assertionId
             );
-            BridgingConduit(bridgingConduit).executeMovePosition(
-                string((dataAssertion.data))
-            );
+            BridgingConduit(bridgingConduit).executeMovePosition(assertionId);
         } else delete assertionsData[assertionId];
     }
 

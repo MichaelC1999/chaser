@@ -8,6 +8,25 @@
         "anonymous": false,
         "inputs": [
             {
+                "indexed": false,
+                "internalType": "bytes",
+                "name": "newPoolId",
+                "type": "bytes"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "balance",
+                "type": "uint256"
+            }
+        ],
+        "name": "CallbackExecuted",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
                 "indexed": true,
                 "internalType": "bytes32",
                 "name": "ilk",
@@ -285,6 +304,25 @@
         "type": "function"
     },
     {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "name": "assertionToRequestedPool",
+        "outputs": [
+            {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
         "inputs": [],
         "name": "assertionsUMA",
         "outputs": [
@@ -532,12 +570,12 @@
     },
     {
         "inputs": [],
-        "name": "currentStrategyScriptURL",
+        "name": "currentStrategyScriptAddress",
         "outputs": [
             {
-                "internalType": "string",
+                "internalType": "address",
                 "name": "",
-                "type": "string"
+                "type": "address"
             }
         ],
         "stateMutability": "view",
@@ -648,9 +686,9 @@
     {
         "inputs": [
             {
-                "internalType": "string",
-                "name": "newPoolId",
-                "type": "string"
+                "internalType": "bytes32",
+                "name": "assertionId",
+                "type": "bytes32"
             }
         ],
         "name": "executeMovePosition",
@@ -1151,9 +1189,9 @@
                 "type": "string"
             },
             {
-                "internalType": "address",
-                "name": "requestTokenAddress",
-                "type": "address"
+                "internalType": "string",
+                "name": "requestPoolId",
+                "type": "string"
             }
         ],
         "name": "queryMovePosition",

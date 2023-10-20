@@ -23,7 +23,7 @@ async function main() {
 
     // const cons2 = await hre.ethers.getContractAt("BridConduit", "0x4D3fa9E212a9CF7108c6d5fF83C1d42A426F6272")
 
-    const conduit = await hre.ethers.getContractAt("BridgingConduit", "0x8dFb49332ac866350460FA825cE631a0d723e2cE")
+    const conduit = await hre.ethers.getContractAt("BridgingConduit", "0x2aD9b5de7F38Dcc42ae916d4B9ED43D2627F3E7f")
 
     console.log(await conduit.currentDepositPoolId())
     // function deposit(
