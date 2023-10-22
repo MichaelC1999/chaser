@@ -33,8 +33,6 @@ contract FunctionsConsumer is
     ) FunctionsClient(router) ConfirmedOwner(msg.sender) {
         donId = _donId;
         bridgingConduit = _bridgingConduit;
-        // This contract will be deployed by BridgingConduit for security purposes
-        // Pass BridgingConduit address in constructor to call conduit functions upon request fullfillment
     }
 
     /**
@@ -86,15 +84,6 @@ contract FunctionsConsumer is
             requestTokenAddress = args[3];
             req.setArgs(argsToPass);
         }
-        // if (
-        //     keccak256(abi.encodePacked(requestProtocolSlug)) !=
-        //     keccak256(abi.encodePacked(args[0]))
-        // ) {
-        //     requestProtocolSlug = args[0];
-        // }
-        // if (requestTokenAddress != address(bytes20(bytes(args[1])))) {
-        //     requestTokenAddress = address(bytes20(bytes(args[1])));
-        // }
 
         s_lastRequestId = _sendRequest(
             req.encodeCBOR(),

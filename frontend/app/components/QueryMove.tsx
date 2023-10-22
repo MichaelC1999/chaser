@@ -131,7 +131,7 @@ const QueryMove = ({ setErrorMessage }: QueryMoveProps) => {
             />
             {button}
             {assertionId ? <Typography>UMA Assertion: {assertionId}</Typography> : null}
-            {txReceipt ? <Typography>TX: {txReceipt}</Typography> : null}
+            {txReceipt ? <Typography><a href={"https://goerli.etherscan.io/tx/" + txReceipt}>TX: {txReceipt}</a></Typography> : null}
         </div>
     );
 };

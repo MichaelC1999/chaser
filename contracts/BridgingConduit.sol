@@ -583,6 +583,10 @@ contract BridgingConduit is IBridgingConduit, IInterestRateDataSource {
         );
     }
 
+    function returnToSpark() public {
+        // CCIP call to subconduit to send funds back to Spark on mainnet
+    }
+
     function addProtocolSupport(
         string[] memory slugs,
         uint256[] memory chainIds,

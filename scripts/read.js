@@ -25,7 +25,7 @@ async function main() {
 
     const conduit = await hre.ethers.getContractAt("BridgingConduit", "0x2aD9b5de7F38Dcc42ae916d4B9ED43D2627F3E7f")
 
-    console.log(await conduit.currentDepositPoolId())
+    console.log(await conduit.currentStrategyScriptAddress())
     // function deposit(
     //     address asset,
     //     uint256 amount,
