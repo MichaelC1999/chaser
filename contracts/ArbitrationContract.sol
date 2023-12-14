@@ -2,7 +2,7 @@
 pragma solidity ^0.8.9;
 import {IERC20} from "./interfaces/IERC20.sol";
 import {IOptimisticOracleV3} from "./interfaces/IOptimisticOracleV3.sol";
-import {IPivotPoolRegistry} from "./interfaces/IPivotPoolRegistry.sol";
+import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IPoolControl} from "./interfaces/IPoolControl.sol";
 import {AncillaryData} from "./libraries/AncillaryData.sol";
 
@@ -13,7 +13,7 @@ contract ArbitrationContract {
     uint64 public constant assertionLiveness = 30;
     bytes32 public immutable defaultIdentifier;
     address public bridgingConduit;
-    IPivotPoolRegistry public registry;
+    IChaserRegistry public registry;
 
     struct DataAssertion {
         bytes32 dataId; // The dataId that was asserted.
@@ -43,7 +43,7 @@ contract ArbitrationContract {
         address _defaultCurrency,
         address _optimisticOracleV3
     ) {
-        registry = IPivotPoolRegistry(_registry);
+        registry = IChaserRegistry(_registry);
         defaultCurrency = IERC20(_defaultCurrency);
         oo = IOptimisticOracleV3(_optimisticOracleV3);
         defaultIdentifier = oo.defaultIdentifier();
@@ -134,10 +134,10 @@ contract ArbitrationContract {
                 dataAssertion.asserter,
                 assertionId
             );
-            //Execute callback on PoolControl pivotPoolPosition()
+            //Execute callback on PoolControl chaserPosition()
 
             IPoolControl poolControl = IPoolControl(dataAssertion.asserter);
-            poolControl.pivotPoolPosition(assertionId);
+            poolControl.chaserPosition(assertionId);
         } else delete assertionsData[assertionId];
     }
 

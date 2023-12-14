@@ -16,7 +16,7 @@ contract BridgeConnection {
     // Import AAVE pool, Compound market, etc interface
     // Receives bridged funds and handles their positioning on external protocolsneed to properly allocate funds when more than one pool deposits into the same market
     // Needs PoolControl address as an argument when depositing,
-    // function to send funds back to the PivotPoolManager on mainnet
+    // function to send funds back to the ChaserManager on mainnet
     // function to send funds to new position on other L2
     //How will bridgeConnection handle pushing funds into position? Should the funds be escrowed to this contract and then transfered to external protocol?
     // Two cases

@@ -6,7 +6,7 @@ import {PoolControl} from "./PoolControl.sol";
 import {Registry} from "./Registry.sol";
 import {ArbitrationContract} from "./ArbitrationContract.sol";
 
-interface IPivotPoolManager {
+interface IChaserManager {
     function createNewPool(
         address poolAsset,
         uint amount,
@@ -17,7 +17,7 @@ interface IPivotPoolManager {
     function viewRegistryAddress() external view returns (address);
 }
 
-contract PivotPoolManager {
+contract ChaserManager {
     //Should this inherit a factory contract?
 
     //Addresses managed in registry

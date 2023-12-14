@@ -5,8 +5,8 @@ import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./PoolToken.sol";
 import {ISpokePool} from "./interfaces/ISpokePool.sol";
-import {IPivotPoolRegistry} from "./interfaces/IPivotPoolRegistry.sol";
-import {IPivotPoolManager} from "./PivotPoolManager.sol";
+import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
+import {IChaserManager} from "./ChaserManager.sol";
 import {IBridgeConnection} from "./BridgeConnection.sol";
 import {ArbitrationContract} from "./ArbitrationContract.sol";
 
@@ -27,8 +27,8 @@ contract PoolControl {
     uint256 LOCAL_CHAIN;
     address public assetAddress;
     ERC20 asset;
-    IPivotPoolManager public manager;
-    IPivotPoolRegistry public registry;
+    IChaserManager public manager;
+    IChaserRegistry public registry;
     PoolToken public poolToken;
 
     string public strategySource; // STRATEGY SOURCE CAN BE A REPO URL WITH CODE TO EXECUTE, OR THIS STRING COULD POINT TO AN ADDRESS/CHAIN/METHOD THAT RETURNS THE INSTRUCTIONS
@@ -67,8 +67,8 @@ contract PoolControl {
         string memory poolName,
         uint256 deploymentChain
     ) {
-        manager = IPivotPoolManager(address(msg.sender));
-        registry = IPivotPoolRegistry(manager.viewRegistryAddress());
+        manager = IChaserManager(address(msg.sender));
+        registry = IChaserRegistry(manager.viewRegistryAddress());
         LOCAL_CHAIN = deploymentChain;
         assetAddress = initialAsset;
         asset = ERC20(initialAsset);
@@ -296,14 +296,14 @@ contract PoolControl {
         }
     }
 
-    function pivotPoolPosition(bytes32 assertionId) external {
+    function chaserPosition(bytes32 assertionId) external {
         // This function makes the call to the BridgeConnection that is holding pool deposits, passing in the new chain/pool to move deposits to
         //Can only be called by Arbitration contract
         currentPositionAssertion = assertionId;
         address arbitrationContract = registry.arbitrationContract();
         require(
             msg.sender == arbitrationContract,
-            "pivotPoolPosition() may only be called by the arbitration contract"
+            "chaserPosition() may only be called by the arbitration contract"
         );
 
         string memory requestPoolId = assertionToRequestedPoolId[assertionId];

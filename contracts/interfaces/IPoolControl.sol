@@ -5,5 +5,5 @@ interface IPoolControl {
 
     function updateAsset(address) external;
 
-    function pivotPoolPosition(bytes32) external;
+    function chaserPosition(bytes32) external;
 }

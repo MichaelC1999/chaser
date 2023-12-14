@@ -3,7 +3,7 @@ pragma solidity ^0.8.9;
 
 import "hardhat/console.sol";
 
-interface IPivotPoolRegistry {
+interface IChaserRegistry {
     function poolEnabled(address) external returns (bool);
 
     function addPoolEnabled(address) external;
