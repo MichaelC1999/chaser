@@ -1,42 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.0;
-
-import "./ClaimData.sol";
+pragma solidity ^0.8.9;
 import {IERC20} from "./interfaces/IERC20.sol";
+import {IOptimisticOracleV3} from "./interfaces/IOptimisticOracleV3.sol";
+import {IPivotPoolRegistry} from "./interfaces/IPivotPoolRegistry.sol";
+import {IPoolControl} from "./interfaces/IPoolControl.sol";
+import {AncillaryData} from "./libraries/AncillaryData.sol";
 
-import {BridgingConduit} from "./BridgingConduit.sol";
-
-// This contract allows assertions on any form of data to be made using the UMA Optimistic Oracle V3 and stores the
-// proposed value so that it may be retrieved on chain. The dataId is intended to be an arbitrary value that uniquely
-// identifies a specific piece of information in the consuming contract and is replaceable. Similarly, any data
-// structure can be used to replace the asserted data.
-interface OptimisticOracleV3Interface {
-    function defaultIdentifier() external view returns (bytes32);
-
-    function getMinimumBond(address currency) external view returns (uint256);
-
-    function settleAssertion(bytes32 assertionId) external;
-
-    function assertTruth(
-        bytes memory claim,
-        address asserter,
-        address callbackRecipient,
-        address escalationManager,
-        uint64 liveness,
-        IERC20 currency,
-        uint256 bond,
-        bytes32 identifier,
-        bytes32 domainId
-    ) external returns (bytes32);
-}
-
-contract DataAsserter {
+contract ArbitrationContract {
     IERC20 public immutable defaultCurrency;
-    OptimisticOracleV3Interface public immutable oo;
+    IOptimisticOracleV3 public immutable oo;
     // 3 minute liveness
     uint64 public constant assertionLiveness = 30;
     bytes32 public immutable defaultIdentifier;
     address public bridgingConduit;
+    IPivotPoolRegistry public registry;
 
     struct DataAssertion {
         bytes32 dataId; // The dataId that was asserted.
@@ -61,9 +38,14 @@ contract DataAsserter {
         bytes32 indexed assertionId
     );
 
-    constructor(address _defaultCurrency, address _optimisticOracleV3) {
+    constructor(
+        address _registry,
+        address _defaultCurrency,
+        address _optimisticOracleV3
+    ) {
+        registry = IPivotPoolRegistry(_registry);
         defaultCurrency = IERC20(_defaultCurrency);
-        oo = OptimisticOracleV3Interface(_optimisticOracleV3);
+        oo = IOptimisticOracleV3(_optimisticOracleV3);
         defaultIdentifier = oo.defaultIdentifier();
         bridgingConduit = msg.sender;
     }
@@ -78,28 +60,37 @@ contract DataAsserter {
     }
 
     ///  @dev assertDataFor Opens the UMA assertion that must be verified using the strategy script provided
+    /// THIS FUNCTION GETS CALLED FROM queryMovePosition ON THE POOL CONTROL
     function assertDataFor(
-        bytes32 dataId,
         bytes memory data,
-        address asserter
+        address asserter,
+        uint256 bond
     ) public returns (bytes32 assertionId) {
-        asserter = asserter == address(0) ? msg.sender : asserter;
-        uint256 bond = oo.getMinimumBond(address(defaultCurrency));
-        defaultCurrency.transferFrom(msg.sender, address(this), bond);
+        // Confirm msg.sender is a pool in the registry
+        bool isPool = registry.poolEnabled(msg.sender);
+        require(
+            isPool == true,
+            "assertDataFor() may only be called by a valid pool."
+        );
+
+        bytes32 dataId = bytes32(abi.encode(asserter));
+
+        defaultCurrency.transferFrom(asserter, address(this), bond);
         defaultCurrency.approve(address(oo), bond);
 
+        //SHOULD THE TEXT IN assertTruth FOLLOW TEMPLATE?
         assertionId = oo.assertTruth(
             abi.encodePacked(
-                "Data asserted: ", // in the example data is type bytes32 so we add the hex prefix 0x.
+                "Data asserted: ",
                 data,
                 " for using the startegy logic located at: ",
-                ClaimData.toUtf8Bytes(dataId),
+                AncillaryData.toUtf8Bytes(dataId),
                 " and asserter: 0x",
-                ClaimData.toUtf8BytesAddress(asserter),
+                AncillaryData.toUtf8BytesAddress(asserter),
                 " at timestamp: ",
-                ClaimData.toUtf8BytesUint(block.timestamp),
+                AncillaryData.toUtf8BytesUint(block.timestamp),
                 " in the DataAsserter contract at 0x",
-                ClaimData.toUtf8BytesAddress(address(this)),
+                AncillaryData.toUtf8BytesAddress(address(this)),
                 " is valid."
             ),
             asserter,
@@ -117,6 +108,7 @@ contract DataAsserter {
             asserter,
             false
         );
+
         emit DataAsserted(dataId, data, asserter, assertionId);
     }
 
@@ -126,6 +118,12 @@ contract DataAsserter {
         bool assertedTruthfully
     ) public {
         require(msg.sender == address(oo));
+
+        // IMPORTANT - ASSERTION CAN RESOLVE TO TRUE IF THE INVESTMENT WAS VIABLE AT TIME OF PROPOSAL BUT IS UNVIABLE AT TIME OF SETTLEMENT
+        // -High bond assertion opens up asserting that the proposed market is no longer viable. This would cancel the original proposal
+        // -Original proposing user could possibly 'cancel' the proposal?
+        // -Could just ignore this issue, if the investment pivots to a worse investment, someone will soon propose a better investment. The opportunity cost of a few hours lost profit is prob negligible
+
         // If the assertion was true, then the data assertion is resolved.
         if (assertedTruthfully) {
             assertionsData[assertionId].resolved = true;
@@ -136,12 +134,17 @@ contract DataAsserter {
                 dataAssertion.asserter,
                 assertionId
             );
-            ///  @dev Execute logic on BridgingConduit to move funds and update states
-            BridgingConduit(bridgingConduit).executeMovePosition(assertionId);
+            //Execute callback on PoolControl pivotPoolPosition()
+
+            IPoolControl poolControl = IPoolControl(dataAssertion.asserter);
+            poolControl.pivotPoolPosition(assertionId);
         } else delete assertionsData[assertionId];
     }
 
     // If assertion is disputed, do nothing and wait for resolution.
     // This OptimisticOracleV3 callback function needs to be defined so the OOv3 doesn't revert when it tries to call it.
-    function assertionDisputedCallback(bytes32 assertionId) public {}
+    function assertionDisputedCallback(bytes32 assertionId) public {
+        //Clear up proposal
+        //Even if the dispute was invalid, the proposal is cancelled
+    }
 }

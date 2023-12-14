@@ -12,6 +12,7 @@ import { Fade } from '@mui/material';
 import abi from './BridgingConduitABI.json'
 import FundsState from "./components/FundsState";
 import QueryMove from "./components/QueryMove";
+import History from "./components/History";
 
 
 const HomePage = () => {
@@ -26,76 +27,11 @@ const HomePage = () => {
 
   const classes = useStyles({ connected });
 
-  useEffect(() => {
-    // Initialize the injected provider event listeners to execute behaviors if account/chain/unlock changes in Metamask 
-    windowOverride?.ethereum?.on("chainChanged", () => {
-      if (typeof window !== 'undefined') {
-        return window.location.reload();
-      }
-    });
-    windowOverride?.ethereum?.on("accountsChanged", () => {
-      if (ethers.isAddress(windowOverride?.ethereum?.selectedAddress)) {
-        setConnected(true);
-      }
-    });
-    checkUnlock();
-  }, [])
-
-  useEffect(() => {
-    try {
-      console.log(provider)
-      if (provider) {
-        getCurrentDepositLocation()
-      } else {
-        console.log("NO PROVIDER")
-      }
-    } catch (err: any) {
-      console.log("ERROR: " + err.message)
-    }
-  })
-
-  const provider: ethers.BrowserProvider = useMemo(() => {
-    return new ethers.BrowserProvider(windowOverride?.ethereum);
-  }, [windowOverride]);
-
-  const checkUnlock = async () => {
-    const isUnlocked = await windowOverride?.ethereum?._metamask?.isUnlocked();
-    setConnected(isUnlocked);
-  }
-
-
-  const getCurrentDepositLocation = async () => {
-    const readBridgingConduitContract: ethers.Contract = new ethers.Contract(bridgingConduitAddress, abi, provider);
-    const pool = await readBridgingConduitContract.currentDepositPoolId()
-    const slug = await readBridgingConduitContract.currentDepositProtocolSlug()
-    const strategy = await readBridgingConduitContract.currentStrategyScriptAddress()
-
-    console.log(pool, slug, strategy)
-    setCurrentPoolId(pool)
-    setCurrentProtocolSlug(slug)
-    setCurrentStrategy(strategy)
-  }
 
   return (
     <Fade in appear timeout={1500}>
       <div className={classes.root}>
-        <NetworkSwitcher />
-        <ErrorPopup errorMessage={errorMessage} errorMessageCallback={() => setErrorMessage("")} />
-        <div className={classes.buttonDiv}>
-          <ConnectButton connected={connected} setErrorMessage={(msg: string) => setErrorMessage(msg)} />
-        </div>
-        <Container maxWidth="lg" className={classes.contentContainer}>
-          <Typography className={classes.header}>
-            Chaser Protocol
-          </Typography>
-          <Button className={classes.toggleButton} onClick={() => setShowMovePropose(!showMovePropose)}>{showMovePropose ? "Show Current Deposit Info" : "Propose Move"}</Button>
-          {showMovePropose ? <QueryMove setErrorMessage={(msg: string) => setErrorMessage(msg)} /> : <FundsState currentPoolId={currentPoolId} currentProtocolSlug={currentProtocolSlug} currentStrategy={currentStrategy} />}
-
-          <div className={classes.childContainer}>
-
-            <Interaction setErrorMessage={(msg: string) => setErrorMessage(msg)} />
-          </div>
-        </Container>
+        <History setErrorMessage={setErrorMessage} />
       </div>
     </Fade>
   );

@@ -2,95 +2,77 @@ import React, { useState, useEffect } from 'react';
 import PurchaseObject from './PurchaseObject';
 import { formatEther } from 'ethers';
 import { makeStyles } from '@mui/styles';
-import { CircularProgress } from '@mui/material';
-import { Interface } from 'ethers';
-import BigNumber from 'bignumber.js';
-import FlipMove from 'react-flip-move';
+import { createGrpcTransport } from "@connectrpc/connect-node";
+import {
+    createAuthInterceptor,
+    createRegistry,
+    createRequest,
+    fetchSubstream,
+    isEmptyMessage,
+    streamBlocks,
+    unpackMapOutput,
+} from "@substreams/core";
 
 interface HistoryProps {
     setErrorMessage: (message: string) => void;
 }
 
 const History = ({ setErrorMessage }: HistoryProps) => {
-    const bridgingConduitAddress: string = process.env.NEXT_PUBLIC_CONDUIT_ADDRESS || "";
-    const etherscanURI = "https://api-goerli.etherscan.io/api?module=account&action=txlist&address=" + bridgingConduitAddress + "&startblock=0&endblock=99999999&page=1&offset=100&sort=desc&apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API;
+    const [outputArray, setOutputArray] = useState([]);
+    const [contracts, setContracts] = useState({});
 
-    const [historyObjects, setHistoryObjects] = useState<{ [x: string]: any }[]>([]);
-    const [loadContent, setLoadContent] = useState<Boolean>(false);
-    const [showCount, setShowCount] = useState<number>(5);
+    const SUBSTREAM = "https://spkg.io/streamingfast/erc20-balance-changes-v0.0.5.spkg";
+    const MODULE = "map_valid_balance_changes";
+
+    const createChannels = async () => {
+        const substream = await fetchSubstream(SUBSTREAM);
+        const registry = createRegistry(substream);
+        const transport = createGrpcTransport({
+            baseUrl: "https://mainnet.eth.streamingfast.io",
+            httpVersion: "2",
+            interceptors: [createAuthInterceptor("eyJhbGciOiJLTVNFUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIwMTUzNTE0OTMsImp0aSI6IjQxMDlkMjE0LWMyYTYtNGNmNi05YWYzLTNlYWNlMTFkZmI2YyIsImlhdCI6MTY5OTk5MTQ5MywiaXNzIjoiZGZ1c2UuaW8iLCJzdWIiOiIwY3lraTNlNGNlYWU2N2MzMDI3YjQiLCJ2IjoxLCJha2kiOiI1MGQyYjhhMTQxNmExMDhjMmM4NmVhZmZiZDU5OGE4NWI2YWI1MjE4NWFlYWY3MTY3MjNlM2UwMDMyYmUwYWVkIiwidWlkIjoiMGN5a2kzZTRjZWFlNjdjMzAyN2I0In0.sgJPeVaKWJxiXrObA67dC7X9u-G0Uy0xqegKjbTLWEhkAGBc-yh2jHf6Ic-S10vxqdQT_BMmpdFMvohviyjRyA")],
+            jsonOptions: {
+                typeRegistry: registry,
+            },
+        });
+
+        const request = createRequest({
+            substreamPackage: substream,
+            outputModule: MODULE,
+            productionMode: true,
+            startBlockNum: 18584817,
+            stopBlockNum: "+1000",
+        });
+        for await (const response of streamBlocks(transport, request)) {
+
+            console.log(response?.message?.value);
+        }
+    }
 
     const classes = useStyles();
 
 
     useEffect(() => {
         // Rather than calling getTxHistory() upon mount, set the loadContent state to true to display certain components while waiting for response from etherscan
-        setLoadContent(true);
+        createChannels()
     }, [])
 
     useEffect(() => {
         getTxHistory();
-    }, [loadContent])
+    }, [])
 
 
     const getTxHistory = async () => {
         try {
-            const res = await fetch(etherscanURI);
-            const resultTransactions = (await res.json()).result;
-            const transactions = resultTransactions.filter((x: any) => x.functionName.includes('buy(') && x.isError === "0");
-            const transactionsToRender = transactions.map((x: any) => {
-                // Construct the object that will be set in state
-                return {};
-            })
-            setHistoryObjects(transactionsToRender);
+
         } catch (err: any) {
-            // setErrorMessage("Error Fetching Transaction History: " + err?.info?.error?.message ?? err?.message);
         }
-        setLoadContent(false);
-    }
-
-    const handleLoadMorePurchases = () => {
-        setShowCount(prevCount => prevCount + 5);
-    }
-
-    let render: React.JSX.Element | null = null;
-    if (loadContent) {
-        // If the etherscan request is still loading, display a loading spinner
-        render = (
-            <div className={classes.centeredContainer}>
-                <CircularProgress className={classes.spinner} />
-            </div>
-        );
-    } else {
-        // Display a list of buy transaction history on the contract 
-        const purchaseObjects: React.JSX.Element[] = historyObjects.slice(0, showCount).map((obj: any) => (
-            <div key={obj.txHash}>
-                <PurchaseObject date={obj.date} amount={obj.amount} txHash={obj.txHash} />
-            </div>
-        ));
-
-        render = (
-            <div className="fullWidth">
-                <FlipMove
-                    typeName={null}
-                    enterAnimation="fade"
-                    leaveAnimation="fade"
-                    duration={500}
-                >
-                    {purchaseObjects}
-                </FlipMove>
-                <button className={classes.loadMoreButton} onClick={handleLoadMorePurchases}>
-                    Load More
-                </button>
-            </div>
-        );
     }
 
     return (
         <div className={classes.history}>
             <div className={classes.headerContainer}>
-                <span className="sectionHeader">Deposit History</span>
             </div>
-            {render}
         </div>
     );
 };

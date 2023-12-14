@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 /**
  * @notice Contains common data structures and functions used by all SpokePool implementations.
  */
-interface SpokePoolInterface {
+interface ISpokePool {
     // This leaf is meant to be decoded in the SpokePool to pay out successful relayers.
     struct RelayerRefundLeaf {
         // This is the amount to return to the HubPool. This occurs when there is a PoolRebalanceLeaf netSendAmount that
@@ -161,7 +161,7 @@ interface SpokePoolInterface {
 
     function executeRelayerRefundLeaf(
         uint32 rootBundleId,
-        SpokePoolInterface.RelayerRefundLeaf memory relayerRefundLeaf,
+        ISpokePool.RelayerRefundLeaf memory relayerRefundLeaf,
         bytes32[] memory proof
     ) external;
 
