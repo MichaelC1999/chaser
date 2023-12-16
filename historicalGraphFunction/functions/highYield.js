@@ -13,11 +13,11 @@ const strategyCalculation = async (args) => {
             },
             body: JSON.stringify({
                 query: `{
-                \x09\x6D\x61\x72\x6B\x65\x74\x44\x61\x69\x6C\x79\x53\x6E\x61\x70\x73\x68\x6F\x74\x73\x28\x66\x69\x72\x73\x74\x3A\x20\x33\x30\x2C\x20\x6F\x72\x64\x65\x72\x42\x79\x3A\x20\x74\x69\x6D\x65\x73\x74\x61\x6D\x70\x2C\x20\x6F\x72\x64\x65\x72\x44\x69\x72\x65\x63\x74\x69\x6F\x6E\x3A\x20\x64\x65\x73\x63\x2C\x20\x77\x68\x65\x72\x65\x3A\x20\x7B\x6D\x61\x72\x6B\x65\x74\x3A\x22\x24\x7B\x63\x75\x72\x50\x6F\x6F\x6C\x49\x64\x7D\x22\x7D\x29\x20\x7B\x0A
-                totalDepositBalanceUSD
-            dailySupplySideRevenueUSD
-        }
-    }`
+                	marketDailySnapshots(first: 30, orderBy: timestamp, orderDirection: desc, where: {market:"${curPoolId}"}) {
+                        totalDepositBalanceUSD
+                        dailySupplySideRevenueUSD
+                    }
+                }`
             })
         });
         const curPositionData = await curPositionDataResponse.json();
@@ -29,18 +29,18 @@ const strategyCalculation = async (args) => {
             },
             body: JSON.stringify({
                 query: `{
-                \x09\x6D\x61\x72\x6B\x65\x74\x44\x61\x69\x6C\x79\x53\x6E\x61\x70\x73\x68\x6F\x74\x73\x28\x66\x69\x72\x73\x74\x3A\x20\x33\x30\x2C\x20\x6F\x72\x64\x65\x72\x42\x79\x3A\x20\x74\x69\x6D\x65\x73\x74\x61\x6D\x70\x2C\x20\x6F\x72\x64\x65\x72\x44\x69\x72\x65\x63\x74\x69\x6F\x6E\x3A\x20\x64\x65\x73\x63\x2C\x20\x77\x68\x65\x72\x65\x3A\x20\x7B\x6D\x61\x72\x6B\x65\x74\x3A\x22\x24\x7B\x64\x65\x73\x50\x6F\x6F\x6C\x49\x64\x7D\x22\x7D\x29\x20\x7B\x0A
-            totalDepositBalanceUSD
-            dailySupplySideRevenueUSD
-        }
-    }`
+                	marketDailySnapshots(first: 30, orderBy: timestamp, orderDirection: desc, where: {market:"${desPoolId}"}) {
+                        totalDepositBalanceUSD
+                        dailySupplySideRevenueUSD
+                    }
+                }`
             })
         });
         const positionDesData = await positionDesDataResponse.json();
 
         let currentCumulative = 0;
         let currentRate = 0;
-        curPositionData.data.data.marketDailySnapshots.forEach((instance, index) => {
+        curPositionData.data.marketDailySnapshots.forEach((instance, index) => {
             const instanceApy = Number(((Number(instance.dailySupplySideRevenueUSD) * 365) / Number(Number(instance.totalDepositBalanceUSD)).toFixed(4)));
             if (instanceApy) {
                 currentRate = (currentCumulative + instanceApy) / (index + 1);
@@ -52,7 +52,7 @@ const strategyCalculation = async (args) => {
         if (!desPoolId) return (curPoolId);
         let destinationCumulative = 0;
         let destinationRate = 0;
-        positionDesData.data.data.marketDailySnapshots.forEach((instance, index) => {
+        positionDesData.data.marketDailySnapshots.forEach((instance, index) => {
             const instanceApy = Number(((Number(instance.dailySupplySideRevenueUSD) * 365) / Number(Number(instance.totalDepositBalanceUSD)).toFixed(4)));
             if (instanceApy) {
                 destinationRate = (destinationCumulative + instanceApy) / (index + 1)
@@ -60,6 +60,8 @@ const strategyCalculation = async (args) => {
             }
         }
         );
+
+        console.log(currentRate, destinationRate)
 
         if (destinationRate > currentRate && destinationRate > 0) return (desPoolId);
         return curPoolId;
@@ -78,4 +80,15 @@ const strategyCalculation = async (args) => {
 // - The proposed pool ID that the assertion says is a better investment
 // - The subgraph slug of the protocol-network that the proposed investment is located
 
-strategyCalculation([]);
+
+// We have the aave-v3-arbitrum WETH market as the current position that our pool has investments in
+// The proposal states that the compound-v3-arbitrum WETH market yields a better investment 
+// The return valu is the pool id that is a better investment 
+
+strategyCalculation([
+    "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8",
+    "aave-v3-arbitrum",
+    "0x9c4ec768c28520b50860ea7a15bd7213a9ff58bf82af49447d8a07e3bd95bd0d56f35241523fbab1",
+    "compound-v3-arbitrum"
+]).then(betterInvestment => console.log(betterInvestment));
+

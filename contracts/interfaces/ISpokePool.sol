@@ -166,4 +166,6 @@ interface ISpokePool {
     ) external;
 
     function chainId() external view returns (uint256);
+
+    function wrappedNativeToken() external view returns (address);
 }

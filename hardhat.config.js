@@ -7,7 +7,7 @@ require('dotenv').config({ path: __dirname + '/.env' });
 module.exports = {
   defaultNetwork: "goerli",
   solidity: {
-    version: "0.8.19",
+    version: "0.8.20",
     settings: {
       optimizer: {
         enabled: true,

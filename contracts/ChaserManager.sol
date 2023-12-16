@@ -30,9 +30,12 @@ contract ChaserManager {
     Registry public registry;
     ArbitrationContract public arbitrationContract;
 
-    constructor() {
+    constructor(uint256 chainId) {
         registry = new Registry();
-        arbitrationContract = new ArbitrationContract(address(registry));
+        arbitrationContract = new ArbitrationContract(
+            address(registry),
+            chainId
+        );
     }
 
     function createNewPool(

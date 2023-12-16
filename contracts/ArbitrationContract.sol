@@ -4,10 +4,11 @@ import {IERC20} from "./interfaces/IERC20.sol";
 import {IOptimisticOracleV3} from "./interfaces/IOptimisticOracleV3.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IPoolControl} from "./interfaces/IPoolControl.sol";
+import {ISpokePool} from "./interfaces/ISpokePool.sol";
 import {AncillaryData} from "./libraries/AncillaryData.sol";
 
 contract ArbitrationContract {
-    IERC20 public immutable defaultCurrency;
+    IERC20 public immutable umaCurrency; // umaCurrency is the asset used for UMA bond, not a pool's currency
     IOptimisticOracleV3 public immutable oo;
     // 3 minute liveness
     uint64 public constant assertionLiveness = 30;
@@ -38,14 +39,14 @@ contract ArbitrationContract {
         bytes32 indexed assertionId
     );
 
-    constructor(
-        address _registry,
-        address _defaultCurrency,
-        address _optimisticOracleV3
-    ) {
+    constructor(address _registry, uint256 chainId) {
+        // address _optimisticOracleV3
         registry = IChaserRegistry(_registry);
-        defaultCurrency = IERC20(_defaultCurrency);
-        oo = IOptimisticOracleV3(_optimisticOracleV3);
+        ISpokePool spokePool = ISpokePool(
+            registry.chainIdToSpokePoolAddress(chainId)
+        );
+        umaCurrency = IERC20(spokePool.wrappedNativeToken());
+        oo = IOptimisticOracleV3(registry.chainIdToUmaAddress(chainId));
         defaultIdentifier = oo.defaultIdentifier();
         bridgingConduit = msg.sender;
     }
@@ -66,6 +67,8 @@ contract ArbitrationContract {
         address asserter,
         uint256 bond
     ) public returns (bytes32 assertionId) {
+        // THIS IS FOR PROPOSING A POOL MOVE THEIR INVESTMENTS FOR A GIVEN STRATEGY
+
         // Confirm msg.sender is a pool in the registry
         bool isPool = registry.poolEnabled(msg.sender);
         require(
@@ -73,10 +76,12 @@ contract ArbitrationContract {
             "assertDataFor() may only be called by a valid pool."
         );
 
+        //IMPORTANT - IF POOL HAS NO CURRENT POSITION OR IF FUNDS ARE IN THE POOL CONTROL CONTRACT, APPROVE POSITION MOVEMENT IF THE DESTINATION POOL IS VALID. NO UMA ASSERTION NEEDED
+
         bytes32 dataId = bytes32(abi.encode(asserter));
 
-        defaultCurrency.transferFrom(asserter, address(this), bond);
-        defaultCurrency.approve(address(oo), bond);
+        umaCurrency.transferFrom(asserter, address(this), bond);
+        umaCurrency.approve(address(oo), bond);
 
         //SHOULD THE TEXT IN assertTruth FOLLOW TEMPLATE?
         assertionId = oo.assertTruth(
@@ -97,7 +102,64 @@ contract ArbitrationContract {
             address(this),
             address(0), // No sovereign security.
             assertionLiveness,
-            defaultCurrency,
+            umaCurrency,
+            bond,
+            defaultIdentifier,
+            bytes32(0) // No domain.
+        );
+        assertionsData[assertionId] = DataAssertion(
+            dataId,
+            data,
+            asserter,
+            false
+        );
+
+        emit DataAsserted(dataId, data, asserter, assertionId);
+    }
+
+    ///  @dev assertDataForInternal Opens the UMA assertion that must be verified using the strategy script provided
+    /// THIS FUNCTION GETS CALLED WHEN A USER ASSERTS THAT A CERTAIN CONDITION TO TRIGGER A PROTOCOL INTERNAL PROCESS HAS BEEN MET
+    /// THIS CONDITION IS MEASURABLE/VERIFIABLE BY SUBGRAPH DATA
+    function assertDataForInternal(
+        bytes memory data,
+        address asserter,
+        uint256 bond
+    ) public returns (bytes32 assertionId) {
+        // THIS IS FOR PROPOSING THE PROTOCOL TO EXECUTE SOME INTERNAL ACTIONS
+        // THE ASSERTION SAYS THAT A PREVIOUSLY SPECIFIED CONDITION HAS BEEN MET, TO BE VERIFIED BY UMA DISPUTERS EXECUTING STRATEGY LOGIC
+
+        // Confirm msg.sender is a pool in the registry
+        bool isPool = registry.poolEnabled(msg.sender);
+        require(
+            isPool == true,
+            "assertDataFor() may only be called by a valid pool."
+        );
+
+        bytes32 dataId = bytes32(abi.encode(asserter));
+
+        umaCurrency.transferFrom(asserter, address(this), bond);
+        umaCurrency.approve(address(oo), bond);
+
+        //SHOULD THE TEXT IN assertTruth FOLLOW TEMPLATE?
+        assertionId = oo.assertTruth(
+            abi.encodePacked(
+                "Data asserted: ",
+                data,
+                " for using the startegy logic located at: ",
+                AncillaryData.toUtf8Bytes(dataId),
+                " and asserter: 0x",
+                AncillaryData.toUtf8BytesAddress(asserter),
+                " at timestamp: ",
+                AncillaryData.toUtf8BytesUint(block.timestamp),
+                " in the DataAsserter contract at 0x",
+                AncillaryData.toUtf8BytesAddress(address(this)),
+                " is valid."
+            ),
+            asserter,
+            address(this),
+            address(0), // No sovereign security.
+            assertionLiveness,
+            umaCurrency,
             bond,
             defaultIdentifier,
             bytes32(0) // No domain.

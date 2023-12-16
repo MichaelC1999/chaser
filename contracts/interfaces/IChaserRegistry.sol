@@ -12,6 +12,10 @@ interface IChaserRegistry {
 
     function chainIdToBridgeConnection(uint256) external view returns (address);
 
+    function chainIdToSpokePoolAddress(uint256) external view returns (address);
+
+    function chainIdToUmaAddress(uint256) external view returns (address);
+
     function acrossAddress() external view returns (address);
 
     function arbitrationContract() external view returns (address);

@@ -141,12 +141,16 @@ contract PoolControl {
     }
 
     function enterFundsCrossChain(bytes32 depositId) internal {
+        // THIS FUNCTION IS FOR A USER MAKING A DEPOSIT INTO A POOL
+
         address sender = depositIdToDepositor[depositId];
         uint256 amount = depositIdToDepositAmount[depositId];
 
         //user made permit/approval for across
         // fund entrance can automatically bridge into position.
-        address acrossSpokePool = registry.acrossAddress();
+        address acrossSpokePool = registry.chainIdToSpokePoolAddress(
+            currentPositionChain
+        );
 
         // Take the sucessfully proposed position, input into a registry function to get Bridge Connection address for its chain
         address bridgeConnection = registry.chainIdToBridgeConnection(
@@ -328,7 +332,10 @@ contract PoolControl {
 
         //marketAddress is user address for user methods, pivot this is the destination market address
         address marketAddress = address(bytes20(bytes(requestPoolId)));
-        // IMPORTANT - The market id in the subgraph could be different than the address of market contract. The subgraph market id is needed for assertion,
+
+        // IMPORTANT - The market id in the subgraph could be different than the address of market contract. The subgraph market id is needed for assertion, the market address is needed to move funds into position
+        //IMPORTANT - NEED TO VERIFY makretAddress is not prone to manipulation (neither here nor on bridgeConnection)
+        // IMPORTANT - NEED TO VERIFY marketAddress ACTUALLY PERTAINS TO THE PROTOCOL RATHER THAN A DUMMY CLONE OF THE PROTOCOL. MAYBE CAN BE VERIFIED IN ASSERTION?
 
         bytes memory bridgingMessage = createPivotBridgingMessage(
             protocolHash,
@@ -351,7 +358,9 @@ contract PoolControl {
         //*************************************** */
         // IERC20(wethAddress).approve(acrossSpokePool, transferAmount);
 
-        address acrossSpokePool = registry.acrossAddress();
+        address acrossSpokePool = registry.chainIdToSpokePoolAddress(
+            currentPositionChain
+        );
 
         address destinationBridgeConnection = registry
             .chainIdToBridgeConnection(destinationChainId);
