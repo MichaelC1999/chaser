@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.9;
-import {IERC20} from "./interfaces/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IOptimisticOracleV3} from "./interfaces/IOptimisticOracleV3.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IPoolControl} from "./interfaces/IPoolControl.sol";
@@ -8,11 +8,11 @@ import {ISpokePool} from "./interfaces/ISpokePool.sol";
 import {AncillaryData} from "./libraries/AncillaryData.sol";
 
 contract ArbitrationContract {
-    IERC20 public immutable umaCurrency; // umaCurrency is the asset used for UMA bond, not a pool's currency
-    IOptimisticOracleV3 public immutable oo;
+    IERC20 public umaCurrency; // umaCurrency is the asset used for UMA bond, not a pool's currency
+    IOptimisticOracleV3 public oo;
     // 3 minute liveness
     uint64 public constant assertionLiveness = 30;
-    bytes32 public immutable defaultIdentifier;
+    bytes32 public defaultIdentifier;
     address public bridgingConduit;
     IChaserRegistry public registry;
 
@@ -42,12 +42,18 @@ contract ArbitrationContract {
     constructor(address _registry, uint256 chainId) {
         // address _optimisticOracleV3
         registry = IChaserRegistry(_registry);
-        ISpokePool spokePool = ISpokePool(
-            registry.chainIdToSpokePoolAddress(chainId)
-        );
-        umaCurrency = IERC20(spokePool.wrappedNativeToken());
-        oo = IOptimisticOracleV3(registry.chainIdToUmaAddress(chainId));
-        defaultIdentifier = oo.defaultIdentifier();
+
+        if (chainId != 1337) {
+            ISpokePool spokePool = ISpokePool(
+                registry.chainIdToSpokePoolAddress(chainId)
+            );
+
+            address umaCurrencyAddress = spokePool.wrappedNativeToken();
+            umaCurrency = IERC20(umaCurrencyAddress);
+            oo = IOptimisticOracleV3(registry.chainIdToUmaAddress(chainId));
+            defaultIdentifier = oo.defaultIdentifier();
+        }
+
         bridgingConduit = msg.sender;
     }
 

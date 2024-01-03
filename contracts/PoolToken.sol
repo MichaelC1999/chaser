@@ -19,7 +19,7 @@ contract PoolToken is ERC20 {
         poolAddress = address(msg.sender);
         // Take the rounded down base 10 log of total supplied tokens by user
         // Make the initial supply 10 ^ (18 + base10 log)
-        uint256 supplyFactor = (Math.log10(initialSupply) + 18);
+        uint256 supplyFactor = (Math.log10(initialSupply));
 
         uint256 initialTokensToDepositor = 10 ** supplyFactor;
 
@@ -31,8 +31,8 @@ contract PoolToken is ERC20 {
         _mint(recipient, amount);
     }
 
-    function burn(address recipient, uint256 amount) external {
+    function burn(address holder, uint256 amount) external {
         require(msg.sender == poolAddress, "Only pool may call burn");
-        _burn(recipient, amount);
+        _burn(holder, amount);
     }
 }

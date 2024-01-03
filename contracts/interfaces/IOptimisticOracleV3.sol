@@ -1,6 +1,6 @@
 pragma solidity ^0.8.9;
 
-import {IERC20} from "./IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IOptimisticOracleV3 {
     function defaultIdentifier() external view returns (bytes32);

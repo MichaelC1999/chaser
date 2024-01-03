@@ -4,17 +4,23 @@ pragma solidity ^0.8.9;
 import "hardhat/console.sol";
 
 interface IChaserRegistry {
+    function managerChainId() external view returns (uint256);
+
+    function currentChainId() external view returns (uint256);
+
     function poolEnabled(address) external returns (bool);
 
     function addPoolEnabled(address) external;
 
     function disablePool(address) external;
 
-    function chainIdToBridgeConnection(uint256) external view returns (address);
+    function chainIdToBridgedConnector(uint256) external view returns (address);
 
     function chainIdToSpokePoolAddress(uint256) external view returns (address);
 
     function chainIdToUmaAddress(uint256) external view returns (address);
+
+    function chainIdToEndpointId(uint256) external view returns (uint32);
 
     function acrossAddress() external view returns (address);
 

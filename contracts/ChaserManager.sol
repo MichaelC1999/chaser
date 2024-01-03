@@ -3,6 +3,7 @@ pragma solidity ^0.8.9;
 
 import "hardhat/console.sol";
 import {PoolControl} from "./PoolControl.sol";
+import {ChaserRouter} from "./ChaserRouter.sol";
 import {Registry} from "./Registry.sol";
 import {ArbitrationContract} from "./ArbitrationContract.sol";
 
@@ -30,17 +31,21 @@ contract ChaserManager {
     Registry public registry;
     ArbitrationContract public arbitrationContract;
 
-    constructor(uint256 chainId) {
-        registry = new Registry();
+    uint256 LOCAL_CHAIN;
+
+    event PoolCreated(address indexed poolAddress);
+
+    constructor(uint256 _chainId) {
+        LOCAL_CHAIN = _chainId;
+        registry = new Registry(_chainId, _chainId);
         arbitrationContract = new ArbitrationContract(
             address(registry),
-            chainId
+            _chainId
         );
     }
 
     function createNewPool(
         address poolAsset,
-        uint amount,
         string memory strategyURI,
         string memory poolName
     ) public {
@@ -49,13 +54,13 @@ contract ChaserManager {
         PoolControl pool = new PoolControl(
             initialDepositor,
             poolAsset,
-            amount,
             strategyURI,
             poolName,
-            42161
+            LOCAL_CHAIN
         );
         address poolAddress = address(pool);
         registry.addPoolEnabled(poolAddress);
+        emit PoolCreated(poolAddress);
     }
 
     function viewRegistryAddress() external view returns (address) {

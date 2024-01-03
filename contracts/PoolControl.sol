@@ -6,35 +6,40 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./PoolToken.sol";
 import {ISpokePool} from "./interfaces/ISpokePool.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
+import {IBridgedConnector} from "./interfaces/IBridgedConnector.sol";
+import {IChaserRouter} from "./interfaces/IChaserRouter.sol";
 import {IChaserManager} from "./ChaserManager.sol";
-import {IBridgeConnection} from "./BridgeConnection.sol";
 import {ArbitrationContract} from "./ArbitrationContract.sol";
 
 contract PoolControl {
-    //Gives ERC20 for pool position proportions
+    uint256 localChain;
+    bytes32 poolId;
+    address deployingUser;
+    uint256 public poolNonce = 0;
+    string public poolName;
+    string public strategySource; // STRATEGY SOURCE CAN BE A REPO URL WITH CODE TO EXECUTE, OR THIS STRING COULD POINT TO AN ADDRESS/CHAIN/METHOD THAT RETURNS THE INSTRUCTIONS
 
-    // TWO TYPES OF POOLS: BRIDGING/INTRACHAIN
-    // Bridging is less liquid but can access wider range of investments
-    // Intrachain is instant liquidity
-
-    //Operates as a local treasury for the pool, managing balances, deposits, withdraws.
-
-    // All funds pertaining to this pool are passed through here for deposits and withdraws
-    //Bridging functionality to spokes
-    // Holds strategy state. Points to a strategy to use
-    // oSnap voting for pool permissions
-    //Assertion calls originate here
-    uint256 LOCAL_CHAIN;
-    address public assetAddress;
-    ERC20 asset;
+    IChaserRouter public router;
+    IBridgedConnector public localBridgedConnector;
     IChaserManager public manager;
     IChaserRegistry public registry;
     PoolToken public poolToken;
+    ERC20 public asset;
 
-    string public strategySource; // STRATEGY SOURCE CAN BE A REPO URL WITH CODE TO EXECUTE, OR THIS STRING COULD POINT TO AN ADDRESS/CHAIN/METHOD THAT RETURNS THE INSTRUCTIONS
+    event PivotOrder(address, uint256, bytes32);
+    event DepositRecorded(bytes32, uint256);
+    event WithdrawRecorded(bytes32, uint256);
+    event AcrossMessageSent(bytes);
+    event LzMessageSent(bytes4, bytes);
+    event Numbers(uint256, uint256);
 
     mapping(bytes32 => address) depositIdToDepositor;
     mapping(bytes32 => uint256) depositIdToDepositAmount;
+    mapping(bytes32 => bool) depositIdToTokensMinted;
+
+    mapping(bytes32 => address) withdrawIdToDepositor;
+    mapping(bytes32 => uint256) withdrawIdToDepositAmount;
+    mapping(address => bool) userHasPendingWithdraw;
 
     mapping(bytes32 => string) public assertionToRequestedPoolId;
     mapping(bytes32 => string) public assertionToRequestedProtocol;
@@ -49,8 +54,9 @@ contract PoolControl {
 
     // current state holds the position that funds are currently deposited into. This facilitates withdraws. Current state gets set as chaser + address(this) when the bridge request to withdraw has been sent
     address currentPositionAddress;
-    uint256 currentPositionChain;
+    uint256 currentPositionChain = 80001; //IMPORTANT - CURRENT HARDCODED BEFORE PIVOT FUNCTIONALITY
     bytes32 currentPositionProtocolHash;
+    uint256 currentRecordPositionValue; //This holds the most recently recorded value of the entire position sent from the current position chain.
 
     // last state holds the previous position data. In the case of error while bridging, this is to rescue funds
     address lastPositionAddress;
@@ -58,62 +64,394 @@ contract PoolControl {
     bytes32 lastPositionProtocolHash;
 
     bytes32 currentPositionAssertion;
+    bool pivotPending = false;
 
+    struct Origin {
+        uint32 srcEid; // The source chain's Endpoint ID.
+        bytes32 sender; // The sending OApp address.
+        uint64 nonce; // The message nonce for the pathway.
+    }
+
+    /**
+     * @notice Initial pool configurations and address caching
+     * @param _deployingUser The address that called the pool deployment from the manager contract
+     * @param _asset The asset that is being invested in this pool
+     * @param _strategySource The source of the strategy for determining investment
+     * @param _poolName The name of the pool
+     * @param _localChain The integer Chain ID of this pool
+     */
     constructor(
-        address initialDepositor,
-        address initialAsset,
-        uint initialDepositAmount,
-        string memory strategy,
-        string memory poolName,
-        uint256 deploymentChain
+        address _deployingUser,
+        address _asset,
+        string memory _strategySource,
+        string memory _poolName,
+        uint256 _localChain
     ) {
+        localChain = _localChain;
+        poolId = keccak256(abi.encode(address(this), _poolName));
+        poolName = _poolName;
+        deployingUser = _deployingUser;
+        asset = ERC20(_asset);
+        strategySource = _strategySource;
         manager = IChaserManager(address(msg.sender));
         registry = IChaserRegistry(manager.viewRegistryAddress());
-        LOCAL_CHAIN = deploymentChain;
-        assetAddress = initialAsset;
-        asset = ERC20(initialAsset);
-        strategySource = strategy;
-
-        poolToken = new PoolToken(
-            initialDepositor,
-            initialDepositAmount,
-            poolName
+        localBridgedConnector = IBridgedConnector(
+            registry.chainIdToBridgedConnector(localChain)
         );
-
-        asset.transferFrom(
-            initialDepositor,
-            address(this),
-            initialDepositAmount
-        );
+        router = IChaserRouter(localBridgedConnector.chaserRouter());
     }
 
-    function updateAsset(address) public {
-        // NEEDS ACCESS CONTROL. Perhaps upon oSnap vote of users who have pool tokens
-    }
+    /**
+     * @notice Handles methods called from another chain through LZ. Router contract receives the message and calls pool methods through this function
+     * @param _method The name of the method that was called from the other chain
+     * @param _data The data to be calculated upon in the method
+     */
+    function receiveHandler(bytes4 _method, bytes memory _data) external {
+        //IMPORTANT - Should only be callable by pool router
+        // require(msg.sender != address(router), "");
 
-    function enterFunds(uint256 amount) public {
-        bytes32 depositId = keccak256(
-            abi.encode(msg.sender, amount, block.timestamp)
-        );
+        if (
+            _method ==
+            bytes4(keccak256(abi.encode("readPositionBalanceResult")))
+        ) {
+            // Decode the payload data
+            (uint256 positionAmount, bytes32 depositId) = abi.decode(
+                _data,
+                (uint256, bytes32)
+            );
+            //Receives the current value of the entire position. Sets this to a contract wide state (or mapping with timestamp => uint balance, and save timestamp to contract wide state)
 
-        depositIdToDepositor[depositId] = msg.sender;
-        depositIdToDepositAmount[depositId] = amount;
+            currentRecordPositionValue = positionAmount;
+            if (depositId != bytes32("")) {
+                mintUserPoolTokens(depositId, positionAmount);
+            }
 
-        if (currentPositionChain == LOCAL_CHAIN) {
-            enterFundsLocalChain(depositId);
-        } else {
-            enterFundsCrossChain(depositId);
+            //If depositId included in the payload data, mint position tokens for user
+            //Check mapping if depositId has minted position tokens yet
+        }
+        if (
+            _method == bytes4(keccak256(abi.encode("readPositionDataResult")))
+        ) {
+            //Receives data from the position on the current position chain. Sets this to mapping state
+        }
+        if (
+            _method ==
+            bytes4(keccak256(abi.encode("readRegistryAddressResult")))
+        ) {
+            //Receives the current address of an upgradeable contract on another chain. Sets this to a mapping state
         }
     }
 
-    function enterFundsLocalChain(bytes32 depositId) internal {
-        address sender = depositIdToDepositor[depositId];
-        delete depositIdToDepositor[depositId];
-        uint256 amount = depositIdToDepositAmount[depositId];
-        delete depositIdToDepositAmount[depositId];
+    /**
+     * @notice Standard Across Message reception
+     * @dev This function separates messages by method and executes the different logic for each based off of the first 4 bytes of the message
+     */
+    function handleAcrossMessage(
+        address tokenSent,
+        uint256 amount,
+        bool fillCompleted,
+        address relayer,
+        bytes memory message
+    ) external {
+        // IMPORTANT: HOW CAN I ACCESS CONTROL THIS FUNCTION TO ONLY BE CALLABLE BY SPOKE POOL? require msg.sender == spoke pool address
+        // IMPORTANT: THESE INTERNAL FUNCTIONS SHOULD BE MOVED TO A SEPARATE CONTRACT - IF THEY FAIL, THE TX WONT REVERT. THESE if{} SECTIONS SHOULD CACHE THE AMOUNT AND MESSAGE DATA FOR RETRY
+
+        // Separate method from message data
+        (bytes4 method, bytes memory data) = abi.decode(
+            message,
+            (bytes4, bytes)
+        );
+
+        if (method == bytes4(keccak256(abi.encode("poolReturn")))) {
+            // Receive the entire pool's funds if there are no currently viable markets or if the pool is disabled
+        }
+        if (method == bytes4(keccak256(abi.encode("userWithdrawOrder")))) {
+            //Take amount in asset sent through bridge and totalAvailableForUser, take this proportion
+            //Burn the users pool tokens based off this proportion
+            //Send user their tokens
+            (bytes32 withdrawId, uint256 totalAvailableForUser) = abi.decode(
+                data,
+                (bytes32, uint256)
+            );
+
+            address depositor = withdrawIdToDepositor[withdrawId];
+
+            uint256 userPoolTokenBalance = poolToken.balanceOf(depositor);
+            // asset/totalAvailableForUser=x/userPoolTokenBalance
+
+            // IMPORTANT - IF totalAvailableForUser IS VERY CLOSE TO amount, MAKE amount = totalAvailableForUser
+            if (totalAvailableForUser < amount) {
+                amount = totalAvailableForUser; // IMPORTANT - IF THE CALCULATED TOTAL AVAILABLE FOR USER IS LESS THAN THE AMOUNT BRIDGED BACK, ONLY TRANSFER THE CALCULATED AMOUNT TO USER
+            }
+            //COULD IT BE AMOUNT SENT IN THE BRIDGE FROM CONNECTOR?
+
+            uint256 poolTokensToBurn = userPoolTokenBalance;
+            if (totalAvailableForUser > 0) {
+                uint256 ratio = (amount * (10 ** 18)) / (totalAvailableForUser);
+                poolTokensToBurn = (ratio * userPoolTokenBalance) / (10 ** 18);
+            }
+
+            poolNonce += 1;
+
+            userHasPendingWithdraw[depositor] = false;
+            poolToken.burn(depositor, poolTokensToBurn);
+            asset.transfer(depositor, amount);
+        }
+    }
+
+    /**
+     * @notice The user-facing function for beginning the withdraw sequence
+     * @dev This function is the "A" of the "A=>B=>A" sequence of withdraws
+     * @dev On this chain we don't have access to the current position value after gains. If the amount specified is over the proportion available with user's pool tokens, withdraw the maximum proportion
+     * @param _amount The amount to withdraw, denominated in the pool asset
+     */
+    function userWithdrawOrder(uint256 _amount) external {
+        //IMPORTANT - Since we dont know the actual amount of pool tokens to be burnt from the withdraw, we should lock withdraws from the user until all pending withdraws are completed
+        require(
+            userHasPendingWithdraw[msg.sender] == false,
+            "User may only open new withdraw order if they do not have a pending withdraw order"
+        );
+        bytes32 withdrawId = keccak256(
+            abi.encode(msg.sender, _amount, block.timestamp)
+        );
+
+        withdrawIdToDepositor[withdrawId] = msg.sender;
+        withdrawIdToDepositAmount[withdrawId] = _amount;
+        userHasPendingWithdraw[msg.sender] = true;
+
+        emit WithdrawRecorded(withdrawId, _amount);
+
+        uint256 userPoolTokenBalance = poolToken.balanceOf(msg.sender);
+        require(userPoolTokenBalance > 0, "User has no deposits in pool");
+        uint256 poolTokenSupply = poolToken.totalSupply();
+
+        uint256 scaledRatio = (10 ** 18); // scaledRatio defaults to 1, if the user has all pool tokens
+        if (userPoolTokenBalance != poolTokenSupply) {
+            scaledRatio =
+                (userPoolTokenBalance * (10 ** 18)) /
+                (poolTokenSupply);
+        }
+
+        bytes memory data = abi.encode(
+            withdrawId,
+            address(this),
+            _amount,
+            poolNonce,
+            scaledRatio
+        );
+
+        bytes memory options;
+        bytes4 method = bytes4(keccak256(abi.encode("userWithdrawOrder")));
+
+        emit LzMessageSent(method, data);
+
+        router.send(
+            registry.chainIdToEndpointId(currentPositionChain),
+            method,
+            false,
+            address(this),
+            data,
+            options
+        );
+    }
+
+    /**
+     * @notice After pivot was successfully asserted, send the execution request for the pivot
+     */
+    function pivotPosition() external {
+        // Send message to BridgedConnector on new target position chain, with instructions to move funds to new position
+        // Uses lzSend to send message with instructions on how to handle pivot
+
+        bytes memory data;
+        bytes memory options;
+
+        router.send(
+            registry.chainIdToEndpointId(currentPositionChain),
+            bytes4(keccak256(abi.encode("pivotPosition"))),
+            false,
+            address(this),
+            data,
+            options
+        );
+    }
+
+    /**
+     * @notice Send a request to the position chain for the up to date value of the position (including any gains)
+     */
+    function readPositionBalance() external {
+        // Get the value of the entire position for the pool with gains
+        // Uses lzSend to send message to request this data be sent back
+        bytes4 method = bytes4(keccak256("readPositionBalance"));
+        bytes memory data;
+        bytes memory options;
+
+        router.send(
+            registry.chainIdToEndpointId(currentPositionChain),
+            method,
+            false,
+            address(this),
+            data,
+            options
+        );
+    }
+
+    /**
+     * @notice Send a request to the position chain for arbitrary data about the position
+     */
+    function getPositionData() external {
+        // Uses lzSend to request position data be sent back
+
+        bytes memory data;
+        bytes memory options;
+
+        router.send(
+            registry.chainIdToEndpointId(currentPositionChain),
+            bytes4(keccak256(abi.encode("getPositionData"))),
+            false,
+            address(this),
+            data,
+            options
+        );
+    }
+
+    /**
+     * @notice Send a request to the position chain to get an address from its' registry
+     */
+    function getRegistryAddress() external {
+        // Uses lzSend to request an address from the registry on another chain
+        bytes memory data;
+        bytes memory options;
+
+        router.send(
+            registry.chainIdToEndpointId(currentPositionChain),
+            bytes4(keccak256(abi.encode("getRegistryAddress"))),
+            false,
+            address(this),
+            data,
+            options
+        );
+    }
+
+    /**
+     * @notice Make the first deposit on the pool and set up the first position. This is a function meant to be called from a user/investing entity.
+     * @notice This function simultaneously sets the first position and deposits the first funds
+     * @notice After executing, other functions are called withdata generated in this function, in order to direction the position entrance
+     * @param _amount The amount of the initial deposit
+     * @param _relayFeePct The Across Bridge relay fee %
+     * @param _currentPositionAddress The address to be passed to the integration function for investment entrance
+     * @param _currentPositionChain The destination chain on which the first position exists
+     * @param _currentPositionProtocolHash The protocol that the position is made on
+     */
+    function userDepositAndSetPosition(
+        uint256 _amount,
+        int64 _relayFeePct,
+        address _currentPositionAddress,
+        uint256 _currentPositionChain,
+        bytes32 _currentPositionProtocolHash
+    ) public {
+        // This is for the initial deposit and position set up after pool creation
+        require(
+            msg.sender == deployingUser,
+            "Only deploying user can set position and deposit"
+        );
+        require(
+            poolNonce == 0,
+            "The position may only be set before the first deposit has settled"
+        );
+
+        // Set the current position values
+        currentPositionAddress = _currentPositionAddress;
+        currentPositionChain = _currentPositionChain;
+        currentPositionProtocolHash = _currentPositionProtocolHash;
+
+        // Generate a deposit ID
+        bytes32 depositId = keccak256(
+            abi.encode(msg.sender, _amount, block.timestamp)
+        );
+
+        // Map deposit ID to depositor and deposit amount
+        depositIdToDepositor[depositId] = msg.sender;
+        depositIdToDepositAmount[depositId] = _amount;
+        depositIdToTokensMinted[depositId] = false;
+
+        emit DepositRecorded(depositId, _amount);
+
+        // Encode the data including position details
+        bytes memory data = abi.encode(
+            depositId,
+            msg.sender,
+            currentPositionAddress,
+            currentPositionProtocolHash
+        );
+
+        emit PivotOrder(
+            currentPositionAddress,
+            currentPositionChain,
+            currentPositionProtocolHash
+        );
+
+        enterFundsCrossChain(depositId, _relayFeePct, true, data);
+    }
+
+    /**
+     * @notice Make a deposit on the pool
+     * @dev This function creates the deposit data and routes the function call depending on whether or not the position is local or cross chain
+     * @param _amount The amount of the deposit
+     * @param _relayFeePct The Across Bridge relay fee % (irrelevant if local deposit)
+     */
+    function userDeposit(uint256 _amount, int64 _relayFeePct) public {
+        bytes32 depositId = keccak256(
+            abi.encode(msg.sender, _amount, block.timestamp)
+        );
+
+        depositIdToDepositor[depositId] = msg.sender;
+        depositIdToDepositAmount[depositId] = _amount;
+        depositIdToTokensMinted[depositId] = false;
+
+        emit DepositRecorded(depositId, _amount);
+
+        if (currentPositionChain == localChain) {
+            enterFundsLocalChain(depositId);
+        } else {
+            enterFundsCrossChain(depositId, _relayFeePct, false, "");
+        }
+    }
+
+    function dummyUserDeposit(uint256 amount, int64 _relayFeePct) public {
+        bytes32 depositId = keccak256(
+            abi.encode(
+                address(0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199),
+                amount,
+                block.timestamp
+            )
+        );
+
+        depositIdToDepositor[depositId] = address(
+            0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199
+        );
+        depositIdToDepositAmount[depositId] = amount;
+        depositIdToTokensMinted[depositId] = false;
+
+        emit DepositRecorded(depositId, amount);
+
+        if (currentPositionChain == localChain) {
+            enterFundsLocalChain(depositId);
+        } else {
+            enterFundsCrossChain(depositId, _relayFeePct, false, "");
+        }
+    }
+
+    /**
+     * @notice Complete the process of sending funds to a local BridgedConnector fr entering the position
+     * @dev This function does not use the Bridge or cross chain communication for execution
+     * @param _depositId The id of the deposit, used for data lookup
+     */
+    function enterFundsLocalChain(bytes32 _depositId) internal {
+        address sender = depositIdToDepositor[_depositId];
+        uint256 amount = depositIdToDepositAmount[_depositId];
 
         uint256 poolPositionAmount = 0;
-        address currentConnectionAddress = registry.chainIdToBridgeConnection(
+        address currentConnectionAddress = registry.chainIdToBridgedConnector(
             currentPositionChain
         );
         if (currentPositionAddress == address(this)) {
@@ -124,9 +462,7 @@ contract PoolControl {
             poolPositionAmount = asset.balanceOf(address(this));
         } else {
             // -funds are in a connection/external on same chain
-            uint256 positionValueBeforeDeposit = IBridgeConnection(
-                currentConnectionAddress
-            ).readPositionValue();
+            uint256 positionValueBeforeDeposit = 0;
 
             // --read full position amount, get proportion of deposit to full position
             poolPositionAmount = positionValueBeforeDeposit + amount;
@@ -137,171 +473,90 @@ contract PoolControl {
         }
         // -Perform checks that the funds were transfered (wouldnt the tx fail if user didnt actually transfer?)
         // -mint tokens according to proportion
-        mintUserPoolTokens(depositId, poolPositionAmount);
+        mintUserPoolTokens(_depositId, poolPositionAmount);
     }
 
-    function enterFundsCrossChain(bytes32 depositId) internal {
-        // THIS FUNCTION IS FOR A USER MAKING A DEPOSIT INTO A POOL
+    /**
+     * @notice Complete the process of sending funds to the BridgedConnector on another chain for entering the position
+     * @dev This function is the first "A" step of the "A=>B=>A" deposit sequence
+     * @param _depositId The id of the deposit, used for data lookup
+     * @param _relayFeePct The Across Bridge relay fee %
+     * @param _isInitializer Boolean that determines whether or not the call is setting the first position
+     * @param _data Bytes that are passed in the Across "message" parameter, particularly to help set the position
+     */
+    function enterFundsCrossChain(
+        bytes32 _depositId,
+        int64 _relayFeePct,
+        bool _isInitializer,
+        bytes memory _data
+    ) internal {
+        require(
+            pivotPending == false,
+            "If a pivot proposal has been approved, no cross-chain position entrances are allowed"
+        );
 
-        address sender = depositIdToDepositor[depositId];
-        uint256 amount = depositIdToDepositAmount[depositId];
+        address sender = depositIdToDepositor[_depositId];
+        uint256 amount = depositIdToDepositAmount[_depositId];
 
-        //user made permit/approval for across
         // fund entrance can automatically bridge into position.
         address acrossSpokePool = registry.chainIdToSpokePoolAddress(
             currentPositionChain
         );
 
         // Take the sucessfully proposed position, input into a registry function to get Bridge Connection address for its chain
-        address bridgeConnection = registry.chainIdToBridgeConnection(
+        address bridgedConnector = registry.chainIdToBridgedConnector(
             currentPositionChain
         );
 
-        int64 relayerFeePct = 0; // SHOULD THIS BE HARDCODED OR INPUT?
+        bytes4 method = bytes4(keccak256(abi.encode("userDeposit")));
 
-        bytes32 method = keccak256("enterFunds()");
-        bytes32 userAddress = bytes32(
-            uint256(uint160(address(msg.sender))) << 96
-        );
-        bytes32 poolAddress = bytes32(uint256(uint160(address(this))) << 96);
-        bytes memory message = new bytes(96);
-
-        assembly {
-            mstore(add(message, 32), method)
-            mstore(add(message, 64), userAddress)
-            mstore(add(message, 96), poolAddress)
+        if (_isInitializer == true) {
+            method = bytes4(keccak256(abi.encode("positionInitializer")));
+        } else {
+            _data = abi.encode(_depositId, sender);
         }
 
-        ISpokePool(acrossSpokePool).deposit(
-            bridgeConnection,
-            assetAddress,
-            amount,
-            currentPositionChain,
-            relayerFeePct,
-            uint32(block.timestamp),
-            message,
-            0
-        );
+        bytes memory message = abi.encode(method, address(this), _data);
 
-        //Relay fee while assertion is open w/ no dispute is set higher for rapid fulfillment
+        // Approval made from sender to this contract
+        // spokePoolPreparation makes approval for spokePool
+        spokePoolPreparation(sender, amount);
+
+        emit AcrossMessageSent(message);
+
         //When assertion is settled, pivotPending state is true and no deposits are allowed until new position is successfully engaged
-        //Pool tokens are complicated because we cannot immediately get the position size after interest on the L2 bridge connection and figure out a deposit's proportion of the pool
-        // On the pool, user deposit is recorded as proportionate to the total funds pivoted into the position
-        // On the bridge connection whenever a user deposit is received, take a snapshot of how much interest has been gained since the pivot.
-        //
-        //
-        //
-        // user/DAO signs permit and then calls this function to deposit funds into this pool
-        // When funds are entered, they are no longer liquid to the depositor, as they are exchanged for position tokens for user who made withdraw request
-        // Pool tokens are not given to depositor until their funds are in the position. Either after a pivot and funds are moved to correct position, or a withdraw request gets fulfilled
-        // Pool token proportions should be calculated and minted on pivot
-        //how can we do this without a loop?
-        //Each entered funds between pivots gets recorded in a mapping, pivotNonce => address => amount
-        //Each entered funds mints erc20/721 for the pivot nonce, recording how proportional a users entered funds were when added to a pivot
-        //The pivot adds entered funds to the position, then mints pool tokens for the entered funds proportionate to the current deposits
-        //The minted pool tokens are given to the pool
-        // The depositor can call a function to burn their nonce tokens in exchange for the pool tokens
-        //if depositor still has nonce tokens and attempts to withdraw, the nonce tokens + pool tokns get burnt
-        //
-        // asset.transferFrom(msg.sender, address(this), amount);
-        // update balances/ledger
+        // ISpokePool(acrossSpokePool).deposit(
+        //     bridgedConnector,
+        //     assetAddress,
+        //     amount,
+        //     currentPositionChain,
+        //     _relayFeePct,
+        //     uint32(block.timestamp),
+        //     message,
+        //     (2 ** 256 - 1)
+        // );
     }
 
-    function mintUserPoolTokens(
-        bytes32 depositId,
-        uint256 poolPositionAmount
-    ) internal {
-        address depositor = depositIdToDepositor[depositId];
-        delete depositIdToDepositor[depositId];
-        uint256 userAssetDepositAmount = depositIdToDepositAmount[depositId];
-        delete depositIdToDepositAmount[depositId];
-        //Could there just be a depositor argument and get rid of userAssetDepositAmount?
-        // upon deposit set mapping user=>depositedAmountPending
-        // Once the full position amount is calcd, this function gets called
-        //Function has access to mapping
-        // IMPORTANT - IF USER MAKES MULTIPLE SUCCESSIVE BRIDGED DEPOSITS, THE TOTAL POSITION VALUE DOES NOT REFLECT ALL DEPOSITS UNTIL THEY HAVE ALL BEEN BRIDGED.
-        // WHERAS THE CALLBACK FOR MINTING TOKENS HERE IN POOL, THE MAPPING DEPOSIT AMOUNT REFLECTS ALL DEPOSITS MADE. GIVING USER A HIGHER POOL TOKEN PROPORTION THAN THEY REALLY SHOULD
-        // Could have 2 mappings, depositId => depoAddr and depositId => amount. Each callback returns the depositId which gives access to the depositor and depoamount.
-        // User can have multiple pending deposits and the proportion reflects at time of user deposit
-        // Is poolTokenSupplySnapshot necessary? If a later deposit returns callback quicker, the pool tokens that are minted could be disproportionate
-        // But the snapshot wouldnt reflect the pool tokens of deposits that came before deposit but have not settled yet
-        // The poolToken supply should be based on the amount at the time of minting
-
-        uint256 largeFactorUserAssetAmount = userAssetDepositAmount *
-            (10 ** 18);
-        uint256 ratio = largeFactorUserAssetAmount / poolPositionAmount;
-        uint256 poolTokenSupply = poolToken.totalSupply();
-        uint256 largeFactorPoolTokensToMint = largeFactorUserAssetAmount *
-            poolTokenSupply;
-        uint256 poolTokensToMint = largeFactorPoolTokensToMint / (10 ** 18);
-
-        poolToken.mint(depositor, poolTokensToMint);
-
-        //What is needed to mint pool tokens?
-        // -Proportion of deposit to current pool position
-        // -address of depositor
-        // -current amount of pooltokens in existence
-        // THREE CASES
-        // -funds are currently in this pool
-        // -funds are in a connection/external om same chain
-
-        // -funds are in a connection/external on other chain
-        // --Pooltokens are minted and distributed to depositors on the soonest pivot
-        // --State on pool holds the recent depositors who do not have tokens yet. The position size is now available after bridging from connection back to pool
-        // --Loop through the recent depositors and give their pool tokens
-        // --create additional function for users who need instant liquidity to pay higher gas fees and do the bridge + bridge back method
-    }
-
-    function orderWithdraw(uint amount) external {
-        // Withdraws for Bridging pools cannot be immediately fulfilled
-        // Record withdraw requests in order
-        //approves (address(this)) for their pool/nonce tokens
-        // If there are funds in this pool and no withdraw orders in front of this, burn the pool tokens proportionate and mint the depositors their pool tokens
-        //
-        //user withdraw directly from pool forfeits any interest earned for user during that position
-    }
-
-    //Should fund transfer transactions be initiated on manager or pool? Wherever funds are held must approve spoke pool for transfer of assets
-    //manager: prevent fraudulent pools, depo/with functionality with better upgradeability (all logic on single contract),Uniformity in how transactions are executed
-    //pool: calls to function on manager with msg.sender access control, better enables specific roles/users on a pool to execute certain actions
-    // Should deposits be held in the PoolControl or manager?
-    //manager: keeps all pools funds together, can still measure proportions to allocate for each pool
-    // pool: allows greater security, in the case of a hack it is easier to freeze/disable fund movement before entire deposits are drained. Contract holds only a single asset rather than manager holding various assets for each pool
-    //
-
-    //How should unfulfilled withdraw orders be paid out during a pivot to avoid unbounded loops?
-    // -Withdraw request keeps funds liquid in the pool for the user to withdraw in another transaction
-
-    //Is there a way (using across composable bridging) without sending funds, to request a withdraw from BridgeConnection on L2?
-    // -poses security issue to attempt to wait for bridge transaction to process + send the transaction. Could a conflict arise if a pivot executes in between bridge fulfillment?
-    // -Could block direct withdraws (removing from BridgeConnection) when an assertion is open. Defaulting to withdraw order instead
-    // -If assertion closes from dispute, depositor can change the order to a direct withdraw request
-    // -
-
-    //State contains position target, current position location and last position location (for failed bridge handling)
-    // When a pivot is accepted, the inter chain request to bridged position is sent. Locally, the current position is set to address(this), and last position
-
-    function handleAcrossMessage(
-        address tokenSent,
-        uint256 amount,
-        bool fillCompleted,
-        address relayer,
-        bytes memory message
-    ) external {
-        // IMPORTANT: HOW CAN I ACCESS CONTROL THIS FUNCTION TO ONLY BE CALLABLE BY SPOKE POOL? require msg.sender == spoke pool address
-        bytes32 methodHash = extractBytes32(message, 0);
-        if (methodHash == keccak256("passDepositProportion()")) {
-            // If the message indicates a pool mint, call mintUserPoolTokens()
-            // extract the total position value from message bytes
-            bytes32 depositId = extractBytes32(message, 1);
-            bytes32 poolPositionSupplyBytes32 = extractBytes32(message, 2);
-            uint256 poolPositionAmount = uint256(poolPositionSupplyBytes32);
-            mintUserPoolTokens(depositId, poolPositionAmount);
-        }
+    /**
+     * @notice IMPORTANT - TESTING FUNCTION, CAN DELETE. THIS IS FOR MAKING A DUMMY ACROSS WITHDRAW MESSAGE
+     * @param _method The method to call in message
+     * @param _withdrawId The id of the withdraw, for data lookup
+     * @param _totalAvailableWithdraw The total amount of assets that are available for user to withdraw
+     */
+    function generateAcrossMessage(
+        string memory _method,
+        bytes32 _withdrawId,
+        uint256 _totalAvailableWithdraw
+    ) external view returns (bytes memory) {
+        bytes4 method = bytes4(keccak256(abi.encode(_method)));
+        bytes memory data = abi.encode(_withdrawId, _totalAvailableWithdraw);
+        return (abi.encode(method, data));
     }
 
     function chaserPosition(bytes32 assertionId) external {
-        // This function makes the call to the BridgeConnection that is holding pool deposits, passing in the new chain/pool to move deposits to
+        //IMPORTANT - CHANGE TO LZ SEND
+
+        // This function makes the call to the BridgedConnector that is holding pool deposits, passing in the new chain/pool to move deposits to
         //Can only be called by Arbitration contract
         currentPositionAssertion = assertionId;
         address arbitrationContract = registry.arbitrationContract();
@@ -321,7 +576,7 @@ contract PoolControl {
 
         bytes32 protocolHash = registry.slugToProtocolHash(requestProtocolSlug);
 
-        //Construct across message with instructions for BridgeConnection to process the pivot
+        //Construct across message with instructions for BridgedConnector to process the pivot
         //What does this message need?
         // -Pool id/addr
         // -New position protocol name, market id/addr, chain
@@ -334,7 +589,7 @@ contract PoolControl {
         address marketAddress = address(bytes20(bytes(requestPoolId)));
 
         // IMPORTANT - The market id in the subgraph could be different than the address of market contract. The subgraph market id is needed for assertion, the market address is needed to move funds into position
-        //IMPORTANT - NEED TO VERIFY makretAddress is not prone to manipulation (neither here nor on bridgeConnection)
+        //IMPORTANT - NEED TO VERIFY makretAddress is not prone to manipulation (neither here nor on bridgedConnector)
         // IMPORTANT - NEED TO VERIFY marketAddress ACTUALLY PERTAINS TO THE PROTOCOL RATHER THAN A DUMMY CLONE OF THE PROTOCOL. MAYBE CAN BE VERIFIED IN ASSERTION?
 
         bytes memory bridgingMessage = createPivotBridgingMessage(
@@ -362,22 +617,12 @@ contract PoolControl {
             currentPositionChain
         );
 
-        address destinationBridgeConnection = registry
-            .chainIdToBridgeConnection(destinationChainId);
+        address destinationBridgedConnector = registry
+            .chainIdToBridgedConnector(destinationChainId);
 
         uint256 transferAmount = 0;
 
         // The amount bridged is protocol fee
-        ISpokePool(acrossSpokePool).deposit(
-            destinationBridgeConnection,
-            assetAddress,
-            transferAmount,
-            destinationChainId,
-            250000000000000000,
-            uint32(block.timestamp),
-            bridgingMessage,
-            (2 ** 256 - 1)
-        );
     }
 
     //THIS FUNCTION queryMovePosition() IS THE FIRST STEP IN THE PROCESS TO PIVOT MARKETS. ANY USER CALLS THIS FUNCTION, WHICH OPENS AN ASSERTION
@@ -399,7 +644,7 @@ contract PoolControl {
             registry.arbitrationContract()
         );
 
-        uint256 userAllowance = IERC20(assetAddress).allowance(
+        uint256 userAllowance = asset.allowance(
             msg.sender,
             address(arbitrationContract)
         );
@@ -446,12 +691,70 @@ contract PoolControl {
         assertionToRequestedProtocol[assertionId] = requestProtocolSlug;
     }
 
+    /**
+     * @notice Called after receiving communication of successful position entrance on the connector, minting tokens for the users proportional stake in the pool
+     * @param _depositId The id of the deposit, for data lookup
+     * @param _poolPositionAmount The amount of assets in the position, read recently from the connector in the "B" step of the "A=>B=>A" deposit sequence
+     */
+    function mintUserPoolTokens(
+        bytes32 _depositId,
+        uint256 _poolPositionAmount
+    ) internal {
+        require(
+            depositIdToTokensMinted[_depositId] == false,
+            "Deposit has already minted tokens"
+        );
+
+        address depositor = depositIdToDepositor[_depositId];
+        uint256 userAssetDepositAmount = depositIdToDepositAmount[_depositId];
+        poolNonce += 1;
+
+        if (address(poolToken) == address(0)) {
+            poolToken = new PoolToken(
+                depositor,
+                userAssetDepositAmount,
+                poolName
+            );
+        } else {
+            emit Numbers(userAssetDepositAmount, _poolPositionAmount);
+            uint256 ratio = (userAssetDepositAmount * (10 ** 18)) /
+                (_poolPositionAmount - userAssetDepositAmount);
+
+            // // Calculate the correct amount of pool tokens to mint
+            uint256 poolTokenSupply = poolToken.totalSupply();
+            uint256 poolTokensToMint = (ratio * poolTokenSupply) / (10 ** 18);
+
+            depositIdToTokensMinted[_depositId] = true;
+
+            poolToken.mint(depositor, poolTokensToMint);
+        }
+    }
+
+    /**
+     * @notice Transfer deposit funds from user to pool, make approval for funds to the spokepool for moving the funds to the destination chain
+     * @param _sender The address of the user who is making the deposit
+     * @param _amount The amount of assets to deposit
+     */
+    function spokePoolPreparation(address _sender, uint256 _amount) internal {
+        address acrossSpokePool = registry.chainIdToSpokePoolAddress(
+            localChain
+        );
+        require(acrossSpokePool != address(0), "SPOKE ADDR");
+        uint256 senderAssetBalance = asset.balanceOf(_sender);
+        require(
+            senderAssetBalance >= _amount,
+            "Sender has insufficient asset balance"
+        );
+        asset.transferFrom(_sender, address(this), _amount);
+        asset.approve(acrossSpokePool, _amount);
+    }
+
     function createPivotBridgingMessage(
         bytes32 protocolHash,
         address marketAddress,
         uint256 destinationChainId
     ) internal view returns (bytes memory) {
-        bytes4 method = bytes4(keccak256("exitPivot"));
+        bytes4 method = bytes4(keccak256(abi.encode("exitPivot")));
         bytes memory message = abi.encode(
             method,
             address(this),
@@ -463,55 +766,4 @@ contract PoolControl {
 
         return message;
     }
-
-    function createUserBridgingMessage(
-        bool isDepo,
-        bytes32 protocol,
-        address userAddress,
-        uint256 amountToWithdraw
-    ) internal view returns (bytes memory) {
-        bytes4 method = bytes4(keccak256("userWithdraw"));
-        if (isDepo == true) {
-            method = bytes4(keccak256("userDeposit"));
-        }
-
-        // userProportionRatio calculated from (user address balanceOf pool tokens)/(total supply pool tokens)
-        uint256 userProportionRatio = 0;
-
-        bytes memory message = abi.encode(
-            method,
-            address(this),
-            protocol,
-            userAddress,
-            amountToWithdraw,
-            userProportionRatio
-        );
-
-        return message;
-    }
-
-    function extractBytes32(
-        bytes memory data,
-        uint256 index
-    ) internal pure returns (bytes32) {
-        require(data.length >= (index + 1) * 32, "Insufficient data length");
-
-        bytes32 result;
-
-        assembly {
-            // Calculate the offset in bytes
-            let offset := mul(index, 32)
-
-            // Copy 32 bytes from data[offset] to result
-            mstore(result, mload(add(data, add(0x20, offset))))
-        }
-
-        return result;
-    }
 }
-
-// Biggest design roadblock is weighing balance of UX/Liquidity and interchain use
-// How can we handle user positions when bridging actions are taking place? State on main chain changes while L2/spoke is in the middle of transfering funds
-//Ex. User deposits USDC in mainnet pool, sending to the current position at ABC. While the funds are being bridged to current position, the pivot is being executed and the rest of the position has already bean removed from 'last' position located
-
-//Is there any way to execute a callback on origin chain after destination chain receives bridging req

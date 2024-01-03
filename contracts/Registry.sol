@@ -2,13 +2,30 @@
 pragma solidity ^0.8.9;
 
 import "hardhat/console.sol";
+import {BridgedConnector} from "./BridgedConnector.sol";
 
 contract Registry {
     //Addresses managed in registry
     //Contains supported protocols/chains
     // Functions for making sure that a proposal assertion is actually supported
 
-    constructor() {
+    //_currentChainId is the chain that this registry is currently deployed on
+    //_managerChainId is the chain that has the manager contract and all of the pools
+    constructor(uint256 _currentChainId, uint256 _managerChainId) {
+        if (_currentChainId == _managerChainId) {
+            manager = msg.sender;
+        }
+
+        currentChainId = _currentChainId;
+
+        managerChainId = _managerChainId;
+
+        address connectorAddress = address(
+            new BridgedConnector(_managerChainId)
+        );
+
+        addBridgedConnector(_currentChainId, connectorAddress);
+
         chainIdToSpokePoolAddress[1] = address(
             0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5
         );
@@ -42,6 +59,10 @@ contract Registry {
         );
 
         // TESTNET ADDRESSES
+        chainIdToSpokePoolAddress[1337] = address(
+            0x063fFa6C9748e3f0b9bA8ee3bbbCEe98d92651f7
+        );
+
         chainIdToSpokePoolAddress[5] = address(
             0x063fFa6C9748e3f0b9bA8ee3bbbCEe98d92651f7
         ); // Can bridge 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6 to 421613
@@ -62,13 +83,19 @@ contract Registry {
         chainIdToUmaAddress[80001] = address(
             0x263351499f82C107e540B01F0Ca959843e22464a
         );
+
+        chainIdToEndpointId[5] = 40121;
+
+        chainIdToEndpointId[80001] = 40109;
     }
 
     mapping(address => bool) public poolEnabled;
 
-    mapping(uint256 => address) public chainIdToBridgeConnection; //This uses CrossDeploy to create inter-chain registry of connection addresses
+    mapping(uint256 => address) public chainIdToBridgedConnector; //This uses CrossDeploy to create inter-chain registry of connection addresses
 
     mapping(uint256 => address) public chainIdToSpokePoolAddress;
+
+    mapping(uint256 => uint32) public chainIdToEndpointId; // Chain Id to the LayerZero endpoint Id
 
     mapping(uint256 => address) public chainIdToUmaAddress;
 
@@ -79,6 +106,12 @@ contract Registry {
     mapping(bytes32 => bool) private hashedProtocolToEnabled;
 
     mapping(bytes32 => bytes32) private hashedSlugToProtocolHash;
+
+    address manager;
+
+    uint256 public currentChainId;
+
+    uint256 public managerChainId;
 
     function enableProtocol(string memory protocol) external {
         //IMPORTANT - NEEDS ACCESS CONTROL
@@ -150,6 +183,12 @@ contract Registry {
     function disablePool(address poolAddress) public {
         //IMPORTANT - NEEDS ACCESS CONTROL
         poolEnabled[poolAddress] = false;
+    }
+
+    function addBridgedConnector(uint chainId, address connector) public {
+        //IMPORTANT - NEEDS ACCESS CONTROL
+
+        chainIdToBridgedConnector[chainId] = connector;
     }
 
     //HOW SHOULD CROSS CHAIN DEPLOYMENT ADDRESSES BE STORED? CONNECTIONS FOR AAVE ON MAINNET ARBITRUM ETC, WHILE THE REGISTRY IS ONLY ON ARB
