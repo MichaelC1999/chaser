@@ -32,6 +32,7 @@ contract PoolControl {
     event AcrossMessageSent(bytes);
     event LzMessageSent(bytes4, bytes);
     event Numbers(uint256, uint256);
+    event PivotCompleted(string, address, bytes32, uint256);
 
     mapping(bytes32 => address) depositIdToDepositor;
     mapping(bytes32 => uint256) depositIdToDepositAmount;
@@ -41,27 +42,28 @@ contract PoolControl {
     mapping(bytes32 => uint256) withdrawIdToDepositAmount;
     mapping(address => bool) userHasPendingWithdraw;
 
-    mapping(bytes32 => string) public assertionToRequestedPoolId;
+    mapping(bytes32 => string) public assertionToRequestedMarketId;
     mapping(bytes32 => string) public assertionToRequestedProtocol;
 
     // POSITION STATE
     //State contains position target, current position location and last position location (for failed bridge handling)
     // target state is for holding the position to pivot to. This facilitates the new position to enter
 
-    address targetPositionAddress; //THE MARKET ADDRESS THAT WILL BE PASSED TO BRIDGECONNECTION, NOT THE FINAL ADDRESS THAT FUNDS ARE ACTUALLY HELD IN
+    string targetPositionMarketId; //THE MARKET ADDRESS THAT WILL BE PASSED TO BRIDGECONNECTION, NOT THE FINAL ADDRESS THAT FUNDS ARE ACTUALLY HELD IN
     uint256 targetPositionChain;
     bytes32 targetPositionProtocolHash;
 
     // current state holds the position that funds are currently deposited into. This facilitates withdraws. Current state gets set as chaser + address(this) when the bridge request to withdraw has been sent
-    address currentPositionAddress;
-    uint256 currentPositionChain = 80001; //IMPORTANT - CURRENT HARDCODED BEFORE PIVOT FUNCTIONALITY
-    bytes32 currentPositionProtocolHash;
-    uint256 currentRecordPositionValue; //This holds the most recently recorded value of the entire position sent from the current position chain.
+    address public currentPositionAddress;
+    string public currentPositionMarketId;
+    uint256 public currentPositionChain = 1337; //IMPORTANT - CURRENT HARDCODED BEFORE PIVOT FUNCTIONALITY
+    bytes32 public currentPositionProtocolHash;
+    uint256 public currentRecordPositionValue; //This holds the most recently recorded value of the entire position sent from the current position chain.
 
     // last state holds the previous position data. In the case of error while bridging, this is to rescue funds
-    address lastPositionAddress;
-    uint256 lastPositionChain;
-    bytes32 lastPositionProtocolHash;
+    address public lastPositionAddress;
+    uint256 public lastPositionChain;
+    bytes32 public lastPositionProtocolHash;
 
     bytes32 currentPositionAssertion;
     bool pivotPending = false;
@@ -140,6 +142,43 @@ contract PoolControl {
         ) {
             //Receives the current address of an upgradeable contract on another chain. Sets this to a mapping state
         }
+        if (_method == bytes4(keccak256(abi.encode("pivotCompleted")))) {
+            (
+                string memory marketId,
+                address marketAddress,
+                bytes32 protocolHash,
+                uint256 positionAmount
+            ) = abi.decode(_data, (string, address, bytes32, uint256));
+
+            lastPositionAddress = currentPositionAddress;
+            lastPositionChain = currentPositionChain;
+            lastPositionProtocolHash = currentPositionProtocolHash;
+
+            currentPositionAddress = marketAddress;
+            currentPositionMarketId = marketId;
+            currentPositionChain = targetPositionChain;
+            currentPositionProtocolHash = protocolHash;
+            currentRecordPositionValue = positionAmount;
+
+            targetPositionMarketId = "";
+            targetPositionChain = 0;
+            targetPositionProtocolHash = bytes32("");
+
+            pivotPending = false;
+            emit PivotCompleted(
+                marketId,
+                lastPositionAddress,
+                lastPositionProtocolHash,
+                positionAmount
+            );
+
+            emit PivotCompleted(
+                marketId,
+                marketAddress,
+                protocolHash,
+                positionAmount
+            );
+        }
     }
 
     /**
@@ -210,6 +249,10 @@ contract PoolControl {
         require(
             userHasPendingWithdraw[msg.sender] == false,
             "User may only open new withdraw order if they do not have a pending withdraw order"
+        );
+        require(
+            pivotPending == false,
+            "Withdraws are blocked until the Pivot is completed"
         );
         bytes32 withdrawId = keccak256(
             abi.encode(msg.sender, _amount, block.timestamp)
@@ -390,6 +433,8 @@ contract PoolControl {
             currentPositionProtocolHash
         );
 
+        // IMPORTANT - UPDATE FOR CASE OF LOCAL CHAIN
+
         enterFundsCrossChain(depositId, _relayFeePct, true, data);
     }
 
@@ -404,35 +449,13 @@ contract PoolControl {
             abi.encode(msg.sender, _amount, block.timestamp)
         );
 
+        // IMPORTANT - While assertion is open, user deposits sit in the pool rather than being sent.
+
         depositIdToDepositor[depositId] = msg.sender;
         depositIdToDepositAmount[depositId] = _amount;
         depositIdToTokensMinted[depositId] = false;
 
         emit DepositRecorded(depositId, _amount);
-
-        if (currentPositionChain == localChain) {
-            enterFundsLocalChain(depositId);
-        } else {
-            enterFundsCrossChain(depositId, _relayFeePct, false, "");
-        }
-    }
-
-    function dummyUserDeposit(uint256 amount, int64 _relayFeePct) public {
-        bytes32 depositId = keccak256(
-            abi.encode(
-                address(0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199),
-                amount,
-                block.timestamp
-            )
-        );
-
-        depositIdToDepositor[depositId] = address(
-            0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199
-        );
-        depositIdToDepositAmount[depositId] = amount;
-        depositIdToTokensMinted[depositId] = false;
-
-        emit DepositRecorded(depositId, amount);
 
         if (currentPositionChain == localChain) {
             enterFundsLocalChain(depositId);
@@ -553,83 +576,82 @@ contract PoolControl {
         return (abi.encode(method, data));
     }
 
-    function chaserPosition(bytes32 assertionId) external {
+    function sendPositionChange(bytes32 assertionId) external {
         //IMPORTANT - CHANGE TO LZ SEND
+        // This gets executed open callback of the position pivot assertion resolving
+        // This send lz message to the connector to make the transition
 
-        // This function makes the call to the BridgedConnector that is holding pool deposits, passing in the new chain/pool to move deposits to
         //Can only be called by Arbitration contract
         currentPositionAssertion = assertionId;
         address arbitrationContract = registry.arbitrationContract();
-        require(
-            msg.sender == arbitrationContract,
-            "chaserPosition() may only be called by the arbitration contract"
-        );
+        // require(
+        //     msg.sender == arbitrationContract,
+        //     "sendPositionChange() may only be called by the arbitration contract"
+        // ); IMPORTANT - UNCOMMENT
 
-        string memory requestPoolId = assertionToRequestedPoolId[assertionId];
+        //SInce withdraws use  LZ ordered messaging, can be made uninterrupted up until the exitPivot is executed
+        //Block withdraws once exitPivot is executed, until the new target position is entered and sends message to pool
+
+        string memory requestMarketId = assertionToRequestedMarketId[
+            assertionId
+        ];
         string memory requestProtocolSlug = assertionToRequestedProtocol[
             assertionId
         ];
+
+        requestMarketId = string(
+            abi.encodePacked(assertionId, abi.encode("0xTEST"))
+        ); // REMOVE - TESTING
+        requestProtocolSlug = string(
+            abi.encodePacked(assertionId, abi.encode("SLUG"))
+        ); //REMOVE - TESTING
 
         uint256 destinationChainId = registry.slugToChainId(
             requestProtocolSlug
         );
 
+        if (currentPositionChain == 1337) {
+            destinationChainId = 80001; // REMOVE - TESTING
+        } else {
+            destinationChainId = 1337;
+        }
+
         bytes32 protocolHash = registry.slugToProtocolHash(requestProtocolSlug);
 
-        //Construct across message with instructions for BridgedConnector to process the pivot
-        //What does this message need?
-        // -Pool id/addr
-        // -New position protocol name, market id/addr, chain
-        // -User deposit info???
-        // -New position method bytes???
-
-        //CALL ACROSS DEPOSIT FOR EXECUTING THE PIVOT
-
-        //marketAddress is user address for user methods, pivot this is the destination market address
-        address marketAddress = address(bytes20(bytes(requestPoolId)));
-
-        // IMPORTANT - The market id in the subgraph could be different than the address of market contract. The subgraph market id is needed for assertion, the market address is needed to move funds into position
-        //IMPORTANT - NEED TO VERIFY makretAddress is not prone to manipulation (neither here nor on bridgedConnector)
-        // IMPORTANT - NEED TO VERIFY marketAddress ACTUALLY PERTAINS TO THE PROTOCOL RATHER THAN A DUMMY CLONE OF THE PROTOCOL. MAYBE CAN BE VERIFIED IN ASSERTION?
-
-        bytes memory bridgingMessage = createPivotBridgingMessage(
+        bytes memory pivotMessage = createPivotExitMessage(
             protocolHash,
-            marketAddress,
+            requestMarketId,
             destinationChainId
         );
 
-        // TEST-CEI REORDER IN PRODUCTION***********************
-        // uint256 wethBalance = IERC20(wethAddress).balanceOf(address(this));
-        // require(
-        //     wethBalance >= transferAmount,
-        //     "Deployer has insufficient asset balance"
-        // );
+        bytes memory options;
 
-        //How do we handle amounts/transfer in a pivot?
-        //No value needs to be transfered, but relayers still need to be paid
-        //Could this be sourced by the user signing off the assertionSettled callback?
-        //Doesnt need to be a high amount. However need funds on this network in order to pay these fees
+        bytes4 method = bytes4(keccak256(abi.encode("exitPivot")));
 
-        //*************************************** */
-        // IERC20(wethAddress).approve(acrossSpokePool, transferAmount);
+        targetPositionMarketId = requestMarketId;
+        targetPositionChain = destinationChainId;
+        targetPositionProtocolHash = protocolHash;
 
-        address acrossSpokePool = registry.chainIdToSpokePoolAddress(
-            currentPositionChain
+        pivotPending = true;
+
+        emit LzMessageSent(method, pivotMessage);
+        emit Numbers(currentPositionChain, destinationChainId);
+
+        router.send(
+            registry.chainIdToEndpointId(currentPositionChain),
+            method,
+            false,
+            address(this),
+            pivotMessage,
+            options
         );
-
-        address destinationBridgedConnector = registry
-            .chainIdToBridgedConnector(destinationChainId);
-
-        uint256 transferAmount = 0;
-
-        // The amount bridged is protocol fee
     }
 
     //THIS FUNCTION queryMovePosition() IS THE FIRST STEP IN THE PROCESS TO PIVOT MARKETS. ANY USER CALLS THIS FUNCTION, WHICH OPENS AN ASSERTION
     //IN ORDER TO CALL THIS FUNCTION, USER MUST APPROVE TOKEN TO THIS ADDRESS FOR BOND
     function queryMovePosition(
         string memory requestProtocolSlug,
-        string memory requestPoolId,
+        string memory requestMarketId,
         uint256 bond
     ) public {
         require(bond >= 1000000000, "Bond provided must be above 1000 USDC");
@@ -659,7 +681,7 @@ contract PoolControl {
         string memory currentDepositProtocolSlug = assertionToRequestedProtocol[
             currentPositionAssertion
         ];
-        string memory currentDepositPoolId = assertionToRequestedPoolId[
+        string memory currentDepositMarketId = assertionToRequestedMarketId[
             currentPositionAssertion
         ];
 
@@ -667,11 +689,11 @@ contract PoolControl {
             "The market on ",
             requestProtocolSlug,
             " for pool with an id of ",
-            requestPoolId,
+            requestMarketId,
             " yields a better investment than the current market on ",
             currentDepositProtocolSlug,
             " with an id of ",
-            currentDepositPoolId,
+            currentDepositMarketId,
             ". This is according to the current strategy whose Javascript logic that can be read from ",
             strategySource,
             " as of block ",
@@ -687,7 +709,7 @@ contract PoolControl {
         );
 
         //DOES THIS VIOLATE CEI?
-        assertionToRequestedPoolId[assertionId] = requestPoolId;
+        assertionToRequestedMarketId[assertionId] = requestMarketId;
         assertionToRequestedProtocol[assertionId] = requestProtocolSlug;
     }
 
@@ -749,21 +771,23 @@ contract PoolControl {
         asset.approve(acrossSpokePool, _amount);
     }
 
-    function createPivotBridgingMessage(
+    function createPivotExitMessage(
         bytes32 protocolHash,
-        address marketAddress,
+        string memory requestMarketId,
         uint256 destinationChainId
     ) internal view returns (bytes memory) {
-        bytes4 method = bytes4(keccak256(abi.encode("exitPivot")));
-        bytes memory message = abi.encode(
-            method,
+        address destinationBridgedConnector = registry
+            .chainIdToBridgedConnector(destinationChainId);
+
+        bytes memory data = abi.encode(
             address(this),
+            poolNonce,
             protocolHash,
-            marketAddress,
+            requestMarketId,
             destinationChainId,
-            0
+            destinationBridgedConnector
         );
 
-        return message;
+        return data;
     }
 }

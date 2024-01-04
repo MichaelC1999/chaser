@@ -10,7 +10,6 @@ import {AncillaryData} from "./libraries/AncillaryData.sol";
 contract ArbitrationContract {
     IERC20 public umaCurrency; // umaCurrency is the asset used for UMA bond, not a pool's currency
     IOptimisticOracleV3 public oo;
-    // 3 minute liveness
     uint64 public constant assertionLiveness = 30;
     bytes32 public defaultIdentifier;
     address public bridgingConduit;
@@ -83,6 +82,7 @@ contract ArbitrationContract {
         );
 
         //IMPORTANT - IF POOL HAS NO CURRENT POSITION OR IF FUNDS ARE IN THE POOL CONTROL CONTRACT, APPROVE POSITION MOVEMENT IF THE DESTINATION POOL IS VALID. NO UMA ASSERTION NEEDED
+        // IMPORTANT - NEED TO VERIFY marketAddress ACTUALLY PERTAINS TO THE PROTOCOL RATHER THAN A DUMMY CLONE OF THE PROTOCOL. MAYBE CAN BE VERIFIED IN ASSERTION?
 
         bytes32 dataId = bytes32(abi.encode(asserter));
 
@@ -187,11 +187,6 @@ contract ArbitrationContract {
     ) public {
         require(msg.sender == address(oo));
 
-        // IMPORTANT - ASSERTION CAN RESOLVE TO TRUE IF THE INVESTMENT WAS VIABLE AT TIME OF PROPOSAL BUT IS UNVIABLE AT TIME OF SETTLEMENT
-        // -High bond assertion opens up asserting that the proposed market is no longer viable. This would cancel the original proposal
-        // -Original proposing user could possibly 'cancel' the proposal?
-        // -Could just ignore this issue, if the investment pivots to a worse investment, someone will soon propose a better investment. The opportunity cost of a few hours lost profit is prob negligible
-
         // If the assertion was true, then the data assertion is resolved.
         if (assertedTruthfully) {
             assertionsData[assertionId].resolved = true;
@@ -202,10 +197,10 @@ contract ArbitrationContract {
                 dataAssertion.asserter,
                 assertionId
             );
-            //Execute callback on PoolControl chaserPosition()
+            //Execute callback on PoolControl sendPositionChange()
 
             IPoolControl poolControl = IPoolControl(dataAssertion.asserter);
-            poolControl.chaserPosition(assertionId);
+            poolControl.sendPositionChange(assertionId);
         } else delete assertionsData[assertionId];
     }
 

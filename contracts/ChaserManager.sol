@@ -42,6 +42,7 @@ contract ChaserManager {
             address(registry),
             _chainId
         );
+        registry.addArbitrationContract(address(arbitrationContract));
     }
 
     function createNewPool(

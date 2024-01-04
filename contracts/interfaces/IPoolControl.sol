@@ -38,7 +38,7 @@ interface IPoolControl {
         bytes memory message
     ) external;
 
-    function chaserPosition(bytes32 assertionId) external;
+    function sendPositionChange(bytes32 assertionId) external;
 
     function queryMovePosition(
         string memory requestProtocolSlug,

@@ -109,6 +109,8 @@ contract Registry {
 
     address manager;
 
+    address public arbitrationContract; // The address of the arbitrationContract on the pool chain
+
     uint256 public currentChainId;
 
     uint256 public managerChainId;
@@ -171,7 +173,10 @@ contract Registry {
     function slugToProtocolHash(
         string memory slug
     ) external view returns (bytes32) {
-        bytes32 hash = keccak256(abi.encode(slug));
+        return keccak256(abi.encode(slug));
+    }
+
+    function ProtocolHashToSlug(bytes32 hash) external view returns (bytes32) {
         return hashedSlugToProtocolHash[hash];
     }
 
@@ -189,6 +194,14 @@ contract Registry {
         //IMPORTANT - NEEDS ACCESS CONTROL
 
         chainIdToBridgedConnector[chainId] = connector;
+    }
+
+    function addArbitrationContract(address _arbitrationContract) external {
+        require(
+            msg.sender == manager,
+            "Only the Manager contract may set the arbitration contract"
+        );
+        arbitrationContract = _arbitrationContract;
     }
 
     //HOW SHOULD CROSS CHAIN DEPLOYMENT ADDRESSES BE STORED? CONNECTIONS FOR AAVE ON MAINNET ARBITRUM ETC, WHILE THE REGISTRY IS ONLY ON ARB
