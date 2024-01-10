@@ -6,9 +6,10 @@ import {OApp, Origin, MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contract
 import {IPoolControl} from "./interfaces/IPoolControl.sol";
 import {IBridgedConnector} from "./interfaces/IBridgedConnector.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
+import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 
-// IMPORTANT - contract ChaserRouter is OApp {
-contract ChaserRouter {
+contract ChaserRouter is OApp {
+    // contract ChaserRouter {
     // Manages LayerZero communications with other chains
     // Receives lzReceive messages from BridgedRouter, then calls the proper PoolControl functions to update state on pool
 
@@ -20,12 +21,15 @@ contract ChaserRouter {
     /**
      * @dev Constructor to initialize the omnichain contract.
      * @param _endpoint Address of the LayerZero endpoint.
-     * @param _owner Address of the contract owner.
+     * @param _registry Address of the contract registry.
      */
-    //IMPORTANT - constructor(address _endpoint, address _owner) OApp(_endpoint, _owner) {
-    constructor(address _endpoint, address _owner) {
+    constructor(
+        address _endpoint,
+        address _registry
+    ) OApp(_endpoint, msg.sender) {
+        // constructor(address _endpoint, address _owner) {
         connector = msg.sender;
-        registry = IChaserRegistry(_owner);
+        registry = IChaserRegistry(_registry);
     }
 
     function send(
@@ -34,23 +38,23 @@ contract ChaserRouter {
         bool isDestinationPool,
         address poolAddress,
         bytes memory _data,
-        bytes calldata _options
+        uint256 _dstGasWei
     ) external payable {
         uint32 dstEid = registry.chainIdToEndpointId(_destinationChainId);
-
+        bytes memory options = buildOptions(_dstGasWei);
         bytes memory message = generateSendMessage(
             method,
             isDestinationPool,
             poolAddress,
             _data
         );
-        // _lzSend(
-        //     dstEid, // Destination chain's endpoint ID.
-        //     message, // Encoded message payload being sent.
-        //     _options, // Message execution options (e.g., gas to use on destination).
-        //     MessagingFee(msg.value, 0), // Fee struct containing native gas and ZRO token.
-        //     payable(msg.sender) // The refund address in case the send call reverts.
-        // );
+        _lzSend(
+            dstEid, // Destination chain's endpoint ID.
+            message, // Encoded message payload being sent.
+            options, // Message execution options (e.g., gas to use on destination).
+            MessagingFee(msg.value, 0), // Fee struct containing native gas and ZRO token.
+            payable(msg.sender) // The refund address in case the send call reverts.
+        );
     }
 
     function methodHash(string memory method) public view returns (bytes4) {
@@ -79,8 +83,8 @@ contract ChaserRouter {
         bytes32 _guid,
         bytes calldata _message,
         address _executor,
-        bytes calldata _extraData // IMPORTANT - ) internal override {
-    ) internal {
+        bytes calldata _extraData
+    ) internal override {
         // IMPORTANT - NEED TO IMPLEMENT NONCED/ORDERED DELIVERY
         (
             bytes4 method,
@@ -114,5 +118,28 @@ contract ChaserRouter {
             address poolAddress,
             bytes memory data
         ) = abi.decode(_payload, (bytes4, bool, address, bytes));
+    }
+
+    function buildOptions(
+        uint256 _dstGasWei
+    ) public view returns (bytes memory) {
+        bytes memory options = OptionsBuilder.addExecutorLzReceiveOption(
+            OptionsBuilder.newOptions(),
+            uint128(_dstGasWei),
+            0
+        );
+        return options;
+    }
+
+    function quote(
+        uint32 _dstEid, // Destination chain's endpoint ID.
+        uint256 _dstGasWei,
+        string memory _message // The message to send.
+    ) public view returns (uint256 nativeFee) {
+        bytes memory options = buildOptions(_dstGasWei);
+        bytes memory _payload = abi.encode(_message);
+
+        MessagingFee memory fee = _quote(_dstEid, _payload, options, false);
+        return fee.nativeFee;
     }
 }

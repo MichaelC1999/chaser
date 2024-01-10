@@ -15,6 +15,8 @@ interface IChaserManager {
         string memory poolName
     ) external;
 
+    function initializeContractConnections(address) external;
+
     function viewRegistryAddress() external view returns (address);
 }
 
@@ -38,11 +40,11 @@ contract ChaserManager {
     constructor(uint256 _chainId) {
         LOCAL_CHAIN = _chainId;
         registry = new Registry(_chainId, _chainId);
-        arbitrationContract = new ArbitrationContract(
-            address(registry),
-            _chainId
-        );
-        registry.addArbitrationContract(address(arbitrationContract));
+        // arbitrationContract = new ArbitrationContract(
+        //     address(registry),
+        //     _chainId
+        // );
+        // registry.addArbitrationContract(address(arbitrationContract));
     }
 
     function createNewPool(
@@ -62,6 +64,12 @@ contract ChaserManager {
         address poolAddress = address(pool);
         registry.addPoolEnabled(poolAddress);
         emit PoolCreated(poolAddress);
+    }
+
+    function initializeContractConnections(address _poolAddress) external {
+        PoolControl(_poolAddress).initializeContractConnections(
+            address(registry)
+        );
     }
 
     function viewRegistryAddress() external view returns (address) {

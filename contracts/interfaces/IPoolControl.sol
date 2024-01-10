@@ -2,52 +2,99 @@
 pragma solidity ^0.8.9;
 
 interface IPoolControl {
-    function generatePayload(
-        string memory name,
-        uint256 amount,
-        bytes32 depositId
-    ) external view returns (bytes memory);
+    // Public state variables as view functions
+    function localChain() external view returns (uint256);
 
-    function userWithdrawOrder() external;
+    function poolId() external view returns (bytes32);
 
-    function pivotPosition() external;
+    function deployingUser() external view returns (address);
 
-    function getPositionValueWithGains() external;
+    function poolNonce() external view returns (uint256);
 
-    function getPositionData() external;
+    function poolName() external view returns (string memory);
 
-    function getRegistryAddress() external;
+    function strategySource() external view returns (string memory);
+
+    function router() external view returns (address);
+
+    function localBridgedConnector() external view returns (address);
+
+    function manager() external view returns (address);
+
+    function registry() external view returns (address);
+
+    function poolToken() external view returns (address);
+
+    function asset() external view returns (address);
+
+    function targetPositionMarketId() external view returns (string memory);
+
+    function targetPositionChain() external view returns (uint256);
+
+    function targetPositionProtocolHash() external view returns (bytes32);
+
+    function currentPositionAddress() external view returns (address);
+
+    function currentPositionMarketId() external view returns (string memory);
+
+    function currentPositionChain() external view returns (uint256);
+
+    function currentPositionProtocolHash() external view returns (bytes32);
+
+    function currentRecordPositionValue() external view returns (uint256);
+
+    function lastPositionAddress() external view returns (address);
+
+    function lastPositionChain() external view returns (uint256);
+
+    function lastPositionProtocolHash() external view returns (bytes32);
+
+    function currentPositionAssertion() external view returns (bytes32);
+
+    function pivotPending() external view returns (bool);
+
+    // External/Public functions
+    function initializeContractConnections(address) external;
 
     function receiveHandler(bytes4, bytes memory) external;
 
-    function userDepositAndSetPosition(
-        uint256 amount,
-        int64 relayFeePct,
-        address _currentPositionAddress,
-        uint256 _currentPositionChain,
-        bytes32 _currentPositionProtocolHash
-    ) external;
-
-    function userDeposit(uint256 amount, int64 relayFeePct) external;
-
     function handleAcrossMessage(
-        address tokenSent,
-        uint256 amount,
-        bool fillCompleted,
-        address relayer,
-        bytes memory message
+        address,
+        uint256,
+        bool,
+        address,
+        bytes memory
     ) external;
 
-    function sendPositionChange(bytes32 assertionId) external;
+    function userWithdrawOrder(uint256) external payable;
 
-    function queryMovePosition(
-        string memory requestProtocolSlug,
-        string memory requestPoolId,
-        uint256 bond
+    function pivotPosition() external payable;
+
+    function readPositionBalance() external payable;
+
+    function getPositionData() external payable;
+
+    function getRegistryAddress() external payable;
+
+    function userDepositAndSetPosition(
+        uint256,
+        int64,
+        string memory,
+        uint256,
+        string memory
     ) external;
 
-    function readPositionBalanceResult(
-        uint256 positionAmount,
-        bytes32 depositId
-    ) external;
+    function userDeposit(uint256, int64) external;
+
+    function sendPositionChange(bytes32) external payable;
+
+    function queryMovePosition(string memory, string memory, uint256) external;
+
+    function pivotCompleted(address, uint256) external;
+
+    function generateAcrossMessage(
+        string memory,
+        bytes32,
+        uint256
+    ) external view returns (bytes memory);
 }

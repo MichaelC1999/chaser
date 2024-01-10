@@ -5,7 +5,7 @@ require("@nomicfoundation/hardhat-toolbox");
 require('dotenv').config({ path: __dirname + '/.env' });
 
 module.exports = {
-  defaultNetwork: "hardhat",
+  defaultNetwork: "goerli",
   solidity: {
     version: "0.8.22",
     settings: {
@@ -34,9 +34,9 @@ module.exports = {
       chainId: 11155111,
       accounts: [process.env.WALLET_PK]
     },
-    lineaGoerli: {
-      url: "https://linea-goerli.infura.io/v3/" + process.env.INFURA_API_KEY,
-      chainId: 59140,
+    mumbai: {
+      url: "https://polygon-mumbai.infura.io/v3/" + process.env.INFURA_API_KEY,
+      chainId: 80001,
       accounts: [process.env.WALLET_PK]
     }
   },

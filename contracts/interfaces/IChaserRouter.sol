@@ -10,7 +10,7 @@ interface IChaserRouter {
         bool isDestinationPool,
         address poolAddress,
         bytes memory _data,
-        bytes calldata _options
+        uint256 _dstGasWei
     ) external payable;
 
     // Any other public or external functions would be listed here
