@@ -14,7 +14,11 @@ interface IChaserRegistry {
 
     function disablePool(address) external;
 
-    function chainIdToBridgedConnector(uint256) external view returns (address);
+    function routerAddress() external view returns (address);
+
+    function bridgeLogic() external view returns (address);
+
+    function chainIdToBridgeReceiver(uint256) external view returns (address);
 
     function chainIdToSpokePoolAddress(uint256) external view returns (address);
 

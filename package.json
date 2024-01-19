@@ -2,7 +2,7 @@
   "name": "chaser",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
-    "hardhat": "^2.19.1"
+    "hardhat": "^2.19.4"
   },
   "dependencies": {
     "@chainlink/contracts": "^0.8.0",

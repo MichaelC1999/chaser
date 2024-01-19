@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
-import "hardhat/console.sol";
-import {BridgedConnector} from "./BridgedConnector.sol";
+import {BridgeReceiver} from "./BridgeReceiver.sol";
+import {BridgeLogic} from "./BridgeLogic.sol";
 
 contract Registry {
     //Addresses managed in registry
@@ -93,7 +93,7 @@ contract Registry {
 
     mapping(address => bool) public poolEnabled;
 
-    mapping(uint256 => address) public chainIdToBridgedConnector; //This uses CrossDeploy to create inter-chain registry of connection addresses
+    mapping(uint256 => address) public chainIdToBridgeReceiver; //This uses CrossDeploy to create inter-chain registry of connection addresses
 
     mapping(uint256 => address) public chainIdToSpokePoolAddress;
 
@@ -111,7 +111,15 @@ contract Registry {
 
     mapping(bytes32 => bytes32) private hashedSlugToProtocolHash;
 
+    mapping(uint256 => address) public poolCountToPool;
+
     address manager;
+
+    address public bridgeLogic;
+
+    address public receiverAddress;
+
+    address public routerAddress;
 
     address public arbitrationContract; // The address of the arbitrationContract on the pool chain
 
@@ -119,18 +127,23 @@ contract Registry {
 
     uint256 public managerChainId;
 
-    function deployBridgedConnector() external {
+    uint256 public poolCount = 0;
+
+    function deployBridgeLogic() external {
         // require(
         //     msg.sender == manager,
-        //     "Only Manager may call deployBridgedConnector"
+        //     "Only Manager may call deployBridgeReceiver"
         // ); IMPORTANT - UNCOMMENT
         address endpointAddress = chainIdToEndpointAddress[currentChainId];
 
-        address connectorAddress = address(
-            new BridgedConnector(managerChainId, endpointAddress)
-        );
+        BridgeLogic BridgeLogicContract = new BridgeLogic(managerChainId);
 
-        addBridgedConnector(currentChainId, connectorAddress);
+        bridgeLogic = address(BridgeLogicContract);
+
+        (receiverAddress, routerAddress) = BridgeLogicContract
+            .deployConnections(endpointAddress);
+
+        addBridgeReceiver(currentChainId, receiverAddress);
     }
 
     function enableProtocol(string memory protocol) external {
@@ -200,6 +213,8 @@ contract Registry {
 
     function addPoolEnabled(address poolAddress) external {
         //IMPORTANT - NEEDS ACCESS CONTROL
+        poolCountToPool[poolCount] = poolAddress;
+        poolCount += 1;
         poolEnabled[poolAddress] = true;
     }
 
@@ -208,10 +223,10 @@ contract Registry {
         poolEnabled[poolAddress] = false;
     }
 
-    function addBridgedConnector(uint chainId, address connector) public {
+    function addBridgeReceiver(uint chainId, address receiver) public {
         //IMPORTANT - NEEDS ACCESS CONTROL
 
-        chainIdToBridgedConnector[chainId] = connector;
+        chainIdToBridgeReceiver[chainId] = receiver;
     }
 
     function addArbitrationContract(address _arbitrationContract) external {

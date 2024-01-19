@@ -6,9 +6,11 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./PoolToken.sol";
 import {ISpokePool} from "./interfaces/ISpokePool.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
-import {IBridgedConnector} from "./interfaces/IBridgedConnector.sol";
+import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
 import {IChaserRouter} from "./interfaces/IChaserRouter.sol";
 import {IChaserManager} from "./ChaserManager.sol";
+import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
+
 import {ArbitrationContract} from "./ArbitrationContract.sol";
 
 contract PoolControl {
@@ -20,7 +22,7 @@ contract PoolControl {
     string public strategySource; // STRATEGY SOURCE CAN BE A REPO URL WITH CODE TO EXECUTE, OR THIS STRING COULD POINT TO AN ADDRESS/CHAIN/METHOD THAT RETURNS THE INSTRUCTIONS
 
     IChaserRouter public router;
-    IBridgedConnector public localBridgedConnector;
+    IBridgeLogic public localBridgeLogic;
     IChaserManager public manager;
     IChaserRegistry public registry;
     PoolToken public poolToken;
@@ -86,7 +88,8 @@ contract PoolControl {
         address _asset,
         string memory _strategySource,
         string memory _poolName,
-        uint256 _localChain
+        uint256 _localChain,
+        address _registry
     ) {
         localChain = _localChain;
         currentPositionChain = localChain;
@@ -95,15 +98,10 @@ contract PoolControl {
         deployingUser = _deployingUser;
         asset = IERC20(_asset);
         strategySource = _strategySource;
-    }
-
-    function initializeContractConnections(address _registry) external {
         // manager = IChaserManager(address(msg.sender));
         registry = IChaserRegistry(_registry);
-        localBridgedConnector = IBridgedConnector(
-            registry.chainIdToBridgedConnector(localChain)
-        );
-        router = IChaserRouter(localBridgedConnector.router());
+        localBridgeLogic = IBridgeLogic(registry.bridgeLogic());
+        router = IChaserRouter(registry.routerAddress());
     }
 
     /**
@@ -200,7 +198,6 @@ contract PoolControl {
             if (totalAvailableForUser < amount) {
                 amount = totalAvailableForUser; // IMPORTANT - IF THE CALCULATED TOTAL AVAILABLE FOR USER IS LESS THAN THE AMOUNT BRIDGED BACK, ONLY TRANSFER THE CALCULATED AMOUNT TO USER
             }
-            //COULD IT BE AMOUNT SENT IN THE BRIDGE FROM CONNECTOR?
 
             uint256 poolTokensToBurn = userPoolTokenBalance;
             if (totalAvailableForUser > 0) {
@@ -266,34 +263,34 @@ contract PoolControl {
 
         emit LzMessageSent(method, data);
 
-        router.send{value: msg.value}(
-            currentPositionChain,
-            method,
-            false,
-            address(this),
-            data,
-            200000
-        );
+        // router.send{value: msg.value}(
+        //     currentPositionChain,
+        //     method,
+        //     false,
+        //     address(this),
+        //     data,
+        //     200000
+        // );
     }
 
     /**
      * @notice After pivot was successfully asserted, send the execution request for the pivot
      */
     function pivotPosition() external payable {
-        // Send message to BridgedConnector on new target position chain, with instructions to move funds to new position
+        // Send message to BridgeReceiver on new target position chain, with instructions to move funds to new position
         // Uses lzSend to send message with instructions on how to handle pivot
 
         bytes memory data;
         bytes memory options;
 
-        router.send{value: msg.value}(
-            currentPositionChain,
-            bytes4(keccak256(abi.encode("pivotPosition"))),
-            false,
-            address(this),
-            data,
-            200000
-        );
+        // router.send{value: msg.value}(
+        //     currentPositionChain,
+        //     bytes4(keccak256(abi.encode("pivotPosition"))),
+        //     false,
+        //     address(this),
+        //     data,
+        //     200000
+        // );
     }
 
     /**
@@ -306,14 +303,14 @@ contract PoolControl {
         bytes memory data;
         bytes memory options;
 
-        router.send{value: msg.value}(
-            currentPositionChain,
-            method,
-            false,
-            address(this),
-            data,
-            200000
-        );
+        // router.send{value: msg.value}(
+        //     currentPositionChain,
+        //     method,
+        //     false,
+        //     address(this),
+        //     data,
+        //     200000
+        // );
     }
 
     /**
@@ -325,14 +322,14 @@ contract PoolControl {
         bytes memory data;
         bytes memory options;
 
-        router.send{value: msg.value}(
-            currentPositionChain,
-            bytes4(keccak256(abi.encode("getPositionData"))),
-            false,
-            address(this),
-            data,
-            200000
-        );
+        // router.send{value: msg.value}(
+        //     currentPositionChain,
+        //     bytes4(keccak256(abi.encode("getPositionData"))),
+        //     false,
+        //     address(this),
+        //     data,
+        //     200000
+        // );
     }
 
     /**
@@ -343,14 +340,14 @@ contract PoolControl {
         bytes memory data;
         bytes memory options;
 
-        router.send{value: msg.value}(
-            currentPositionChain,
-            bytes4(keccak256(abi.encode("getRegistryAddress"))),
-            false,
-            address(this),
-            data,
-            200000
-        );
+        // router.send{value: msg.value}(
+        //     currentPositionChain,
+        //     bytes4(keccak256(abi.encode("getRegistryAddress"))),
+        //     false,
+        //     address(this),
+        //     data,
+        //     200000
+        // );
     }
 
     /**
@@ -359,7 +356,7 @@ contract PoolControl {
      * @notice After executing, other functions are called withdata generated in this function, in order to direction the position entrance
      * @param _amount The amount of the initial deposit
      * @param _relayFeePct The Across Bridge relay fee %
-     * @param _targetPositionMarketId The market Id to be processed by Connector/Integrator to derive the market address
+     * @param _targetPositionMarketId The market Id to be processed by Logic/Integrator to derive the market address
      * @param _targetPositionChain The destination chain on which the first position exists
      * @param _targetPositionProtocol The protocol that the position is made on
      */
@@ -416,7 +413,7 @@ contract PoolControl {
         // );
 
         if (targetPositionChain == localChain) {
-            localBridgedConnector.initializePoolPosition(
+            IBridgeLogic(registry.bridgeLogic()).initializePoolPosition(
                 address(this),
                 address(asset),
                 currentPositionProtocolHash,
@@ -425,10 +422,10 @@ contract PoolControl {
                 _amount
             );
             enterFundsLocalChain(depositId);
-            address marketAddress = localBridgedConnector
+            address marketAddress = localBridgeLogic
                 .poolToCurrentPositionMarket(address(this));
 
-            uint256 positionAmount = localBridgedConnector.getPositionBalance(
+            uint256 positionAmount = localBridgeLogic.getPositionBalance(
                 address(this)
             );
             pivotCompleted(marketAddress, positionAmount);
@@ -475,7 +472,7 @@ contract PoolControl {
     }
 
     /**
-     * @notice Complete the process of sending funds to a local BridgedConnector fr entering the position
+     * @notice Complete the process of sending funds to a local BridgeReceiver fr entering the position
      * @dev This function does not use the Bridge or cross chain communication for execution
      * @param _depositId The id of the deposit, used for data lookup
      */
@@ -483,23 +480,23 @@ contract PoolControl {
         address sender = depositIdToDepositor[_depositId];
         uint256 amount = depositIdToDepositAmount[_depositId];
 
-        asset.transferFrom(sender, address(localBridgedConnector), amount);
+        asset.transferFrom(sender, address(localBridgeLogic), amount);
 
-        localBridgedConnector.receiveDepositFromPool(
+        localBridgeLogic.receiveDepositFromPool(
             amount,
             _depositId,
             address(this),
             sender
         );
 
-        currentRecordPositionValue = localBridgedConnector.getPositionBalance(
+        currentRecordPositionValue = localBridgeLogic.getPositionBalance(
             address(this)
         );
         mintUserPoolTokens(_depositId, currentRecordPositionValue);
     }
 
     /**
-     * @notice Complete the process of sending funds to the BridgedConnector on another chain for entering the position
+     * @notice Complete the process of sending funds to the BridgeReceiver on another chain for entering the position
      * @dev This function is the first "A" step of the "A=>B=>A" deposit sequence
      * @param _depositId The id of the deposit, used for data lookup
      * @param _relayFeePct The Across Bridge relay fee %
@@ -524,7 +521,7 @@ contract PoolControl {
         );
 
         // Take the sucessfully proposed position, input into a registry function to get Bridge Connection address for its chain
-        address bridgedConnector = registry.chainIdToBridgedConnector(
+        address bridgeReceiver = registry.chainIdToBridgeReceiver(
             targetPositionChain
         );
 
@@ -538,7 +535,7 @@ contract PoolControl {
 
         //When assertion is settled, pivotPending state is true and no deposits are allowed until new position is successfully engaged
         ISpokePool(acrossSpokePool).deposit(
-            bridgedConnector,
+            bridgeReceiver,
             address(asset),
             amount,
             targetPositionChain,
@@ -568,7 +565,7 @@ contract PoolControl {
     function sendPositionChange(bytes32 assertionId) external payable {
         //IMPORTANT - CHANGE TO LZ SEND
         // This gets executed open callback of the position pivot assertion resolving
-        // This send lz message to the connector to make the transition
+        // This send lz message to the Router to make the transition
 
         //Can only be called by Arbitration contract
         currentPositionAssertion = assertionId;
@@ -626,29 +623,29 @@ contract PoolControl {
         emit LzMessageSent(method, pivotMessage);
         emit Numbers(currentPositionChain, destinationChainId);
 
-        // IF POSITION NEEDS TO PIVOT *FROM* THIS CHAIN (LOCAL/BRIDGE LOGIC HELD ON CONNECTOR)
+        // IF POSITION NEEDS TO PIVOT *FROM* THIS CHAIN (LOCAL/BRIDGE LOGIC)
         // THIS IF STATEMENT DETERMINES WHETHER TO ACTION THE EXITPIVOT LOCALLY OR THROUGH CROSS CHAIN
         if (currentPositionChain == localChain) {
-            address destinationBridgedConnector = registry
-                .chainIdToBridgedConnector(destinationChainId);
+            address destinationBridgeReceiver = registry
+                .chainIdToBridgeReceiver(destinationChainId);
 
-            localBridgedConnector.executeExitPivot(
+            localBridgeLogic.executeExitPivot(
                 address(this),
                 poolNonce,
                 protocolHash,
                 targetPositionMarketId,
                 targetPositionChain,
-                destinationBridgedConnector
+                destinationBridgeReceiver
             );
         } else {
-            router.send{value: msg.value}(
-                currentPositionChain,
-                method,
-                false,
-                address(this),
-                pivotMessage,
-                200000
-            );
+            // router.send{value: msg.value}(
+            //     currentPositionChain,
+            //     method,
+            //     false,
+            //     address(this),
+            //     pivotMessage,
+            //     200000
+            // );
         }
     }
 
@@ -747,9 +744,9 @@ contract PoolControl {
     }
 
     /**
-     * @notice Called after receiving communication of successful position entrance on the connector, minting tokens for the users proportional stake in the pool
+     * @notice Called after receiving communication of successful position entrance on the BridgeLogic, minting tokens for the users proportional stake in the pool
      * @param _depositId The id of the deposit, for data lookup
-     * @param _poolPositionAmount The amount of assets in the position, read recently from the connector in the "B" step of the "A=>B=>A" deposit sequence
+     * @param _poolPositionAmount The amount of assets in the position, read recently from the BridgeLogic in the "B" step of the "A=>B=>A" deposit sequence
      */
     function mintUserPoolTokens(
         bytes32 _depositId,
@@ -785,6 +782,34 @@ contract PoolControl {
         }
     }
 
+    function finalizeWithdrawOrder(
+        bytes32 withdrawId,
+        uint256 amount,
+        uint256 totalAvailableForUser
+    ) external {
+        address depositor = withdrawIdToDepositor[withdrawId];
+
+        uint256 userPoolTokenBalance = poolToken.balanceOf(depositor);
+        // asset/totalAvailableForUser=x/userPoolTokenBalance
+
+        // IMPORTANT - IF totalAvailableForUser IS VERY CLOSE TO amount, MAKE amount = totalAvailableForUser
+        if (totalAvailableForUser < amount) {
+            amount = totalAvailableForUser; // IMPORTANT - IF THE CALCULATED TOTAL AVAILABLE FOR USER IS LESS THAN THE AMOUNT BRIDGED BACK, ONLY TRANSFER THE CALCULATED AMOUNT TO USER
+        }
+
+        uint256 poolTokensToBurn = userPoolTokenBalance;
+        if (totalAvailableForUser > 0) {
+            uint256 ratio = (amount * (10 ** 18)) / (totalAvailableForUser);
+            poolTokensToBurn = (ratio * userPoolTokenBalance) / (10 ** 18);
+        }
+
+        poolNonce += 1;
+
+        userHasPendingWithdraw[depositor] = false;
+        poolToken.burn(depositor, poolTokensToBurn);
+        asset.transfer(depositor, amount);
+    }
+
     /**
      * @notice Transfer deposit funds from user to pool, make approval for funds to the spokepool for moving the funds to the destination chain
      * @param _sender The address of the user who is making the deposit
@@ -809,8 +834,9 @@ contract PoolControl {
         string memory requestMarketId,
         uint256 destinationChainId
     ) internal view returns (bytes memory) {
-        address destinationBridgedConnector = registry
-            .chainIdToBridgedConnector(destinationChainId);
+        address destinationBridgeReceiver = registry.chainIdToBridgeReceiver(
+            destinationChainId
+        );
 
         bytes memory data = abi.encode(
             address(this),
@@ -818,7 +844,7 @@ contract PoolControl {
             protocolHash,
             requestMarketId,
             destinationChainId,
-            destinationBridgedConnector
+            destinationBridgeReceiver
         );
 
         return data;

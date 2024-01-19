@@ -5,14 +5,18 @@ import "hardhat/console.sol";
 import {IAavePool} from "./interfaces/IAavePool.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {ChaserRouter} from "./ChaserRouter.sol";
+
+import {BridgeReceiver} from "./BridgeReceiver.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract BridgedConnector {
+contract BridgeLogic {
     //IMPORTANT - HOW TO HANDLE TWO POOLS DEPOSITING INTO THE SAME MARKET? When deposit into external protocol's market is made, read the a/c token amount and save in poolAddr => uint mapping
     uint256 managerChainId;
 
     IChaserRegistry public registry;
     ChaserRouter public router;
+
+    address bridgeReceiverAddress;
 
     mapping(address => address) public poolToCurrentPositionMarket;
     mapping(address => string) poolToCurrentMarketId;
@@ -22,7 +26,7 @@ contract BridgedConnector {
     mapping(bytes32 => uint256) userDepositNonce;
     mapping(bytes32 => uint256) userCumulativeDeposits;
     mapping(bytes32 => uint256) nonceToPositionValue; // key is hash of bytes of pool address and nonce
-    mapping(address => uint256) connectorNonce; // pool address to the current nonce of all withdraws/deposits reflected in the position balance
+    mapping(address => uint256) bridgeNonce; // pool address to the current nonce of all withdraws/deposits reflected in the position balance
 
     bool public testFlag = false; // REMOVE - TESTING
 
@@ -31,14 +35,22 @@ contract BridgedConnector {
     event LzMessageSent(bytes4, bytes);
     event Numbers(uint256, uint256);
 
-    constructor(uint256 _managerChainId, address _endpointAddress) {
+    constructor(uint256 _managerChainId) {
+        managerChainId = _managerChainId;
+        registry = IChaserRegistry(msg.sender);
+    }
+
+    function deployConnections(
+        address _endpointAddress
+    ) external returns (address, address) {
         require(
             _endpointAddress != address(0),
             "Must pass valid LayerZero endpoint"
         );
-        managerChainId = _managerChainId;
-        registry = IChaserRegistry(msg.sender);
         router = new ChaserRouter(_endpointAddress, msg.sender); // IMPORTANT - first arg should be the endpoint address
+        bridgeReceiverAddress = address(new BridgeReceiver());
+
+        return (bridgeReceiverAddress, address(router));
     }
 
     function setPeer(uint256 chainId, address routerAddress) external {
@@ -60,13 +72,13 @@ contract BridgedConnector {
                 bytes32 protocolHash,
                 string memory targetMarketId,
                 uint256 destinationChainId,
-                address destinationBridgedConnector
+                address destinationBridgedReceiver
             ) = abi.decode(
                     _data,
                     (address, uint256, bytes32, string, uint256, address)
                 );
 
-            //Pool nonce passed in message should be same as connectorNonce here. Make sure that all deposit/withdraw requests made from pool have been included in this balance
+            //Pool nonce passed in message should be same as bridgeNonce here. Make sure that all deposit/withdraw requests made from pool have been included in this balance
 
             executeExitPivot(
                 poolAddress,
@@ -74,7 +86,7 @@ contract BridgedConnector {
                 protocolHash,
                 targetMarketId,
                 destinationChainId,
-                destinationBridgedConnector
+                destinationBridgedReceiver
             );
         }
 
@@ -104,7 +116,7 @@ contract BridgedConnector {
 
             // POSBAL PENDING: PosBal is 5 with -3 pendng (most recent snapshot shows 2) - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
             // POSBAL GAINED 1 YIELD: PosBal from completed snap is 5, pending snap is 2, current pos is 3. Get Pos bal from currentPos - (pending - completed) = 6 - user has 20 pool tokens in a total of 100, the user can withdraw 1.2 asset
-            // The ratio to get maxAssetToWithdraw (x) is as follows: x/(currentPositionValue - (nonceToPositionValue[connectorNonce] - nonceToPositionValue[poolNonce])) = userPoolTokenBalance/poolTokenSupply
+            // The ratio to get maxAssetToWithdraw (x) is as follows: x/(currentPositionValue - (nonceToPositionValue[bridgeNonce] - nonceToPositionValue[poolNonce])) = userPoolTokenBalance/poolTokenSupply
             // IMPORTANT - DOES THIS RATIO WORK IF THERE IS A PIVOT TO ANOTHER CONNECTOR, THEN BACK TO THIS ONE
 
             (
@@ -183,29 +195,12 @@ contract BridgedConnector {
         ) {
             // IMPORTANT - HANDLE ERROR FOR WRONG ASSET BRIDGED, UNLESS METHOD IS "positionInitializer"
         }
-        if (method == bytes4(keccak256(abi.encode("enterPivot")))) {
-            (
-                bytes32 protocolHash,
-                string memory targetMarketId,
-                uint256 poolNonce
-            ) = abi.decode(data, (bytes32, string, uint256));
-            initializePoolPosition(
-                poolAddress,
-                tokenSent,
-                protocolHash,
-                targetMarketId,
-                poolNonce,
-                amount
-            );
-            sendPivotCompleted(poolAddress, amount);
-        }
+
         if (method == bytes4(keccak256(abi.encode("userDeposit")))) {
             (bytes32 depositId, address userAddress) = abi.decode(
                 data,
                 (bytes32, address)
             );
-            receiveDepositFromPool(amount, depositId, poolAddress, userAddress);
-            sendPositionBalance(poolAddress, depositId);
         }
         if (method == bytes4(keccak256(abi.encode("positionInitializer")))) {
             // Make initial deposit and set the current position
@@ -215,20 +210,57 @@ contract BridgedConnector {
                 string memory marketId,
                 bytes32 protocolHash
             ) = abi.decode(data, (bytes32, address, string, bytes32));
-            // IMPORTANT - DOES THIS ONLY GET INITIALIZED ON THE POOLS FIRST POSITION?
-            bytes32 currentNonceHash = keccak256(abi.encode(poolAddress, 0));
-            connectorNonce[poolAddress] = 0;
-            nonceToPositionValue[currentNonceHash] = 0;
-            // IMPORTANT - SET THE PIVOT HERE BEFORE THE DEPOSIT IS RECEIVED AND TRANSFERED
-            address pivotAddress = getMarketAddressFromId(
-                marketId,
-                protocolHash
-            );
-            poolToCurrentPositionMarket[poolAddress] = pivotAddress;
-            poolToAsset[poolAddress] = tokenSent;
-            receiveDepositFromPool(amount, depositId, poolAddress, userAddress);
-            sendPositionBalance(poolAddress, depositId);
         }
+    }
+
+    function handlePositionInitializer(
+        uint256 amount,
+        address poolAddress,
+        address tokenSent,
+        bytes32 depositId,
+        address userAddress,
+        string memory marketId,
+        bytes32 protocolHash
+    ) external {
+        // IMPORTANT - DOES THIS ONLY GET INITIALIZED ON THE POOLS FIRST POSITION?
+        bytes32 currentNonceHash = keccak256(abi.encode(poolAddress, 0));
+        bridgeNonce[poolAddress] = 0;
+        nonceToPositionValue[currentNonceHash] = 0;
+        // IMPORTANT - SET THE PIVOT HERE BEFORE THE DEPOSIT IS RECEIVED AND TRANSFERED
+        address pivotAddress = getMarketAddressFromId(marketId, protocolHash);
+        poolToCurrentPositionMarket[poolAddress] = pivotAddress;
+        poolToAsset[poolAddress] = tokenSent;
+        receiveDepositFromPool(amount, depositId, poolAddress, userAddress);
+        sendPositionBalance(poolAddress, depositId);
+    }
+
+    function handleEnterPivot(
+        address tokenSent,
+        uint256 amount,
+        address poolAddress,
+        bytes32 protocolHash,
+        string memory targetMarketId,
+        uint256 poolNonce
+    ) external {
+        initializePoolPosition(
+            poolAddress,
+            tokenSent,
+            protocolHash,
+            targetMarketId,
+            poolNonce,
+            amount
+        );
+        sendPivotCompleted(poolAddress, amount);
+    }
+
+    function handleUserDeposit(
+        address poolAddress,
+        address userAddress,
+        bytes32 depositId,
+        uint256 amount
+    ) external {
+        receiveDepositFromPool(amount, depositId, poolAddress, userAddress);
+        sendPositionBalance(poolAddress, depositId);
     }
 
     /**
@@ -278,14 +310,14 @@ contract BridgedConnector {
         // HOW TO SEND FROM ROUTER?
         // This is B in an ABA sequence. There is no native gas token provided that is payable to LZ
         // How would quotes work? Quote can make an estimate, but then this connector must
-        router.send{value: msg.value}(
-            managerChainId,
-            method,
-            true,
-            _poolAddress,
-            data,
-            200000
-        );
+        // router.send{value: msg.value}(
+        //     managerChainId,
+        //     method,
+        //     true,
+        //     _poolAddress,
+        //     data,
+        //     200000
+        // );
     }
 
     /**
@@ -296,14 +328,14 @@ contract BridgedConnector {
         bytes memory data;
         bytes memory options;
 
-        router.send{value: msg.value}(
-            managerChainId,
-            bytes4(keccak256(abi.encode("sendPositionData"))),
-            true,
-            address(this),
-            data,
-            200000
-        );
+        // router.send{value: msg.value}(
+        //     managerChainId,
+        //     bytes4(keccak256(abi.encode("sendPositionData"))),
+        //     true,
+        //     address(this),
+        //     data,
+        //     200000
+        // );
     }
 
     /**
@@ -313,14 +345,14 @@ contract BridgedConnector {
         bytes memory data;
         bytes memory options;
 
-        router.send{value: msg.value}(
-            managerChainId,
-            bytes4(keccak256(abi.encode("sendRegistryAddress"))),
-            true,
-            address(this),
-            data,
-            200000
-        );
+        // router.send{value: msg.value}(
+        //     managerChainId,
+        //     bytes4(keccak256(abi.encode("sendRegistryAddress"))),
+        //     true,
+        //     address(this),
+        //     data,
+        //     200000
+        // );
     }
 
     function sendPivotCompleted(address poolAddress, uint256 amount) internal {
@@ -332,14 +364,14 @@ contract BridgedConnector {
 
         emit LzMessageSent(method, data);
 
-        router.send{value: msg.value}(
-            managerChainId,
-            method,
-            true,
-            address(this),
-            data,
-            200000
-        );
+        // router.send{value: msg.value}(
+        //     managerChainId,
+        //     method,
+        //     true,
+        //     address(this),
+        //     data,
+        //     200000
+        // );
     }
 
     function initializePoolPosition(
@@ -355,7 +387,7 @@ contract BridgedConnector {
         bytes32 currentNonceHash = keccak256(
             abi.encode(poolAddress, poolNonce)
         );
-        connectorNonce[poolAddress] = poolNonce;
+        bridgeNonce[poolAddress] = poolNonce;
         nonceToPositionValue[currentNonceHash] = amount;
 
         enterPosition(poolAddress, protocolHash, targetMarketId, amount);
@@ -383,7 +415,7 @@ contract BridgedConnector {
         bytes32 protocolHash,
         string memory targetMarketId,
         uint256 destinationChainId,
-        address destinationBridgedConnector,
+        address destinationBridgeReceiver,
         uint256 amount
     ) internal {
         //IMPORTANT - SHOULD NONCE BE SENT TO THE OTHER CONNECTOR?
@@ -395,7 +427,7 @@ contract BridgedConnector {
         bytes memory data = abi.encode(
             protocolHash,
             targetMarketId,
-            connectorNonce[poolAddress]
+            bridgeNonce[poolAddress]
         );
 
         bytes memory message = abi.encode(method, poolAddress, data);
@@ -411,13 +443,8 @@ contract BridgedConnector {
 
         ERC20(poolToAsset[poolAddress]).approve(acrossSpokePool, amount);
 
-        ERC20(poolToAsset[poolAddress]).transfer(
-            destinationBridgedConnector,
-            amount
-        ); // REMOVE - TESTING
-
         // ISpokePool(acrossSpokePool).deposit(
-        //     destinationBridgedConnector,
+        //     destinationBridgeReceiver,
         //     poolToAsset[poolAddress],
         //     amount,
         //     destinationChainId,
@@ -434,7 +461,7 @@ contract BridgedConnector {
         bytes32 protocolHash,
         string memory targetMarketId,
         uint256 destinationChainId,
-        address destinationBridgedConnector
+        address destinationBridgeReceiver
     ) public {
         // Withdraw from current position here, bringing funds back to this contract and updating state
         uint256 amount = getPositionBalance(poolAddress); // IMPORTANT - This should be set to the amount of funds withdrawn and to be reentered to new position (denominated in asset)
@@ -447,7 +474,7 @@ contract BridgedConnector {
                 protocolHash,
                 targetMarketId,
                 destinationChainId,
-                destinationBridgedConnector,
+                destinationBridgeReceiver,
                 amount
             );
         }
@@ -577,11 +604,11 @@ contract BridgedConnector {
         address _poolAddress,
         uint256 _currentPositionValue
     ) internal {
-        uint256 nonce = connectorNonce[_poolAddress];
+        uint256 nonce = bridgeNonce[_poolAddress];
         bytes32 currentNonceHash = keccak256(
             abi.encode(_poolAddress, nonce + 1)
         );
-        connectorNonce[_poolAddress] = nonce + 1;
+        bridgeNonce[_poolAddress] = nonce + 1;
         nonceToPositionValue[currentNonceHash] = _currentPositionValue;
     }
 
@@ -629,7 +656,7 @@ contract BridgedConnector {
         uint256 calculatedPositionValue = _currentPositionValue;
 
         bytes32 currentPendingNonceHash = keccak256(
-            abi.encode(_poolAddress, connectorNonce[_poolAddress])
+            abi.encode(_poolAddress, bridgeNonce[_poolAddress])
         );
 
         uint256 positionValueAtPendingNonce = nonceToPositionValue[

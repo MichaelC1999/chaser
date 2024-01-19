@@ -17,7 +17,7 @@ interface IPoolControl {
 
     function router() external view returns (address);
 
-    function localBridgedConnector() external view returns (address);
+    function localBridgeReceiver() external view returns (address);
 
     function manager() external view returns (address);
 
@@ -91,6 +91,8 @@ interface IPoolControl {
     function queryMovePosition(string memory, string memory, uint256) external;
 
     function pivotCompleted(address, uint256) external;
+
+    function finalizeWithdrawOrder(bytes32, uint256, uint256) external;
 
     function generateAcrossMessage(
         string memory,

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
-interface IBridgedConnector {
+interface IBridgeLogic {
     // Public state variables as view functions
     function managerChainId() external view returns (uint256);
+
+    function deployConnections(address) external returns (address, address);
 
     function registry() external view returns (address);
 
@@ -29,7 +31,7 @@ interface IBridgedConnector {
 
     function nonceToPositionValue(bytes32) external view returns (uint256);
 
-    function connectorNonce(address) external view returns (uint256);
+    function bridgeNonce(address) external view returns (uint256);
 
     function testFlag() external view returns (bool);
 
@@ -43,6 +45,27 @@ interface IBridgedConnector {
         bool,
         address,
         bytes memory
+    ) external;
+
+    function handleUserDeposit(address, address, bytes32, uint256) external;
+
+    function handlePositionInitializer(
+        uint256,
+        address,
+        address,
+        bytes32,
+        address,
+        string memory,
+        bytes32
+    ) external;
+
+    function handleEnterPivot(
+        address,
+        uint256,
+        address,
+        bytes32,
+        string memory,
+        uint256
     ) external;
 
     function readBalanceAtNonce(

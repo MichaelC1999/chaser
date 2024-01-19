@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
-
-import "hardhat/console.sol";
 import {PoolControl} from "./PoolControl.sol";
 import {ChaserRouter} from "./ChaserRouter.sol";
 import {Registry} from "./Registry.sol";
@@ -59,18 +57,20 @@ contract ChaserManager {
             poolAsset,
             strategyURI,
             poolName,
-            LOCAL_CHAIN
+            LOCAL_CHAIN,
+            address(registry)
         );
+        // pool.initializeContractConnections(address(registry));
         address poolAddress = address(pool);
         registry.addPoolEnabled(poolAddress);
         emit PoolCreated(poolAddress);
     }
 
-    function initializeContractConnections(address _poolAddress) external {
-        PoolControl(_poolAddress).initializeContractConnections(
-            address(registry)
-        );
-    }
+    // function initializeContractConnections(address _poolAddress) external {
+    //     PoolControl(_poolAddress).initializeContractConnections(
+    //         address(registry)
+    //     );
+    // }
 
     function viewRegistryAddress() external view returns (address) {
         return address(registry);

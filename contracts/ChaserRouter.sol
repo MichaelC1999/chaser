@@ -4,7 +4,7 @@ pragma solidity ^0.8.22;
 import "hardhat/console.sol";
 import {OApp, Origin, MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OApp.sol";
 import {IPoolControl} from "./interfaces/IPoolControl.sol";
-import {IBridgedConnector} from "./interfaces/IBridgedConnector.sol";
+import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 
@@ -16,7 +16,7 @@ contract ChaserRouter is OApp {
     // message structure - bytes4 method, bool isDestinationPool, address poolAddress, bytes memory data
 
     IChaserRegistry public registry;
-    address connector;
+    address logicAddress;
 
     /**
      * @dev Constructor to initialize the omnichain contract.
@@ -28,7 +28,7 @@ contract ChaserRouter is OApp {
         address _registry
     ) OApp(_endpoint, msg.sender) {
         // constructor(address _endpoint, address _owner) {
-        connector = msg.sender;
+        logicAddress = msg.sender;
         registry = IChaserRegistry(_registry);
     }
 
@@ -96,7 +96,7 @@ contract ChaserRouter is OApp {
         if (isDestinationPool == true) {
             IPoolControl(poolAddress).receiveHandler(method, data);
         } else {
-            IBridgedConnector(connector).receiveHandler(method, data);
+            IBridgeLogic(logicAddress).receiveHandler(method, data);
         }
     }
 
