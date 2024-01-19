@@ -131,13 +131,13 @@ const mumbaiTests = async (poolAddress, mumbaiConnector) => {
 //   process.exitCode = 1;
 // });
 
-// mumbaiFirstDeployments("0x17E952A00941E0D6Dfe52D0d007A0DeD53D571D4").catch((error) => {
+// mumbaiFirstDeployments("0x1Db1106cCe372aD7818247996733f73aeEFfDe02").catch((error) => {
 //   console.error(error);
 //   console.log(error.logs)
 //   process.exitCode = 1;
 // });
 
-goerliSecondConfig("0x218621baf387bb346c30d6108a63fdc2dc0459b2", "0xc532035774B1E8664c88Be7A476510EB7EcaE553").catch((error) => {
+goerliSecondConfig("0xff197b52e931fd592be46669c7f74f574bea1eab", "0x5EB49692776925FE408D213b0d75C2d560569Ec0").catch((error) => {
   console.error(error);
   console.log(error.logs)
   process.exitCode = 1;

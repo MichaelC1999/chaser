@@ -46,7 +46,6 @@ contract BridgeReceiver {
             (bytes4, address, bytes)
         );
 
-        emit ExecutionMessage("HIT");
         if (
             tokenSent != poolToAsset[poolAddress] &&
             poolToAsset[poolAddress] != address(0)
@@ -60,16 +59,11 @@ contract BridgeReceiver {
                 uint256 poolNonce
             ) = abi.decode(data, (bytes32, string, uint256));
 
-            // try
-            //     ERC20(poolToAsset[poolAddress]).transfer(
-            //         address(bridgeLogic),
-            //         amount
-            //     )
-            // {
-            //     emit ExecutionMessage("transfer success");
-            // } catch Error(string memory reason) {
-            //     emit ExecutionMessage(reason);
-            // }
+            try ERC20(tokenSent).transfer(address(bridgeLogic), amount) {
+                emit ExecutionMessage("transfer success");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(reason);
+            }
 
             try
                 bridgeLogic.handleEnterPivot(
@@ -92,16 +86,11 @@ contract BridgeReceiver {
                 (bytes32, address)
             );
 
-            // try
-            //     ERC20(poolToAsset[poolAddress]).transfer(
-            //         address(bridgeLogic),
-            //         amount
-            //     )
-            // {
-            //     emit ExecutionMessage("transfer success");
-            // } catch Error(string memory reason) {
-            //     emit ExecutionMessage(reason);
-            // }
+            try ERC20(tokenSent).transfer(address(bridgeLogic), amount) {
+                emit ExecutionMessage("transfer success");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(reason);
+            }
 
             try
                 bridgeLogic.handleUserDeposit(
@@ -124,16 +113,11 @@ contract BridgeReceiver {
                 bytes32 protocolHash
             ) = abi.decode(data, (bytes32, address, string, bytes32));
 
-            // try
-            //     ERC20(poolToAsset[poolAddress]).transfer(
-            //         address(bridgeLogic),
-            //         amount
-            //     )
-            // {
-            //     emit ExecutionMessage("transfer success");
-            // } catch Error(string memory reason) {
-            //     emit ExecutionMessage(reason);
-            // }
+            try ERC20(tokenSent).transfer(address(bridgeLogic), amount) {
+                emit ExecutionMessage("transfer success");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(reason);
+            }
 
             try
                 bridgeLogic.handlePositionInitializer(
@@ -163,11 +147,11 @@ contract BridgeReceiver {
                 (bytes32, uint256)
             );
 
-            // try ERC20(poolToAsset[poolAddress]).transfer(poolAddress, amount) {
-            //     emit ExecutionMessage("transfer success");
-            // } catch Error(string memory reason) {
-            //     emit ExecutionMessage(reason);
-            // }
+            try ERC20(tokenSent).transfer(poolAddress, amount) {
+                emit ExecutionMessage("transfer success");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(reason);
+            }
 
             try
                 IPoolControl(poolAddress).finalizeWithdrawOrder(
