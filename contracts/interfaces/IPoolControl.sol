@@ -86,7 +86,7 @@ interface IPoolControl {
 
     function userDeposit(uint256, int64) external;
 
-    function sendPositionChange(bytes32) external payable;
+    function sendPositionChange(string memory, bytes32) external;
 
     function queryMovePosition(string memory, string memory, uint256) external;
 
@@ -94,9 +94,5 @@ interface IPoolControl {
 
     function finalizeWithdrawOrder(bytes32, uint256, uint256) external;
 
-    function generateAcrossMessage(
-        string memory,
-        bytes32,
-        uint256
-    ) external view returns (bytes memory);
+    function readPositionBalanceResult(bytes memory) external;
 }

@@ -1,11 +1,12 @@
 require("hardhat-deploy");
 require("@nomicfoundation/hardhat-toolbox");
+require('hardhat-contract-sizer');
 
 /** @type import('hardhat/config').HardhatUserConfig */
 require('dotenv').config({ path: __dirname + '/.env' });
 
 module.exports = {
-  defaultNetwork: "goerli",
+  defaultNetwork: "sepolia",
   solidity: {
     version: "0.8.22",
     settings: {

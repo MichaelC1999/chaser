@@ -138,7 +138,9 @@ contract BridgeReceiver {
         if (method == bytes4(keccak256(abi.encode("poolReturn")))) {
             // Receive the entire pool's funds if there are no currently viable markets or if the pool is disabled
         }
-        if (method == bytes4(keccak256(abi.encode("userWithdrawOrder")))) {
+        if (
+            method == bytes4(keccak256(abi.encode("BridgeUserWithdrawOrder")))
+        ) {
             //Take amount in asset sent through bridge and totalAvailableForUser, take this proportion
             //Burn the users pool tokens based off this proportion
             //Send user their tokens

@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
-import "hardhat/console.sol";
-
 interface IChaserRegistry {
     function managerChainId() external view returns (uint256);
 
@@ -14,9 +12,16 @@ interface IChaserRegistry {
 
     function disablePool(address) external;
 
+    function sendMessage(uint, bytes4, address, bytes memory) external;
+
     function routerAddress() external view returns (address);
 
-    function bridgeLogic() external view returns (address);
+    function bridgeLogicAddress() external view returns (address);
+
+    function localCcipConfigs()
+        external
+        view
+        returns (address, address, uint64);
 
     function chainIdToBridgeReceiver(uint256) external view returns (address);
 
@@ -35,4 +40,6 @@ interface IChaserRegistry {
     function slugToProtocolHash(string memory) external view returns (bytes32);
 
     function slugEnabled(string memory) external view returns (bool);
+
+    function checkValidPool(address) external view returns (bool);
 }

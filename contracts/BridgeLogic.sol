@@ -4,7 +4,7 @@ pragma solidity ^0.8.9;
 import "hardhat/console.sol";
 import {IAavePool} from "./interfaces/IAavePool.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
-import {ChaserRouter} from "./ChaserRouter.sol";
+import {ChaserMessenger} from "./ChaserMessenger.sol";
 
 import {BridgeReceiver} from "./BridgeReceiver.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -14,9 +14,9 @@ contract BridgeLogic {
     uint256 managerChainId;
 
     IChaserRegistry public registry;
-    ChaserRouter public router;
+    ChaserMessenger public messenger;
 
-    address bridgeReceiverAddress;
+    address public bridgeReceiverAddress;
 
     mapping(address => address) public poolToCurrentPositionMarket;
     mapping(address => string) poolToCurrentMarketId;
@@ -28,150 +28,32 @@ contract BridgeLogic {
     mapping(bytes32 => uint256) nonceToPositionValue; // key is hash of bytes of pool address and nonce
     mapping(address => uint256) bridgeNonce; // pool address to the current nonce of all withdraws/deposits reflected in the position balance
 
-    bool public testFlag = false; // REMOVE - TESTING
-
     event PositionBalanceSent(uint256, address);
     event AcrossMessageSent(bytes);
     event LzMessageSent(bytes4, bytes);
     event Numbers(uint256, uint256);
 
-    constructor(uint256 _managerChainId) {
+    constructor(uint256 _managerChainId, address _registryAddress) {
         managerChainId = _managerChainId;
-        registry = IChaserRegistry(msg.sender);
+        registry = IChaserRegistry(_registryAddress);
     }
 
-    function deployConnections(
-        address _endpointAddress
-    ) external returns (address, address) {
-        require(
-            _endpointAddress != address(0),
-            "Must pass valid LayerZero endpoint"
+    function deployConnections() external returns (address, address) {
+        (
+            address chainlinkRouter,
+            address linkAddress,
+            uint64 sourceChainSelector
+        ) = registry.localCcipConfigs();
+
+        messenger = new ChaserMessenger(
+            chainlinkRouter,
+            linkAddress,
+            address(registry),
+            sourceChainSelector
         );
-        router = new ChaserRouter(_endpointAddress, msg.sender); // IMPORTANT - first arg should be the endpoint address
         bridgeReceiverAddress = address(new BridgeReceiver());
 
-        return (bridgeReceiverAddress, address(router));
-    }
-
-    function setPeer(uint256 chainId, address routerAddress) external {
-        uint32 eid = registry.chainIdToEndpointId(chainId);
-        bytes32 endpoint = bytes32(uint256(uint160(routerAddress)));
-        router.setPeer(eid, endpoint);
-    }
-
-    /**
-     * @notice Handles methods called from another chain through LZ. Router contract receives the message and calls pool methods through this function
-     * @param _method The name of the method that was called from the other chain
-     * @param _data The data to be calculated upon in the method
-     */
-    function receiveHandler(bytes4 _method, bytes memory _data) external {
-        if (_method == bytes4(keccak256(abi.encode("exitPivot")))) {
-            (
-                address poolAddress,
-                uint256 poolNonce,
-                bytes32 protocolHash,
-                string memory targetMarketId,
-                uint256 destinationChainId,
-                address destinationBridgedReceiver
-            ) = abi.decode(
-                    _data,
-                    (address, uint256, bytes32, string, uint256, address)
-                );
-
-            //Pool nonce passed in message should be same as bridgeNonce here. Make sure that all deposit/withdraw requests made from pool have been included in this balance
-
-            executeExitPivot(
-                poolAddress,
-                poolNonce,
-                protocolHash,
-                targetMarketId,
-                destinationChainId,
-                destinationBridgedReceiver
-            );
-        }
-
-        if (_method == bytes4(keccak256(abi.encode("userWithdrawOrder")))) {
-            // - userWithdraw: bytes 20 userAddress, uint256 amountToWithdraw, uint256 userProportionRatio
-            // Pulls out the appropriate amount of asset from position
-            // Sends the withdrawn asset through Across back to pool to be sent to user
-            // IMPORTANT - MUST RECEIVE + VERIFY USER SIGNED MESSAGE FROM POOLCONTROL
-            //If the requested amount is over the actual asset amount user can withdraw, just withdraw the max
-
-            // IMPORTANT - WHAT HAPPENS IF POOLTOKENSUPPLY HAS NOT BEEN UPDATED, BUT THE POSITION BALANCE HAS? WE SHOULD MEASURE PROPORTION BEFORE EITHER ARE UPDATED FROM OTHER PENDING ORDERS
-            // IMPORTANT - WE NEED TO HAVE THE USER'S POOL TOKEN PROPORTION AT THE TIME OF WITHDRAW, AS WELL AS THE USERS ASSET PROPORTION FROM THAT SAME MOMENT
-            // IMPORTANT - MAINTAIN POOL DEPOSITS/WITHDRAWS NONCES ON THE POOL CONTRACT, ON THE POSITION CONTRACT KEEP SNAPSHOTS OF BALANCES AT THESE NONCES
-            //IMPORTANT - ORDERED LZ MESSAGING IRRELEVANT TO THIS ISSUE, AS IT IS AB-BA. The issue is when AB state is read before the BA sequence of another tx is executed
-            // Example: Currently posBal is 10 - user has 20 pool tokens in a total of 200. The user can withdraw 1 asset
-            // Issue:   PosBal is 10 - user has 20 pool tokens in a total of 100, meanwhile the total should be 200 tokens because PosBal reflects a recent 5 asset deposit. The user can withdraw 2 asset
-            // Solution: If we take proportion before pending deposit, the proportions are fixed
-            //          PosBal is 5 - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
-
-            // IMPORTANT - BUT WITH POSITION VALUE SNPASHOTS, THE VALUE DOES NOT INCLUDE INTEREST GAINED SINCE SNAPSHOT
-            // Does this give depositor a higher stake than deserved, lower stake, or just disclude recently gained interest from user?
-            // POSBAL FROM SNAPSHOT: PosBal is 5 - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
-            // POSBAL GAINED 1 YIELD: PosBal is 6 - user has 20 pool tokens in a total of 100, the user can withdraw 1.2 asset
-            // WE ALSO TAKE THE SNAPSHOT FROM MOST RECENT PROCESSING TX, GET THE DIFFERENCE BETWEEN THIS SNAPSHOT AND LAST COMPLETE SNAPSHOT. SUBTRACT THIS VALUE FROM CURRENT POSITION VALUE
-            // POSBAL PENDING: PosBal is 5 with +5 pendng (most recent snapshot shows 10) - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
-            // POSBAL GAINED 1 YIELD: PosBal from completed snap is 5, pending snap is 10, current pos is 11. Get Pos bal from currentPos - (pending - completed) = 6 - user has 20 pool tokens in a total of 100, the user can withdraw 1.2 asset
-
-            // POSBAL PENDING: PosBal is 5 with -3 pendng (most recent snapshot shows 2) - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
-            // POSBAL GAINED 1 YIELD: PosBal from completed snap is 5, pending snap is 2, current pos is 3. Get Pos bal from currentPos - (pending - completed) = 6 - user has 20 pool tokens in a total of 100, the user can withdraw 1.2 asset
-            // The ratio to get maxAssetToWithdraw (x) is as follows: x/(currentPositionValue - (nonceToPositionValue[bridgeNonce] - nonceToPositionValue[poolNonce])) = userPoolTokenBalance/poolTokenSupply
-            // IMPORTANT - DOES THIS RATIO WORK IF THERE IS A PIVOT TO ANOTHER CONNECTOR, THEN BACK TO THIS ONE
-
-            (
-                bytes32 withdrawId,
-                address poolAddress,
-                uint256 amount,
-                uint256 poolNonce,
-                uint256 scaledRatio
-            ) = abi.decode(
-                    _data,
-                    (bytes32, address, uint256, uint256, uint256)
-                );
-
-            address assetAddress = poolToAsset[poolAddress];
-
-            uint256 currentPositionValue = getPositionBalance(poolAddress);
-
-            uint256 userMaxWithdraw = getUserMaxWithdraw(
-                currentPositionValue,
-                scaledRatio,
-                poolAddress,
-                poolNonce
-            );
-
-            // IMPORTANT - IF amountToWithdraw IS VERY CLOSE TO userMaxWithdraw, MAKE amountToWithdraw = userMaxWithdraw
-
-            uint256 amountToWithdraw = amount;
-            if (userMaxWithdraw < amount) {
-                amountToWithdraw = userMaxWithdraw;
-            }
-
-            userWithdraw(
-                amountToWithdraw,
-                userMaxWithdraw,
-                poolAddress,
-                withdrawId
-            );
-        }
-
-        if (_method == bytes4(keccak256(abi.encode("getPositionBalance")))) {
-            // Checks the external protocol that is currently holding the assets of the pool making the request
-            // Reads from this contract's state as to the proportion of assets that pertain to the pool
-            // Send this value through sendPositionBalance()
-            address poolAddress = abi.decode(_data, (address));
-            sendPositionBalance(poolAddress, bytes32(""));
-        }
-
-        if (_method == bytes4(keccak256(abi.encode("getPositionData")))) {
-            //Reads data to be sent back to pool
-            testFlag = true;
-        }
-
-        if (_method == bytes4(keccak256(abi.encode("getRegistryAddress")))) {
-            //Reads address from the regitry to be sent back to pool
-        }
+        return (bridgeReceiverAddress, address(messenger));
     }
 
     /**
@@ -287,14 +169,14 @@ contract BridgeLogic {
     function sendPositionBalance(
         address _poolAddress,
         bytes32 _depositId
-    ) internal {
+    ) public {
         uint256 positionAmount = getPositionBalance(_poolAddress);
         address currentPositionMarket = poolToCurrentPositionMarket[
             _poolAddress
         ];
 
         bytes4 method = bytes4(
-            keccak256(abi.encode("readPositionBalanceResult"))
+            keccak256(abi.encode("MessageSendPositionBalance"))
         );
         bytes memory data = abi.encode(
             positionAmount,
@@ -307,71 +189,47 @@ contract BridgeLogic {
         emit PositionBalanceSent(positionAmount, _poolAddress);
         emit LzMessageSent(method, data);
 
-        // HOW TO SEND FROM ROUTER?
-        // This is B in an ABA sequence. There is no native gas token provided that is payable to LZ
-        // How would quotes work? Quote can make an estimate, but then this connector must
-        // router.send{value: msg.value}(
-        //     managerChainId,
-        //     method,
-        //     true,
-        //     _poolAddress,
-        //     data,
-        //     200000
-        // );
+        registry.sendMessage(managerChainId, method, _poolAddress, data);
     }
 
     /**
      * @notice Send position data of a pool back to the pool contract
      */
-    function sendPositionData() internal {
+    function sendPositionData(address _poolAddress) internal {
         // Uses lzSend to send position data requested by pool
-        bytes memory data;
-        bytes memory options;
+        bytes memory data = abi.encode("TESTING THE CALLBACK");
 
-        // router.send{value: msg.value}(
-        //     managerChainId,
-        //     bytes4(keccak256(abi.encode("sendPositionData"))),
-        //     true,
-        //     address(this),
-        //     data,
-        //     200000
-        // );
+        bytes4 method = bytes4(
+            keccak256(abi.encode("MessageSendPositionData"))
+        );
+
+        registry.sendMessage(managerChainId, method, _poolAddress, data);
     }
 
     /**
      * @notice Send an address back to the pool contract
      */
-    function sendRegistryAddress() internal {
+    function sendRegistryAddress(address _poolAddress) internal {
         bytes memory data;
         bytes memory options;
 
-        // router.send{value: msg.value}(
-        //     managerChainId,
-        //     bytes4(keccak256(abi.encode("sendRegistryAddress"))),
-        //     true,
-        //     address(this),
-        //     data,
-        //     200000
-        // );
+        bytes4 method = bytes4(keccak256(abi.encode("sendRegistryAddress")));
+        registry.sendMessage(managerChainId, method, _poolAddress, data);
     }
 
-    function sendPivotCompleted(address poolAddress, uint256 amount) internal {
+    function sendPivotCompleted(
+        address _poolAddress,
+        uint256 _amount
+    ) internal {
         bytes4 method = bytes4(keccak256(abi.encode("pivotCompleted")));
-        address marketAddress = poolToCurrentPositionMarket[poolAddress];
-        uint256 positionAmount = positionEntranceAmount[poolAddress];
+        address marketAddress = poolToCurrentPositionMarket[_poolAddress];
+        uint256 positionAmount = positionEntranceAmount[_poolAddress];
         bytes memory data = abi.encode(marketAddress, positionAmount);
         bytes memory options;
 
         emit LzMessageSent(method, data);
 
-        // router.send{value: msg.value}(
-        //     managerChainId,
-        //     method,
-        //     true,
-        //     address(this),
-        //     data,
-        //     200000
-        // );
+        registry.sendMessage(managerChainId, method, _poolAddress, data);
     }
 
     function initializePoolPosition(
@@ -455,22 +313,23 @@ contract BridgeLogic {
         // );
     }
 
-    function executeExitPivot(
-        address poolAddress,
-        uint256 poolNonce,
-        bytes32 protocolHash,
-        string memory targetMarketId,
-        uint256 destinationChainId,
-        address destinationBridgeReceiver
-    ) public {
+    function executeExitPivot(address _poolAddress, bytes memory _data) public {
         // Withdraw from current position here, bringing funds back to this contract and updating state
-        uint256 amount = getPositionBalance(poolAddress); // IMPORTANT - This should be set to the amount of funds withdrawn and to be reentered to new position (denominated in asset)
+        (
+            uint256 poolNonce,
+            bytes32 protocolHash,
+            string memory targetMarketId,
+            uint256 destinationChainId,
+            address destinationBridgeReceiver
+        ) = abi.decode(_data, (uint256, bytes32, string, uint256, address));
+
+        uint256 amount = getPositionBalance(_poolAddress); // IMPORTANT - This should be set to the amount of funds withdrawn and to be reentered to new position (denominated in asset)
 
         if (registry.currentChainId() == destinationChainId) {
-            enterPosition(poolAddress, protocolHash, targetMarketId, amount);
+            enterPosition(_poolAddress, protocolHash, targetMarketId, amount);
         } else {
             crossChainPivot(
-                poolAddress,
+                _poolAddress,
                 protocolHash,
                 targetMarketId,
                 destinationChainId,
@@ -485,6 +344,72 @@ contract BridgeLogic {
         // - Data includes -Pool id that will be pivoting position,-Destination protocol, chain, pool-If any funds/data needs to be sent back to pool control
         // - exitPivot: bytes32 destinationProtocol, bytes20 destinationMarket, uint256 destinationChainId
         //Send funds and outward across message to next position
+    }
+
+    function userWithdrawSequence(
+        address _poolAddress,
+        bytes memory _data
+    ) external {
+        // - userWithdraw: bytes 20 userAddress, uint256 amountToWithdraw, uint256 userProportionRatio
+        // Pulls out the appropriate amount of asset from position
+        // Sends the withdrawn asset through Across back to pool to be sent to user
+        // IMPORTANT - MUST RECEIVE + VERIFY USER SIGNED MESSAGE FROM POOLCONTROL
+        //If the requested amount is over the actual asset amount user can withdraw, just withdraw the max
+
+        // IMPORTANT - WHAT HAPPENS IF POOLTOKENSUPPLY HAS NOT BEEN UPDATED, BUT THE POSITION BALANCE HAS? WE SHOULD MEASURE PROPORTION BEFORE EITHER ARE UPDATED FROM OTHER PENDING ORDERS
+        // IMPORTANT - WE NEED TO HAVE THE USER'S POOL TOKEN PROPORTION AT THE TIME OF WITHDRAW, AS WELL AS THE USERS ASSET PROPORTION FROM THAT SAME MOMENT
+        // IMPORTANT - MAINTAIN POOL DEPOSITS/WITHDRAWS NONCES ON THE POOL CONTRACT, ON THE POSITION CONTRACT KEEP SNAPSHOTS OF BALANCES AT THESE NONCES
+        //IMPORTANT - ORDERED LZ MESSAGING IRRELEVANT TO THIS ISSUE, AS IT IS AB-BA. The issue is when AB state is read before the BA sequence of another tx is executed
+        // Example: Currently posBal is 10 - user has 20 pool tokens in a total of 200. The user can withdraw 1 asset
+        // Issue:   PosBal is 10 - user has 20 pool tokens in a total of 100, meanwhile the total should be 200 tokens because PosBal reflects a recent 5 asset deposit. The user can withdraw 2 asset
+        // Solution: If we take proportion before pending deposit, the proportions are fixed
+        //          PosBal is 5 - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
+
+        // IMPORTANT - BUT WITH POSITION VALUE SNPASHOTS, THE VALUE DOES NOT INCLUDE INTEREST GAINED SINCE SNAPSHOT
+        // Does this give depositor a higher stake than deserved, lower stake, or just disclude recently gained interest from user?
+        // POSBAL FROM SNAPSHOT: PosBal is 5 - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
+        // POSBAL GAINED 1 YIELD: PosBal is 6 - user has 20 pool tokens in a total of 100, the user can withdraw 1.2 asset
+        // WE ALSO TAKE THE SNAPSHOT FROM MOST RECENT PROCESSING TX, GET THE DIFFERENCE BETWEEN THIS SNAPSHOT AND LAST COMPLETE SNAPSHOT. SUBTRACT THIS VALUE FROM CURRENT POSITION VALUE
+        // POSBAL PENDING: PosBal is 5 with +5 pendng (most recent snapshot shows 10) - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
+        // POSBAL GAINED 1 YIELD: PosBal from completed snap is 5, pending snap is 10, current pos is 11. Get Pos bal from currentPos - (pending - completed) = 6 - user has 20 pool tokens in a total of 100, the user can withdraw 1.2 asset
+
+        // POSBAL PENDING: PosBal is 5 with -3 pendng (most recent snapshot shows 2) - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
+        // POSBAL GAINED 1 YIELD: PosBal from completed snap is 5, pending snap is 2, current pos is 3. Get Pos bal from currentPos - (pending - completed) = 6 - user has 20 pool tokens in a total of 100, the user can withdraw 1.2 asset
+        // The ratio to get maxAssetToWithdraw (x) is as follows: x/(currentPositionValue - (nonceToPositionValue[bridgeNonce] - nonceToPositionValue[poolNonce])) = userPoolTokenBalance/poolTokenSupply
+        // IMPORTANT - DOES THIS RATIO WORK IF THERE IS A PIVOT TO ANOTHER CONNECTOR, THEN BACK TO THIS ONE
+
+        (
+            bytes32 withdrawId,
+            address poolAddress,
+            uint256 amount,
+            uint256 poolNonce,
+            uint256 scaledRatio
+        ) = abi.decode(_data, (bytes32, address, uint256, uint256, uint256));
+
+        address assetAddress = poolToAsset[_poolAddress];
+
+        uint256 currentPositionValue = getPositionBalance(_poolAddress);
+
+        uint256 userMaxWithdraw = getUserMaxWithdraw(
+            currentPositionValue,
+            scaledRatio,
+            _poolAddress,
+            poolNonce
+        );
+
+        // IMPORTANT - IF amountToWithdraw IS VERY CLOSE TO userMaxWithdraw, MAKE amountToWithdraw = userMaxWithdraw
+
+        uint256 amountToWithdraw = amount;
+        if (userMaxWithdraw < amount) {
+            amountToWithdraw = userMaxWithdraw;
+        }
+
+        userWithdraw(
+            amountToWithdraw,
+            userMaxWithdraw,
+            _poolAddress,
+            withdrawId
+        );
     }
 
     /**
@@ -507,7 +432,9 @@ contract BridgeLogic {
             currentChainId
         );
 
-        bytes4 method = bytes4(keccak256(abi.encode("userWithdrawOrder")));
+        bytes4 method = bytes4(
+            keccak256(abi.encode("BridgeUserWithdrawOrder"))
+        );
         bytes memory data = abi.encode(_withdrawId, _userMaxWithdraw);
         bytes memory message = abi.encode(method, data);
 

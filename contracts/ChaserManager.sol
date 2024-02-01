@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
+import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
+
 import {PoolControl} from "./PoolControl.sol";
-import {ChaserRouter} from "./ChaserRouter.sol";
 import {Registry} from "./Registry.sol";
 import {ArbitrationContract} from "./ArbitrationContract.sol";
+import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 
 interface IChaserManager {
     function createNewPool(
@@ -18,7 +20,7 @@ interface IChaserManager {
     function viewRegistryAddress() external view returns (address);
 }
 
-contract ChaserManager {
+contract ChaserManager is OwnerIsCreator {
     //Should this inherit a factory contract?
 
     //Addresses managed in registry
@@ -28,21 +30,32 @@ contract ChaserManager {
     // Assertion functionality to be called by a user from Pool contract
     // Bridging functionality to be called by a pool contract for secuity purposes. Access control in spokes
 
-    Registry public registry;
+    IChaserRegistry public registry;
     ArbitrationContract public arbitrationContract;
 
-    uint256 LOCAL_CHAIN;
+    uint256 currentChainId;
+
+    address poolCalculationsAddress;
 
     event PoolCreated(address indexed poolAddress);
 
     constructor(uint256 _chainId) {
-        LOCAL_CHAIN = _chainId;
-        registry = new Registry(_chainId, _chainId);
+        currentChainId = _chainId;
         // arbitrationContract = new ArbitrationContract(
         //     address(registry),
         //     _chainId
         // );
         // registry.addArbitrationContract(address(arbitrationContract));
+    }
+
+    function addRegistry(address registryAddress) external onlyOwner {
+        registry = IChaserRegistry(registryAddress);
+    }
+
+    function addPoolCalculationsAddress(
+        address _poolCalculationsAddress
+    ) external onlyOwner {
+        poolCalculationsAddress = _poolCalculationsAddress;
     }
 
     function createNewPool(
@@ -57,8 +70,9 @@ contract ChaserManager {
             poolAsset,
             strategyURI,
             poolName,
-            LOCAL_CHAIN,
-            address(registry)
+            currentChainId,
+            address(registry),
+            poolCalculationsAddress
         );
         // pool.initializeContractConnections(address(registry));
         address poolAddress = address(pool);

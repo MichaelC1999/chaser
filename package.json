@@ -2,10 +2,12 @@
   "name": "chaser",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
-    "hardhat": "^2.19.4"
+    "hardhat": "^2.19.4",
+    "hardhat-contract-sizer": "^2.10.0"
   },
   "dependencies": {
     "@chainlink/contracts": "^0.8.0",
+    "@chainlink/contracts-ccip": "^1.2.1",
     "@chainlink/env-enc": "^1.0.5",
     "@chainlink/functions-toolkit": "^0.2.5",
     "@layerzerolabs/lz-evm-oapp-v2": "^2.0.2",

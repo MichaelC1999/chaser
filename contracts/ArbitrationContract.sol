@@ -15,6 +15,11 @@ contract ArbitrationContract {
     address public bridgingConduit;
     IChaserRegistry public registry;
 
+    mapping(bytes32 => string) public assertionToRequestedMarketId;
+    mapping(bytes32 => string) public assertionToRequestedProtocol;
+
+    bytes32 currentPositionAssertion;
+
     struct DataAssertion {
         bytes32 dataId; // The dataId that was asserted.
         bytes data; // This could be an arbitrary data type.
@@ -63,6 +68,67 @@ contract ArbitrationContract {
         if (!assertionsData[assertionId].resolved)
             return (false, abi.encode(0));
         return (true, assertionsData[assertionId].data);
+    }
+
+    //THIS FUNCTION queryMovePosition() IS THE FIRST STEP IN THE PROCESS TO PIVOT MARKETS. ANY USER CALLS THIS FUNCTION, WHICH OPENS AN ASSERTION
+    //IN ORDER TO CALL THIS FUNCTION, USER MUST APPROVE TOKEN TO THIS ADDRESS FOR BOND
+    function queryMovePosition(
+        string memory requestProtocolSlug,
+        string memory requestMarketId,
+        uint256 bond,
+        uint256 userAllowance,
+        string memory strategySource
+    ) public {
+        require(bond >= 1000000000, "Bond provided must be above 1000 USDC");
+
+        bool slugEnabled = registry.slugEnabled(requestProtocolSlug);
+        require(
+            slugEnabled == true,
+            "Protocol-Chain slug must be enabled to make proposal"
+        );
+
+        // Turn this into a function view call to PoolCalculations, cpassing in user and address(this) to see user allowance for arb contract
+
+        require(
+            bond <= userAllowance,
+            "User must approve bond amount for PoolControl to spend"
+        );
+        //IMPORTANT - ASSERTION MUST ALSO INCLUDE THE CORRECT ASSET THAT CORRESPONDS TO THIS POOL. ie THE PROPOSED MARKET MUST BE FOR THE ASSET USED ON THIS POOL
+
+        // add view call to pool to get currewntProtocolSlug, currentMarketId, strategy source
+
+        // Assertion should use protocol-chain slugs and subgraph id for dispute UX
+        string memory currentDepositProtocolSlug = assertionToRequestedProtocol[
+            currentPositionAssertion
+        ];
+        string memory currentDepositMarketId = assertionToRequestedMarketId[
+            currentPositionAssertion
+        ];
+
+        bytes memory data = abi.encode(
+            "The market on ",
+            requestProtocolSlug,
+            " for pool with an id of ",
+            requestMarketId,
+            " yields a better investment than the current market on ",
+            currentDepositProtocolSlug,
+            " with an id of ",
+            currentDepositMarketId,
+            ". This is according to the current strategy whose Javascript logic that can be read from ",
+            strategySource,
+            " as of block ",
+            block.number
+        ); // This message must be rewritten to be very exacting/measurable. Check for uint/address byte conversion breaking the value
+        //Switch this message to use different strategy mechanism, not contract string based strategy
+
+        // Submit UMA assertion proposing the move
+        bytes32 assertionId = assertDataForInternal(data, msg.sender, bond);
+
+        // add state function to pool to add these to state
+
+        //DOES THIS VIOLATE CEI?
+        assertionToRequestedMarketId[assertionId] = requestMarketId;
+        assertionToRequestedProtocol[assertionId] = requestProtocolSlug;
     }
 
     ///  @dev assertDataFor Opens the UMA assertion that must be verified using the strategy script provided
@@ -200,7 +266,40 @@ contract ArbitrationContract {
             //Execute callback on PoolControl sendPositionChange()
 
             IPoolControl poolControl = IPoolControl(dataAssertion.asserter);
-            poolControl.sendPositionChange(assertionId);
+
+            //IMPORTANT - CHANGE TO LZ SEND
+            // This gets executed open callback of the position pivot assertion resolving
+            // This send lz message to the Router to make the transition
+
+            //Can only be called by Arbitration contract
+            currentPositionAssertion = assertionId;
+            // require(
+            //     msg.sender == arbitrationContract,
+            //     "sendPositionChange() may only be called by the arbitration contract"
+            // ); IMPORTANT - UNCOMMENT
+
+            //SInce withdraws use  LZ ordered messaging, can be made uninterrupted up until the exitPivot is executed
+            //Block withdraws once exitPivot is executed, until the new target position is entered and sends message to pool
+
+            string memory requestMarketId = assertionToRequestedMarketId[
+                assertionId
+            ];
+            string memory requestProtocolSlug = assertionToRequestedProtocol[
+                assertionId
+            ];
+
+            requestMarketId = string(
+                abi.encodePacked(assertionId, abi.encode("0xTEST"))
+            ); // REMOVE - TESTING
+            requestProtocolSlug = string(
+                abi.encodePacked(assertionId, abi.encode("SLUG"))
+            ); //REMOVE - TESTING
+
+            bytes32 protocolHash = registry.slugToProtocolHash(
+                requestProtocolSlug
+            );
+
+            poolControl.sendPositionChange(requestMarketId, protocolHash);
         } else delete assertionsData[assertionId];
     }
 

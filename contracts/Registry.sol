@@ -3,17 +3,25 @@ pragma solidity ^0.8.9;
 
 import {BridgeReceiver} from "./BridgeReceiver.sol";
 import {BridgeLogic} from "./BridgeLogic.sol";
+import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
+import {IChaserMessenger} from "./interfaces/IChaserMessenger.sol";
 
-contract Registry {
+import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
+
+contract Registry is OwnerIsCreator {
     //Addresses managed in registry
     //Contains supported protocols/chains
     // Functions for making sure that a proposal assertion is actually supported
 
     //_currentChainId is the chain that this registry is currently deployed on
     //_managerChainId is the chain that has the manager contract and all of the pools
-    constructor(uint256 _currentChainId, uint256 _managerChainId) {
+    constructor(
+        uint256 _currentChainId,
+        uint256 _managerChainId,
+        address _managerAddress
+    ) {
         if (_currentChainId == _managerChainId) {
-            manager = msg.sender;
+            manager = _managerAddress;
         }
 
         currentChainId = _currentChainId;
@@ -78,9 +86,23 @@ contract Registry {
             0x263351499f82C107e540B01F0Ca959843e22464a
         );
 
-        chainIdToEndpointId[5] = 40121;
+        chainIdToSelector[5] = 16015286601757825753;
 
-        chainIdToEndpointId[80001] = 40109;
+        chainIdToSelector[80001] = 12532609583862916517;
+
+        chainIdToRouter[5] = address(
+            0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59
+        );
+        chainIdToRouter[80001] = address(
+            0x1035CabC275068e0F4b745A29CEDf38E13aF41b1
+        );
+
+        chainIdToLinkAddress[5] = address(
+            0x779877A7B0D9E8603169DdbD7836e478b4624789
+        );
+        chainIdToLinkAddress[80001] = address(
+            0x326C977E6efc84E512bB9C30f76E30c160eD06FB
+        );
 
         chainIdToEndpointAddress[5] = address(
             0x464570adA09869d8741132183721B4f0769a0287
@@ -95,9 +117,15 @@ contract Registry {
 
     mapping(uint256 => address) public chainIdToBridgeReceiver; //This uses CrossDeploy to create inter-chain registry of connection addresses
 
+    mapping(uint256 => address) public chainIdToMessageReceiver;
+
     mapping(uint256 => address) public chainIdToSpokePoolAddress;
 
-    mapping(uint256 => uint32) public chainIdToEndpointId; // Chain Id to the LayerZero endpoint Id
+    mapping(uint256 => address) public chainIdToRouter;
+
+    mapping(uint256 => address) public chainIdToLinkAddress;
+
+    mapping(uint256 => uint64) public chainIdToSelector; // Chain Id to the LayerZero endpoint Id
 
     mapping(uint256 => address) public chainIdToEndpointAddress;
 
@@ -113,13 +141,11 @@ contract Registry {
 
     mapping(uint256 => address) public poolCountToPool;
 
-    address manager;
+    address public manager;
 
-    address public bridgeLogic;
+    address public bridgeLogicAddress;
 
     address public receiverAddress;
-
-    address public routerAddress;
 
     address public arbitrationContract; // The address of the arbitrationContract on the pool chain
 
@@ -129,21 +155,35 @@ contract Registry {
 
     uint256 public poolCount = 0;
 
-    function deployBridgeLogic() external {
+    function addBridgeLogic(address _bridgeLogicAddress) external onlyOwner {
         // require(
         //     msg.sender == manager,
         //     "Only Manager may call deployBridgeReceiver"
         // ); IMPORTANT - UNCOMMENT
-        address endpointAddress = chainIdToEndpointAddress[currentChainId];
 
-        BridgeLogic BridgeLogicContract = new BridgeLogic(managerChainId);
+        bridgeLogicAddress = _bridgeLogicAddress;
 
-        bridgeLogic = address(BridgeLogicContract);
+        address messengerAddress;
 
-        (receiverAddress, routerAddress) = BridgeLogicContract
-            .deployConnections(endpointAddress);
+        (receiverAddress, messengerAddress) = IBridgeLogic(_bridgeLogicAddress)
+            .deployConnections();
 
+        require(messengerAddress != address(0), "Invalid messenger");
+
+        addMessageReceiver(currentChainId, messengerAddress);
         addBridgeReceiver(currentChainId, receiverAddress);
+    }
+
+    function localCcipConfigs()
+        external
+        view
+        returns (address, address, uint256)
+    {
+        address chainlinkRouter = chainIdToRouter[currentChainId];
+        address linkAddress = chainIdToLinkAddress[currentChainId];
+        uint64 selector = chainIdToSelector[currentChainId];
+
+        return (chainlinkRouter, linkAddress, selector);
     }
 
     function enableProtocol(string memory protocol) external {
@@ -207,8 +247,12 @@ contract Registry {
         return keccak256(abi.encode(slug));
     }
 
-    function ProtocolHashToSlug(bytes32 hash) external view returns (bytes32) {
-        return hashedSlugToProtocolHash[hash];
+    function checkValidPool(address _poolAddress) external view returns (bool) {
+        // If chain is not the manager chain, assume the pool is valid
+        if (managerChainId == currentChainId) {
+            return poolEnabled[_poolAddress];
+        }
+        return true;
     }
 
     function addPoolEnabled(address poolAddress) external {
@@ -227,6 +271,47 @@ contract Registry {
         //IMPORTANT - NEEDS ACCESS CONTROL
 
         chainIdToBridgeReceiver[chainId] = receiver;
+    }
+
+    function addMessageReceiver(uint chainId, address receiver) public {
+        //IMPORTANT - NEEDS ACCESS CONTROL
+
+        chainIdToMessageReceiver[chainId] = receiver;
+        address messengerAddress = chainIdToMessageReceiver[currentChainId];
+        IChaserMessenger(messengerAddress).allowlistSender(receiver, true);
+    }
+
+    function sendMessage(
+        uint256 _chainId,
+        bytes4 _method,
+        address _poolAddress,
+        bytes memory _data
+    ) external {
+        //Pool/BridgeLogic calls this function to send message, letting the registry verify that the Pool/Logic contract is legitimate
+        // IMPORTANT - PERFORM ACCESS CONTROL HERE
+        address poolAddress = msg.sender;
+        if (msg.sender == bridgeLogicAddress) {
+            poolAddress = _poolAddress;
+        } else {
+            require(
+                poolEnabled[poolAddress] == true,
+                "SendMessage may only be actioned by a valid pool"
+            );
+        }
+
+        uint64 destinationChainSelector = chainIdToSelector[_chainId];
+        require(destinationChainSelector != 0, "Invalid Chain Selector");
+        address messageReceiver = chainIdToMessageReceiver[_chainId];
+
+        address messengerAddress = chainIdToMessageReceiver[currentChainId];
+
+        IChaserMessenger(messengerAddress).sendMessagePayLINK(
+            destinationChainSelector,
+            messageReceiver,
+            _method,
+            poolAddress,
+            _data
+        );
     }
 
     function addArbitrationContract(address _arbitrationContract) external {

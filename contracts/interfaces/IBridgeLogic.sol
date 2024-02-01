@@ -5,7 +5,7 @@ interface IBridgeLogic {
     // Public state variables as view functions
     function managerChainId() external view returns (uint256);
 
-    function deployConnections(address) external returns (address, address);
+    function deployConnections() external returns (address, address);
 
     function registry() external view returns (address);
 
@@ -34,8 +34,6 @@ interface IBridgeLogic {
     function bridgeNonce(address) external view returns (uint256);
 
     function testFlag() external view returns (bool);
-
-    function setPeer(uint256, address) external;
 
     function receiveHandler(bytes4, bytes memory) external;
 
@@ -91,14 +89,11 @@ interface IBridgeLogic {
         uint256
     ) external;
 
-    function executeExitPivot(
-        address,
-        uint256,
-        bytes32,
-        string memory,
-        uint256,
-        address
-    ) external;
+    function executeExitPivot(address, bytes memory) external;
+
+    function userWithdrawSequence(address, bytes memory) external;
+
+    function sendPositionBalance(address, bytes32) external;
 
     function receiveDepositFromPool(
         uint256,
