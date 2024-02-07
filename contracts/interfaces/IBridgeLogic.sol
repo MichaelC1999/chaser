@@ -95,6 +95,8 @@ interface IBridgeLogic {
 
     function sendPositionBalance(address, bytes32) external;
 
+    function sendPositionData(address) external;
+
     function receiveDepositFromPool(
         uint256,
         bytes32,

@@ -3,47 +3,51 @@ pragma solidity ^0.8.0;
 
 interface IPoolCalculations {
     function depositIdToDepositor(
-        bytes32 _depositId
+        bytes32
     ) external view returns (address);
 
     function depositIdToDepositAmount(
-        bytes32 _depositId
+        bytes32
     ) external view returns (uint256);
 
     function depositIdToTokensMinted(
-        bytes32 _depositId
+        bytes32
     ) external view returns (bool);
 
     function withdrawIdToDepositor(
-        bytes32 _withdrawId
+        bytes32
     ) external view returns (address);
 
     function withdrawIdToDepositAmount(
-        bytes32 _withdrawId
+        bytes32
     ) external view returns (uint256);
 
     function createWithdrawOrder(
-        uint256 _amount,
-        uint256 _poolNonce,
-        address _poolToken,
-        address _sender
+        uint256,
+        uint256,
+        address,
+        address
     ) external returns (bytes memory);
 
     function getWithdrawOrderFulfillment(
-        bytes32 withdrawId,
-        uint256 totalAvailableForUser,
-        uint256 amount,
-        address _poolToken
-    ) external view returns (address depositor, uint256 poolTokensToBurn);
+        bytes32,
+        uint256,
+        uint256,
+        address
+    ) external view returns (address, uint256);
 
     function createDepositOrder(
-        address _sender,
-        uint256 _amount
-    ) external returns (bytes32 depositId);
+        address,
+        uint256
+    ) external returns (bytes32);
+
+    function updateDepositReceived(bytes32, uint256) external; 
+
+    function depositIdMinted(bytes32 ) external;
 
     function calculatePoolTokensToMint(
-        bytes32 _depositId,
-        uint256 _poolPositionAmount,
-        uint256 _poolTokenSupply
-    ) external returns (uint256, address);
+        bytes32,
+        uint256,
+        uint256
+    ) external view returns (uint256, address);
 }

@@ -13,6 +13,9 @@ import {IPoolToken} from "./interfaces/IPoolToken.sol";
 import {IArbitrationContract} from "./interfaces/IArbitrationContract.sol";
 
 contract PoolControl {
+
+    //IMPORTANT - POOL SHOULD NOT BE UPGRADEABLE, COULD CAUSE ISSUES WITH CROSS CHAIN IDENTIFICATION OF POOL, WHEN PROXY POINTS TO ONE ADDRESS ON HOME CHAIN AFTER UPGRADE, AND OTHER ADDRESS ON DESTINATION CHAIN
+
     uint256 localChain;
     bytes32 poolId;
     address deployingUser;
@@ -32,7 +35,11 @@ contract PoolControl {
     event AcrossMessageSent(bytes);
     event LzMessageSent(bytes4, bytes);
     event Numbers(uint256, uint256);
+    event CheckId(bytes32);
     event PivotCompleted(string, address, bytes32, uint256);
+    event ExecutionMessage(string);
+
+    error WithdrawOrderFailure(string reason);
 
     mapping(address => bool) userHasPendingWithdraw;
 
@@ -72,15 +79,14 @@ contract PoolControl {
         uint256 _localChain,
         address _registry,
         address _poolCalculations
-    ) {
+    ) public  {
         localChain = _localChain;
-        currentPositionChain = localChain;
+        currentPositionChain = 0;
         poolId = keccak256(abi.encode(address(this), _poolName));
         poolName = _poolName;
         deployingUser = _deployingUser;
         asset = IERC20(_asset);
         strategySource = _strategySource;
-        // manager = IChaserManager(address(msg.sender));
         registry = IChaserRegistry(_registry);
         poolCalculations = IPoolCalculations(_poolCalculations);
         localBridgeLogic = IBridgeLogic(registry.bridgeLogicAddress());
@@ -89,19 +95,43 @@ contract PoolControl {
         );
     }
 
-    function externalSetup() external {}
-
-    function readPositionBalanceResult(bytes memory _data) external {
-        // Decode the payload data
-        (uint256 positionAmount, address marketAddress, bytes32 depositId) = abi
-            .decode(_data, (uint256, address, bytes32));
+    function receivePositionInitialized(bytes memory _data) external {
+        (uint256 positionAmount, uint256 depositAmountReceived, address marketAddress, bytes32 depositId) = abi
+            .decode(_data, (uint256, uint256, address, bytes32));
         //Receives the current value of the entire position. Sets this to a contract wide state (or mapping with timestamp => uint balance, and save timestamp to contract wide state)
 
         currentRecordPositionValue = positionAmount;
         if (depositId != bytes32("")) {
-            if (poolNonce == 0) {
-                pivotCompleted(marketAddress, positionAmount);
+            poolCalculations.updateDepositReceived(depositId, depositAmountReceived);
+
+            pivotCompleted(marketAddress, positionAmount);
+            require(poolCalculations.depositIdToTokensMinted(depositId) == false, "Deposit has already minted tokens");
+
+            poolCalculations.depositIdMinted(depositId);
+
+            poolNonce += 1;
+            if (poolToken == address(0)) {
+                poolToken = address(
+                    new PoolToken(deployingUser, positionAmount, poolName)
+                );
             }
+        }
+    }
+
+    function receivePositionBalance(bytes memory _data) external {
+        // Decode the payload data
+        (uint256 positionAmount, uint256 depositAmountReceived, bytes32 depositId) = abi
+            .decode(_data, (uint256, uint256, bytes32));
+        //Receives the current value of the entire position. Sets this to a contract wide state (or mapping with timestamp => uint balance, and save timestamp to contract wide state)
+        poolCalculations.updateDepositReceived(depositId, depositAmountReceived);
+
+        currentRecordPositionValue = positionAmount;
+        if (depositId != bytes32("")) {
+
+            require(poolCalculations.depositIdToTokensMinted(depositId) == false, "Deposit has already minted tokens");
+
+            poolCalculations.depositIdMinted(depositId);
+
             mintUserPoolTokens(depositId, positionAmount);
         }
 
@@ -127,41 +157,26 @@ contract PoolControl {
         );
         userHasPendingWithdraw[msg.sender] = true;
 
-        bytes memory data = poolCalculations.createWithdrawOrder(
+        bytes memory data;
+
+        try poolCalculations.createWithdrawOrder(
             _amount,
             poolNonce,
             poolToken,
             msg.sender
-        );
+        ) returns (bytes memory withdrawOrder) {
+            data = withdrawOrder;
+        } catch Error(string memory reason) {
+            revert WithdrawOrderFailure(reason);
+        }
 
-        bytes memory options;
-        bytes4 method = bytes4(
-            keccak256(abi.encode("MessageUserWithdrawOrder"))
-        );
+        bytes4 method = bytes4(keccak256(abi.encode("AbWithdrawOrderUser")));
 
         emit LzMessageSent(method, data);
 
         registry.sendMessage(
-            80001, //IMPORTANT - CHANGE TO currentPositionChain
+            currentPositionChain,
             method,
-            address(this),
-            data
-        );
-    }
-
-    /**
-     * @notice After pivot was successfully asserted, send the execution request for the pivot
-     */
-    function pivotPosition() external {
-        // Send message to BridgeReceiver on new target position chain, with instructions to move funds to new position
-        // Uses lzSend to send message with instructions on how to handle pivot
-
-        bytes memory data;
-        bytes memory options;
-
-        registry.sendMessage(
-            80001, //IMPORTANT - CHANGE TO currentPositionChain
-            bytes4(keccak256(abi.encode("pivotPosition"))),
             address(this),
             data
         );
@@ -173,7 +188,9 @@ contract PoolControl {
     function readPositionBalance() external {
         // Get the value of the entire position for the pool with gains
         // Uses lzSend to send message to request this data be sent back
-        bytes4 method = bytes4(keccak256("MessageGetPositionBalance"));
+        bytes4 method = bytes4(
+            keccak256(abi.encode("AbMessagePositionBalance"))
+        );
 
         bytes memory data = abi.encode("TEST");
 
@@ -192,10 +209,11 @@ contract PoolControl {
         // Uses lzSend to request position data be sent back
 
         bytes memory data = abi.encode("TEST");
+        bytes4 method = bytes4(keccak256(abi.encode("AbMessagePositionData")));
 
         registry.sendMessage(
             80001, //IMPORTANT - CHANGE TO currentPositionChain
-            bytes4(keccak256(abi.encode("getPositionData"))),
+            method,
             address(this),
             data
         );
@@ -207,9 +225,10 @@ contract PoolControl {
     function getRegistryAddress() external {
         // Uses lzSend to request an address from the registry on another chain
         bytes memory data;
+        bytes4 method = bytes4(keccak256(abi.encode("getRegistryAddress")));
         registry.sendMessage(
             80001, //IMPORTANT - CHANGE TO currentPositionChain
-            bytes4(keccak256(abi.encode("getRegistryAddress"))),
+            method,
             address(this),
             data
         );
@@ -283,9 +302,10 @@ contract PoolControl {
             pivotCompleted(marketAddress, positionAmount);
         } else {
             bytes4 method = bytes4(
-                keccak256(abi.encode("positionInitializer"))
+                keccak256(abi.encode("AbBridgePositionInitializer"))
             );
             bytes memory message = abi.encode(method, address(this), data);
+            emit CheckId(depositId);
             enterFundsCrossChain(
                 depositId,
                 _amount,
@@ -313,7 +333,9 @@ contract PoolControl {
         if (currentPositionChain == localChain) {
             enterFundsLocalChain(depositId, _amount, msg.sender);
         } else {
-            bytes4 method = bytes4(keccak256(abi.encode("userDeposit")));
+            bytes4 method = bytes4(
+                keccak256(abi.encode("AbBridgeDepositUser"))
+            );
 
             bytes memory message = abi.encode(
                 method,
@@ -376,12 +398,19 @@ contract PoolControl {
 
         // fund entrance can automatically bridge into position.
         address acrossSpokePool = registry.chainIdToSpokePoolAddress(
-            currentPositionChain
+            localChain
         );
+
+        uint256 receivingChain = currentPositionChain;
+        if (currentPositionChain == 0) {
+            receivingChain = targetPositionChain;
+        }
+
+        require(receivingChain != 0, "Cannot bridge, invalid chain id");
 
         // Take the sucessfully proposed position, input into a registry function to get Bridge Connection address for its chain
         address bridgeReceiver = registry.chainIdToBridgeReceiver(
-            targetPositionChain
+            receivingChain
         );
 
         // Approval made from sender to this contract
@@ -390,14 +419,12 @@ contract PoolControl {
 
         emit AcrossMessageSent(_message);
 
-        currentPositionChain = targetPositionChain; // REMOVE - TESTING. This simulates finalizing the new position, which normally occurs after LZ callback
-
         //When assertion is settled, pivotPending state is true and no deposits are allowed until new position is successfully engaged
         ISpokePool(acrossSpokePool).deposit(
             bridgeReceiver,
             address(asset),
             _amount,
-            targetPositionChain,
+            receivingChain,
             _relayFeePct,
             uint32(block.timestamp),
             _message,
@@ -439,8 +466,6 @@ contract PoolControl {
             destinationChainId
         );
 
-        bytes memory options;
-
         targetPositionMarketId = requestMarketId;
         targetPositionChain = destinationChainId;
         targetPositionProtocolHash = protocolHash;
@@ -460,10 +485,12 @@ contract PoolControl {
         } else {
             bytes memory data = abi.encode("TEST");
 
-            bytes4 method = bytes4(keccak256(abi.encode("MessageExitPivot")));
+            bytes4 method = bytes4(
+                keccak256(abi.encode("AbPivotMovePosition"))
+            );
             emit LzMessageSent(method, pivotMessage);
             registry.sendMessage(
-                80001, //IMPORTANT - CHANGE TO currentPositionChain
+                currentPositionChain,
                 method,
                 address(this),
                 data
@@ -508,11 +535,6 @@ contract PoolControl {
         bytes32 _depositId,
         uint256 _poolPositionAmount
     ) internal {
-        if (poolToken == address(0)) {
-            poolToken = address(
-                new PoolToken(deployingUser, _poolPositionAmount, poolName)
-            );
-        } else {
             uint256 poolTokenSupply = IPoolToken(poolToken).totalSupply();
 
             (uint256 poolTokensToMint, address depositor) = poolCalculations
@@ -521,11 +543,7 @@ contract PoolControl {
                     _poolPositionAmount,
                     poolTokenSupply
                 );
-
-            poolNonce += 1;
-
             IPoolToken(poolToken).mint(depositor, poolTokensToMint);
-        }
     }
 
     function finalizeWithdrawOrder(
@@ -545,6 +563,10 @@ contract PoolControl {
         userHasPendingWithdraw[depositor] = false;
         IPoolToken(poolToken).burn(depositor, poolTokensToBurn);
         asset.transfer(depositor, _amount);
+    }
+
+    function receivePositionData(bytes memory _data) external {
+        emit AcrossMessageSent(_data);
     }
 
     /**

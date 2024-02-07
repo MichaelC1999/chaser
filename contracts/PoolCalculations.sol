@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 interface IERC20 {
     function totalSupply() external view returns (uint256);
@@ -36,14 +37,14 @@ contract PoolCalculations {
             abi.encode(msg.sender, _sender, _amount, block.timestamp)
         );
 
-        withdrawIdToDepositor[withdrawId] = msg.sender;
+        withdrawIdToDepositor[withdrawId] = _sender;
         withdrawIdToDepositAmount[withdrawId] = _amount;
 
         emit WithdrawRecorded(withdrawId, _amount);
 
         IERC20 poolToken = IERC20(_poolToken);
 
-        uint256 userPoolTokenBalance = poolToken.balanceOf(msg.sender);
+        uint256 userPoolTokenBalance = poolToken.balanceOf(_sender);
         require(userPoolTokenBalance > 0, "User has no deposits in pool");
         uint256 poolTokenSupply = poolToken.totalSupply();
 
@@ -91,41 +92,50 @@ contract PoolCalculations {
     function createDepositOrder(
         address _sender,
         uint256 _amount
-    ) external returns (bytes32 depositId) {
+    ) external returns (bytes32) {
         // Generate a deposit ID
-        bytes32 depositId = keccak256(
+        bytes32 depositId = bytes32(keccak256(
             abi.encode(msg.sender, _sender, _amount, block.timestamp)
-        );
+        ));
 
         // Map deposit ID to depositor and deposit amount
-        depositIdToDepositor[depositId] = msg.sender;
+        depositIdToDepositor[depositId] = _sender;
         depositIdToDepositAmount[depositId] = _amount;
         depositIdToTokensMinted[depositId] = false;
 
         emit DepositRecorded(depositId, _amount);
+        return depositId;
+    }
+
+    function updateDepositReceived(bytes32 _depositId, uint256 _depositAmountReceived) external {
+        depositIdToDepositAmount[_depositId] = _depositAmountReceived;
+    }
+
+    function depositIdMinted(bytes32 _depositId) external {
+        depositIdToTokensMinted[_depositId] = true;
     }
 
     function calculatePoolTokensToMint(
         bytes32 _depositId,
-        uint256 _poolPositionAmount,
+        uint256 _totalPoolPositionAmount,
         uint256 _poolTokenSupply
-    ) external returns (uint256, address) {
-        require(
-            depositIdToTokensMinted[_depositId] == false,
-            "Deposit has already minted tokens"
-        );
+    ) external view returns (uint256, address) {
+
+        // IMPORTANT - THE assetAmount RECORDED LOCALLY IS DIFFERENT THAN THE ACTUAL DEPOSIT ON THE DESTINATION CHAIN, ACROSS FEES
 
         uint256 assetAmount = depositIdToDepositAmount[_depositId];
-
-        uint256 ratio = (assetAmount * (10 ** 18)) /
-            (_poolPositionAmount - assetAmount);
-
-        // // Calculate the correct amount of pool tokens to mint
-        uint256 poolTokensToMint = (ratio * _poolTokenSupply) / (10 ** 18);
-
-        depositIdToTokensMinted[_depositId] = true;
-
         address depositor = depositIdToDepositor[_depositId];
+        uint256 poolTokensToMint;
+        if (_totalPoolPositionAmount == assetAmount) {
+        // Take the rounded down base 10 log of total supplied tokens by user
+        // Make the initial supply 10 ^ (18 + base10 log)
+            uint256 supplyFactor = (Math.log10(assetAmount));
+            poolTokensToMint = 10 ** supplyFactor;
+        } else {
+            uint256 ratio = (assetAmount * (10 ** 18)) /
+                (_totalPoolPositionAmount - assetAmount);
+            poolTokensToMint = (ratio * _poolTokenSupply) / (10 ** 18);
+        }
 
         return (poolTokensToMint, depositor);
     }

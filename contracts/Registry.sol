@@ -5,6 +5,7 @@ import {BridgeReceiver} from "./BridgeReceiver.sol";
 import {BridgeLogic} from "./BridgeLogic.sol";
 import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
 import {IChaserMessenger} from "./interfaces/IChaserMessenger.sol";
+import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.sol";
 
 import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
 
@@ -15,6 +16,11 @@ contract Registry is OwnerIsCreator {
 
     //_currentChainId is the chain that this registry is currently deployed on
     //_managerChainId is the chain that has the manager contract and all of the pools
+
+    event CCIPMessageSent(bytes32 indexed, bytes);
+    event Marker(string);
+    event MessageMethod(bytes4);
+
     constructor(
         uint256 _currentChainId,
         uint256 _managerChainId,
@@ -86,30 +92,22 @@ contract Registry is OwnerIsCreator {
             0x263351499f82C107e540B01F0Ca959843e22464a
         );
 
-        chainIdToSelector[5] = 16015286601757825753;
+        chainIdToSelector[11155111] = 16015286601757825753;
 
         chainIdToSelector[80001] = 12532609583862916517;
 
-        chainIdToRouter[5] = address(
+        chainIdToRouter[11155111] = address(
             0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59
         );
         chainIdToRouter[80001] = address(
             0x1035CabC275068e0F4b745A29CEDf38E13aF41b1
         );
 
-        chainIdToLinkAddress[5] = address(
+        chainIdToLinkAddress[11155111] = address(
             0x779877A7B0D9E8603169DdbD7836e478b4624789
         );
         chainIdToLinkAddress[80001] = address(
             0x326C977E6efc84E512bB9C30f76E30c160eD06FB
-        );
-
-        chainIdToEndpointAddress[5] = address(
-            0x464570adA09869d8741132183721B4f0769a0287
-        );
-
-        chainIdToEndpointAddress[80001] = address(
-            0x464570adA09869d8741132183721B4f0769a0287
         );
     }
 
@@ -126,8 +124,6 @@ contract Registry is OwnerIsCreator {
     mapping(uint256 => address) public chainIdToLinkAddress;
 
     mapping(uint256 => uint64) public chainIdToSelector; // Chain Id to the LayerZero endpoint Id
-
-    mapping(uint256 => address) public chainIdToEndpointAddress;
 
     mapping(uint256 => address) public chainIdToUmaAddress;
 
@@ -155,7 +151,7 @@ contract Registry is OwnerIsCreator {
 
     uint256 public poolCount = 0;
 
-    function addBridgeLogic(address _bridgeLogicAddress) external onlyOwner {
+    function addBridgeLogic(address _bridgeLogicAddress, address _messengerAddress, address _bridgeReceiverAddress) external onlyOwner {
         // require(
         //     msg.sender == manager,
         //     "Only Manager may call deployBridgeReceiver"
@@ -163,14 +159,12 @@ contract Registry is OwnerIsCreator {
 
         bridgeLogicAddress = _bridgeLogicAddress;
 
-        address messengerAddress;
 
-        (receiverAddress, messengerAddress) = IBridgeLogic(_bridgeLogicAddress)
-            .deployConnections();
+        receiverAddress = _bridgeReceiverAddress;
 
-        require(messengerAddress != address(0), "Invalid messenger");
+        require(_messengerAddress != address(0), "Invalid messenger");
 
-        addMessageReceiver(currentChainId, messengerAddress);
+        addMessageReceiver(currentChainId, _messengerAddress);
         addBridgeReceiver(currentChainId, receiverAddress);
     }
 
@@ -180,6 +174,10 @@ contract Registry is OwnerIsCreator {
         returns (address, address, uint256)
     {
         address chainlinkRouter = chainIdToRouter[currentChainId];
+        if (chainlinkRouter == address(0)) {
+            // IMPORTANT - REMOVE
+            chainlinkRouter = address(this);
+        }
         address linkAddress = chainIdToLinkAddress[currentChainId];
         uint64 selector = chainIdToSelector[currentChainId];
 
@@ -299,11 +297,35 @@ contract Registry is OwnerIsCreator {
             );
         }
 
+        uint64 currentChainSelector = chainIdToSelector[currentChainId];
         uint64 destinationChainSelector = chainIdToSelector[_chainId];
-        require(destinationChainSelector != 0, "Invalid Chain Selector");
         address messageReceiver = chainIdToMessageReceiver[_chainId];
-
         address messengerAddress = chainIdToMessageReceiver[currentChainId];
+
+        if (destinationChainSelector == 0 || currentChainSelector == 0) {
+            // TESTING - CAN REMOVE
+            //FOR CHAINS UNSUPPORTED BY CCIP, TEMPORARILY JUST GENERATE THE MESSAGE OBJECT FOR USER TO MANUALLY PASS
+
+            require(poolAddress != address(0), "POOL");
+            bytes memory data = abi.encode(_method, _poolAddress, _data);
+            bytes32 messageId = bytes32(
+                            keccak256(
+                                abi.encode(msg.sender, _poolAddress, _data)
+                            )
+                        );
+
+            emit CCIPMessageSent(
+                messageId,
+                data
+            );
+            emit Marker("Above Log is CCIP Message, below is method sent");
+            (bytes4 decmethod, address decpoolAddress, bytes memory decdata) = IChaserMessenger(messengerAddress).ccipDecodeReceive(messageId, data);
+            emit MessageMethod(decmethod);
+            return;
+        }
+
+        require(messageReceiver != address(0), "RECEIVER");
+        require(destinationChainSelector != 0, "Invalid Chain Selector");
 
         IChaserMessenger(messengerAddress).sendMessagePayLINK(
             destinationChainSelector,

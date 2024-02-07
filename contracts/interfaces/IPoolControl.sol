@@ -66,15 +66,17 @@ interface IPoolControl {
         bytes memory
     ) external;
 
-    function userWithdrawOrder(uint256) external payable;
+    function userWithdrawOrder(uint256) external;
 
-    function pivotPosition() external payable;
+    function pivotPosition() external;
 
-    function readPositionBalance() external payable;
+    function readPositionBalance() external;
 
-    function getPositionData() external payable;
+    function getPositionData() external;
 
-    function getRegistryAddress() external payable;
+    function getRegistryAddress() external;
+
+    function receivePositionData(bytes memory) external;
 
     function userDepositAndSetPosition(
         uint256,
@@ -94,5 +96,8 @@ interface IPoolControl {
 
     function finalizeWithdrawOrder(bytes32, uint256, uint256) external;
 
-    function readPositionBalanceResult(bytes memory) external;
+    function receivePositionBalance(bytes memory) external;
+
+    function receivePositionInitialized(bytes memory) external;
+    
 }

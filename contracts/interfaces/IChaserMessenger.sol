@@ -1,4 +1,5 @@
 pragma solidity ^0.8.9;
+import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.sol";
 
 interface IChaserMessenger {
     // External view functions for mappings
@@ -21,6 +22,13 @@ interface IChaserMessenger {
         bytes memory,
         address
     ) external pure returns (bytes memory);
+
+    function ccipReceiveManual(bytes memory) external;
+
+    function ccipDecodeReceive(
+        bytes32,
+        bytes memory
+    ) external view returns (bytes4, address, bytes memory);
 
     // Events
     event MessageSent(

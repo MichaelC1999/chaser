@@ -66,11 +66,14 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         address _router,
         address _link,
         address _registry,
+        address _bridgeLogicAddress,
         uint64 _sourceChainSelector
     ) CCIPReceiver(_router) {
-        s_linkToken = IERC20(_link);
+        if (_link != address(0)) {
+            s_linkToken = IERC20(_link);
+        }
         registry = IChaserRegistry(_registry);
-        bridgeFunctions = IBridgeLogic(msg.sender);
+        bridgeFunctions = IBridgeLogic(_bridgeLogicAddress);
 
         allowlistSourceChain(16015286601757825753, true);
         allowlistSourceChain(12532609583862916517, true);
@@ -172,7 +175,6 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         // IMPORTANT - SHOULD LINK BALANCE BE HELD IN MESSENGER? OR LOGIC/POOL?
 
         // Create an EVM2AnyMessage struct in memory with necessary information for sending a cross-chain message
-        // require(1 == 0, "TEST");
         require(_receiver != address(0), "RECEIVER");
         require(_poolAddress != address(0), "POOL");
         require(address(s_linkToken) != address(0), "FEETOKEN");
@@ -214,22 +216,51 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             fees
         );
 
-        // // Return the CCIP message ID
-        // return messageId;
         return messageId;
     }
 
+    function ccipReceiveManual(    
+        bytes32 messageId, // MessageId corresponding to ccipSend on source.
+    bytes memory data) external {
+        Client.Any2EVMMessage memory any2EvmMessage = Client.Any2EVMMessage({
+                        messageId: messageId,
+                        sourceChainSelector: 0,
+                        sender: abi.encode(msg.sender),
+                        data: data,
+                        destTokenAmounts: new Client.EVMTokenAmount[](0)
+                    });
+        //IMPORTANT - REMOVE TESTING
+        _ccipReceive(any2EvmMessage);
+    }
+
+    function ccipDecodeReceive(
+    bytes32 messageId, // MessageId corresponding to ccipSend on source.
+    bytes memory data
+        ) external view returns (bytes4, address, bytes memory) {
+
+        (bytes4 _method, address _poolAddress, bytes memory _data) = abi.decode(
+            data,
+            (bytes4, address, bytes)
+        );
+
+        return (_method, _poolAddress, _data);
+    }
+
     /// handle a received message
+    // function _ccipReceive(
+    //     Client.Any2EVMMessage memory any2EvmMessage
+    // )
+    //     internal
+    //     override
+    //     onlyAllowlisted(
+    //         any2EvmMessage.sourceChainSelector,
+    //         abi.decode(any2EvmMessage.sender, (address))
+    //     )
+    // { IMPORTANT - USE THE ABOVE COMMENTED OUT FUNCTION DEFINITION
+
     function _ccipReceive(
         Client.Any2EVMMessage memory any2EvmMessage
-    )
-        internal
-        override
-        onlyAllowlisted(
-            any2EvmMessage.sourceChainSelector,
-            abi.decode(any2EvmMessage.sender, (address))
-        )
-    {
+    ) internal override {
         // testFlag = true;
 
         s_lastReceivedMessageId = any2EvmMessage.messageId; // fetch the messageId
@@ -244,79 +275,90 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
 
         // //Get the method, go through if/else conditional to call the function on the external BridgeLogic or PoolControl
 
-        // if (_method == bytes4(keccak256(abi.encode("MessageExitPivot")))) {
-        //     try bridgeFunctions.executeExitPivot(_poolAddress, _data) {
-        //         emit ExecutionMessage("exitPivot success");
-        //     } catch Error(string memory reason) {
-        //         emit ExecutionMessage(reason);
-        //     }
-        // }
-
-        // if (_method == bytes4(keccak256(abi.encode("MessageUserWithdrawOrder")))) {
-        //     try bridgeFunctions.userWithdrawSequence(_poolAddress, _data) {
-        //         emit ExecutionMessage("userWithdrawOrder success");
-        //     } catch Error(string memory reason) {
-        //         emit ExecutionMessage(reason);
-        //     }
-        // }
-
-        // if (_method == bytes4(keccak256(abi.encode("MessageGetPositionBalance")))) {
-        //     try bridgeFunctions.sendPositionBalance(_poolAddress, bytes32("")) {
-        //         emit ExecutionMessage("getPositionBalance success");
-        //     } catch Error(string memory reason) {
-        //         emit ExecutionMessage(reason);
-        //     }
-        // }
-
-        if (_method == bytes4(keccak256(abi.encode("getPositionData")))) {
-            //Reads data to be sent back to pool
-            testFlag = true;
+        if (_method == bytes4(keccak256(abi.encode("AbPivotMovePosition")))) {
+            try bridgeFunctions.executeExitPivot(_poolAddress, _data) {
+                emit ExecutionMessage("exitPivot success");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(reason);
+            }
         }
 
-        // if (_method == bytes4(keccak256(abi.encode("getRegistryAddress")))) {
-        //     //Reads address from the regitry to be sent back to pool
-        // }
+        if (_method == bytes4(keccak256(abi.encode("AbWithdrawOrderUser")))) {
+            try bridgeFunctions.userWithdrawSequence(_poolAddress, _data) {
+                emit ExecutionMessage("userWithdrawOrder success");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(reason);
+            }
+        }
 
-        // if (
-        //     _method ==
-        //     bytes4(keccak256(abi.encode("MessageSendPositionBalance")))
-        // ) {
-        //     try IPoolControl(_poolAddress).readPositionBalanceResult(_data) {
-        //         emit ExecutionMessage("readPositionBalanceResult success");
-        //     } catch Error(string memory reason) {
-        //         emit ExecutionMessage(reason);
-        //     }
-        // }
-        // if (
-        //     _method == bytes4(keccak256(abi.encode("readPositionDataResult")))
-        // ) {
-        //     //Receives data from the position on the current position chain. Sets this to mapping state
-        // }
-        // if (
-        //     _method ==
-        //     bytes4(keccak256(abi.encode("readRegistryAddressResult")))
-        // ) {
-        //     //Receives the current address of an upgradeable contract on another chain. Sets this to a mapping state
-        // }
-        // if (_method == bytes4(keccak256(abi.encode("BridgeSendPositionData")))) {}
-        // if (_method == bytes4(keccak256(abi.encode("sendRegistryAddress")))) {}
-        // if (_method == bytes4(keccak256(abi.encode("pivotCompleted")))) {
-        //     (address marketAddress, uint256 positionAmount) = abi.decode(
-        //         _data,
-        //         (address, uint256)
-        //     );
+        if (_method == bytes4(keccak256(abi.encode("AbPivotMovePosition")))) {}
 
-        //     try
-        //         IPoolControl(_poolAddress).pivotCompleted(
-        //             marketAddress,
-        //             positionAmount
-        //         )
-        //     {
-        //         emit ExecutionMessage("pivotCompleted success");
-        //     } catch Error(string memory reason) {
-        //         emit ExecutionMessage(reason);
-        //     }
-        // }
+        if (
+            _method == bytes4(keccak256(abi.encode("AbMessagePositionBalance")))
+        ) {
+            try bridgeFunctions.sendPositionBalance(_poolAddress, bytes32("")) {
+                emit ExecutionMessage("getPositionBalance success");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(reason);
+            }
+        }
+
+        if (_method == bytes4(keccak256(abi.encode("AbMessagePositionData")))) {
+            //Reads data to be sent back to pool
+            testFlag = true;
+            try bridgeFunctions.sendPositionData(_poolAddress) {
+                emit ExecutionMessage("pivotCompleted success");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(reason);
+            }
+        }
+
+        if (_method == bytes4(keccak256(abi.encode("BaMessagePositionData")))) {
+            //Receives data from the position on the current position chain. Sets this to mapping state
+            try IPoolControl(_poolAddress).receivePositionData(_data) {
+                emit ExecutionMessage("BaMessagePositionData success");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(reason);
+            }
+        }
+
+        if (
+            _method == bytes4(keccak256(abi.encode("BaMessagePositionBalance")))
+        ) {
+            try IPoolControl(_poolAddress).receivePositionBalance(_data) {
+                emit ExecutionMessage("receivePositionBalance success");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(reason);
+            }
+        }
+        if (
+            _method == bytes4(keccak256(abi.encode("BaPositionInitialized")))
+        ) {
+            try IPoolControl(_poolAddress).receivePositionInitialized(_data) {
+                emit ExecutionMessage("BaPositionInitialized success");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(reason);
+            }
+        }
+
+        if (_method == bytes4(keccak256(abi.encode("sendRegistryAddress")))) {}
+        if (_method == bytes4(keccak256(abi.encode("BaPivotMovePosition")))) {
+            (address marketAddress, uint256 positionAmount) = abi.decode(
+                _data,
+                (address, uint256)
+            );
+
+            try
+                IPoolControl(_poolAddress).pivotCompleted(
+                    marketAddress,
+                    positionAmount
+                )
+            {
+                emit ExecutionMessage("pivotCompleted success");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(reason);
+            }
+        }
 
         emit MessageReceived(
             any2EvmMessage.messageId,

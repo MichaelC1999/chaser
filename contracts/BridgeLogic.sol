@@ -4,7 +4,7 @@ pragma solidity ^0.8.9;
 import "hardhat/console.sol";
 import {IAavePool} from "./interfaces/IAavePool.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
-import {ChaserMessenger} from "./ChaserMessenger.sol";
+import {IChaserMessenger} from "./interfaces/IChaserMessenger.sol";
 
 import {BridgeReceiver} from "./BridgeReceiver.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -14,7 +14,7 @@ contract BridgeLogic {
     uint256 managerChainId;
 
     IChaserRegistry public registry;
-    ChaserMessenger public messenger;
+    IChaserMessenger public messenger;
 
     address public bridgeReceiverAddress;
 
@@ -28,71 +28,21 @@ contract BridgeLogic {
     mapping(bytes32 => uint256) nonceToPositionValue; // key is hash of bytes of pool address and nonce
     mapping(address => uint256) bridgeNonce; // pool address to the current nonce of all withdraws/deposits reflected in the position balance
 
-    event PositionBalanceSent(uint256, address);
+    event PositionBalanceSent(uint256 indexed, address indexed, bytes32 indexed);
     event AcrossMessageSent(bytes);
     event LzMessageSent(bytes4, bytes);
     event Numbers(uint256, uint256);
+    event ExecutionMessage(string);
 
     constructor(uint256 _managerChainId, address _registryAddress) {
         managerChainId = _managerChainId;
         registry = IChaserRegistry(_registryAddress);
+
     }
 
-    function deployConnections() external returns (address, address) {
-        (
-            address chainlinkRouter,
-            address linkAddress,
-            uint64 sourceChainSelector
-        ) = registry.localCcipConfigs();
-
-        messenger = new ChaserMessenger(
-            chainlinkRouter,
-            linkAddress,
-            address(registry),
-            sourceChainSelector
-        );
-        bridgeReceiverAddress = address(new BridgeReceiver());
-
-        return (bridgeReceiverAddress, address(messenger));
-    }
-
-    /**
-     * @notice Standard Across Message reception
-     * @dev This function separates messages by method and executes the different logic for each based off of the first 4 bytes of the message
-     */
-    function handleAcrossMessage(
-        address tokenSent,
-        uint256 amount,
-        bool fillCompleted,
-        address relayer,
-        bytes memory message
-    ) public {
-        (bytes4 method, address poolAddress, bytes memory data) = abi.decode(
-            message,
-            (bytes4, address, bytes)
-        );
-        if (
-            tokenSent != poolToAsset[poolAddress] &&
-            poolToAsset[poolAddress] != address(0)
-        ) {
-            // IMPORTANT - HANDLE ERROR FOR WRONG ASSET BRIDGED, UNLESS METHOD IS "positionInitializer"
-        }
-
-        if (method == bytes4(keccak256(abi.encode("userDeposit")))) {
-            (bytes32 depositId, address userAddress) = abi.decode(
-                data,
-                (bytes32, address)
-            );
-        }
-        if (method == bytes4(keccak256(abi.encode("positionInitializer")))) {
-            // Make initial deposit and set the current position
-            (
-                bytes32 depositId,
-                address userAddress,
-                string memory marketId,
-                bytes32 protocolHash
-            ) = abi.decode(data, (bytes32, address, string, bytes32));
-        }
+    function addConnections(address _messengerAddress, address _bridgeReceiverAddress) external {
+        messenger = IChaserMessenger(_messengerAddress);
+        bridgeReceiverAddress = _bridgeReceiverAddress;
     }
 
     function handlePositionInitializer(
@@ -113,7 +63,7 @@ contract BridgeLogic {
         poolToCurrentPositionMarket[poolAddress] = pivotAddress;
         poolToAsset[poolAddress] = tokenSent;
         receiveDepositFromPool(amount, depositId, poolAddress, userAddress);
-        sendPositionBalance(poolAddress, depositId);
+        sendPositionInitialized(poolAddress, depositId, amount);
     }
 
     function handleEnterPivot(
@@ -142,7 +92,7 @@ contract BridgeLogic {
         uint256 amount
     ) external {
         receiveDepositFromPool(amount, depositId, poolAddress, userAddress);
-        sendPositionBalance(poolAddress, depositId);
+        sendPositionBalance(poolAddress, depositId, amount);
     }
 
     /**
@@ -168,7 +118,44 @@ contract BridgeLogic {
      */
     function sendPositionBalance(
         address _poolAddress,
-        bytes32 _depositId
+        bytes32 _depositId,
+        uint256 _amount
+    ) public {
+        uint256 positionAmount = getPositionBalance(_poolAddress);
+
+        bytes4 method = bytes4(
+            keccak256(abi.encode("BaMessagePositionBalance"))
+        );
+        
+        bytes memory data = abi.encode(
+            positionAmount,
+            _amount,
+            _depositId
+        );
+
+
+        emit PositionBalanceSent(positionAmount, _poolAddress, _depositId);
+        emit LzMessageSent(method, data);
+
+        try registry.sendMessage(managerChainId, method, _poolAddress, data) {
+            emit ExecutionMessage("sendMessage success");
+        } catch Error(string memory reason) {
+            emit ExecutionMessage(
+                string(abi.encodePacked("BridgeLogic: ", reason))
+            );
+        }
+    }
+
+        /**
+     * @notice Send the current position value of a pool back to the pool contract
+     * @dev This is the "B=>A" segment of the "A=>B=>A" sequence for reading the current position value across chains
+     * @param _poolAddress The address of the pool
+     * @param _depositId If called as part of a deposit with the purpose of minting pool tokens, the deposit ID is passed here. It is optional, for falsey use bytes32 zero value
+     */
+    function sendPositionInitialized(
+        address _poolAddress,
+        bytes32 _depositId,
+        uint256 _depositAmount
     ) public {
         uint256 positionAmount = getPositionBalance(_poolAddress);
         address currentPositionMarket = poolToCurrentPositionMarket[
@@ -176,34 +163,49 @@ contract BridgeLogic {
         ];
 
         bytes4 method = bytes4(
-            keccak256(abi.encode("MessageSendPositionBalance"))
+            keccak256(abi.encode("BaPositionInitialized"))
         );
+        
         bytes memory data = abi.encode(
             positionAmount,
+            _depositAmount,
             currentPositionMarket,
             _depositId
         );
 
-        bytes memory options;
 
-        emit PositionBalanceSent(positionAmount, _poolAddress);
+        emit PositionBalanceSent(positionAmount, currentPositionMarket, _depositId);
         emit LzMessageSent(method, data);
 
-        registry.sendMessage(managerChainId, method, _poolAddress, data);
+        try registry.sendMessage(managerChainId, method, _poolAddress, data) {
+            emit ExecutionMessage("sendMessage success");
+        } catch Error(string memory reason) {
+            emit ExecutionMessage(
+                string(abi.encodePacked("BridgeLogic: ", reason))
+            );
+        }
     }
 
     /**
      * @notice Send position data of a pool back to the pool contract
      */
-    function sendPositionData(address _poolAddress) internal {
-        // Uses lzSend to send position data requested by pool
-        bytes memory data = abi.encode("TESTING THE CALLBACK");
-
-        bytes4 method = bytes4(
-            keccak256(abi.encode("MessageSendPositionData"))
+    function sendPositionData(address _poolAddress) public {
+        require(
+            msg.sender == address(this) || msg.sender == address(messenger),
+            "SendPositionData invalid sender"
         );
 
-        registry.sendMessage(managerChainId, method, _poolAddress, data);
+        bytes memory data = abi.encode("TESTING THE CALLBACK");
+
+        bytes4 method = bytes4(keccak256(abi.encode("BaMessagePositionData")));
+
+        try registry.sendMessage(managerChainId, method, _poolAddress, data) {
+            emit ExecutionMessage("sendMessage success");
+        } catch Error(string memory reason) {
+            emit ExecutionMessage(
+                string(abi.encodePacked("BridgeLogic: ", reason))
+            );
+        }
     }
 
     /**
@@ -211,25 +213,34 @@ contract BridgeLogic {
      */
     function sendRegistryAddress(address _poolAddress) internal {
         bytes memory data;
-        bytes memory options;
 
         bytes4 method = bytes4(keccak256(abi.encode("sendRegistryAddress")));
-        registry.sendMessage(managerChainId, method, _poolAddress, data);
+        try registry.sendMessage(managerChainId, method, _poolAddress, data) {
+            emit ExecutionMessage("sendMessage success");
+        } catch Error(string memory reason) {
+            emit ExecutionMessage(
+                string(abi.encodePacked("BridgeLogic: ", reason))
+            );
+        }
     }
 
     function sendPivotCompleted(
         address _poolAddress,
         uint256 _amount
     ) internal {
-        bytes4 method = bytes4(keccak256(abi.encode("pivotCompleted")));
+        bytes4 method = bytes4(keccak256(abi.encode("BaPivotMovePosition")));
         address marketAddress = poolToCurrentPositionMarket[_poolAddress];
-        uint256 positionAmount = positionEntranceAmount[_poolAddress];
-        bytes memory data = abi.encode(marketAddress, positionAmount);
-        bytes memory options;
+        bytes memory data = abi.encode(marketAddress, _amount);
 
         emit LzMessageSent(method, data);
 
-        registry.sendMessage(managerChainId, method, _poolAddress, data);
+        try registry.sendMessage(managerChainId, method, _poolAddress, data) {
+            emit ExecutionMessage("sendMessage success");
+        } catch Error(string memory reason) {
+            emit ExecutionMessage(
+                string(abi.encodePacked("BridgeLogic: ", reason))
+            );
+        }
     }
 
     function initializePoolPosition(
@@ -278,9 +289,10 @@ contract BridgeLogic {
     ) internal {
         //IMPORTANT - SHOULD NONCE BE SENT TO THE OTHER CONNECTOR?
         // --Yes, pool nonce should be maintained equally between different chains
-        //
 
-        bytes4 method = bytes4(keccak256(abi.encode("enterPivot")));
+        bytes4 method = bytes4(
+            keccak256(abi.encode("BbPivotBridgeMovePosition"))
+        );
 
         bytes memory data = abi.encode(
             protocolHash,
@@ -323,7 +335,7 @@ contract BridgeLogic {
             address destinationBridgeReceiver
         ) = abi.decode(_data, (uint256, bytes32, string, uint256, address));
 
-        uint256 amount = getPositionBalance(_poolAddress); // IMPORTANT - This should be set to the amount of funds withdrawn and to be reentered to new position (denominated in asset)
+        uint256 amount = getPositionBalance(_poolAddress);
 
         if (registry.currentChainId() == destinationChainId) {
             enterPosition(_poolAddress, protocolHash, targetMarketId, amount);
@@ -433,7 +445,7 @@ contract BridgeLogic {
         );
 
         bytes4 method = bytes4(
-            keccak256(abi.encode("BridgeUserWithdrawOrder"))
+            keccak256(abi.encode("BaBridgeWithdrawOrderUser"))
         );
         bytes memory data = abi.encode(_withdrawId, _userMaxWithdraw);
         bytes memory message = abi.encode(method, data);
@@ -450,8 +462,6 @@ contract BridgeLogic {
         setBalanceAtNonce(_poolAddress, updatedPositionBalance);
 
         // IMPORTANT - CALL POSITION MARKET AND MAKE THE WITHDRAW
-
-        ERC20(assetAddress).transfer(_poolAddress, _amount); // REMOVE - TESTING
 
         ERC20(assetAddress).approve(acrossSpokePool, _amount);
 
@@ -505,14 +515,15 @@ contract BridgeLogic {
 
         // approve amount to current market
 
-        ERC20(poolToAsset[_poolAddress]).approve(
-            poolToCurrentPositionMarket[_poolAddress],
-            _amount
-        );
-        ERC20(poolToAsset[_poolAddress]).transfer(
-            address(0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E),
-            _amount
-        ); //REMOVE - TESTING
+        // ERC20(poolToAsset[_poolAddress]).approve(
+        //     poolToCurrentPositionMarket[_poolAddress],
+        //     _amount
+        // ); //IMPORTANT - UNCOMMENT
+
+        // ERC20(poolToAsset[_poolAddress]).transfer(
+        //     address(0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E),
+        //     _amount
+        // ); //REMOVE - TESTING
 
         // call the current market's deposit method
         uint256 updatedPositionBalance = getPositionBalance(_poolAddress);

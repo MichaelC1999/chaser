@@ -26,8 +26,12 @@ contract BridgeReceiver {
 
     event ExecutionMessage(string);
 
-    constructor() {
-        bridgeLogic = IBridgeLogic(msg.sender);
+    constructor(address _bridgeLogicAddress) {
+        bridgeLogic = IBridgeLogic(_bridgeLogicAddress);
+    }
+
+    function decodeMessageEvent(bytes memory message) external view returns (bytes4, address, bytes memory) {
+        return abi.decode(message, (bytes4, address, bytes));
     }
 
     /**
@@ -52,7 +56,9 @@ contract BridgeReceiver {
         ) {
             // IMPORTANT - HANDLE ERROR FOR WRONG ASSET BRIDGED, UNLESS METHOD IS "positionInitializer"
         }
-        if (method == bytes4(keccak256(abi.encode("enterPivot")))) {
+        if (
+            method == bytes4(keccak256(abi.encode("BbPivotBridgeMovePosition")))
+        ) {
             (
                 bytes32 protocolHash,
                 string memory targetMarketId,
@@ -80,7 +86,7 @@ contract BridgeReceiver {
                 emit ExecutionMessage(reason);
             }
         }
-        if (method == bytes4(keccak256(abi.encode("userDeposit")))) {
+        if (method == bytes4(keccak256(abi.encode("AbBridgeDepositUser")))) {
             (bytes32 depositId, address userAddress) = abi.decode(
                 data,
                 (bytes32, address)
@@ -105,7 +111,10 @@ contract BridgeReceiver {
                 emit ExecutionMessage(reason);
             }
         }
-        if (method == bytes4(keccak256(abi.encode("positionInitializer")))) {
+        if (
+            method ==
+            bytes4(keccak256(abi.encode("AbBridgePositionInitializer")))
+        ) {
             (
                 bytes32 depositId,
                 address userAddress,
@@ -139,7 +148,7 @@ contract BridgeReceiver {
             // Receive the entire pool's funds if there are no currently viable markets or if the pool is disabled
         }
         if (
-            method == bytes4(keccak256(abi.encode("BridgeUserWithdrawOrder")))
+            method == bytes4(keccak256(abi.encode("BaBridgeWithdrawOrderUser")))
         ) {
             //Take amount in asset sent through bridge and totalAvailableForUser, take this proportion
             //Burn the users pool tokens based off this proportion
