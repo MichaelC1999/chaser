@@ -9,7 +9,7 @@ async function main() {
     value: 0
   });
   const erc20Token1 = await erc20TokenDepo1.waitForDeployment();
-  await erc20Token1.transfer("0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199", "100000000000000000000");
+  // await erc20Token1.transfer("0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199", "100000000000000000000");
   console.log(erc20TokenDepo1.target, hre.network.config.chainId);
 
   // Deploy manager to user level chain, deploy the test pool
@@ -29,12 +29,17 @@ async function main() {
 
   // Enter new position sequence
   const pool = await hre.ethers.getContractAt("PoolControl", poolAddress);
-  const connectorAddr = await pool.localBridgedConnector();
+  const registryAddress = await manager1.registry();
+
+  await (await pool.initializeContractConnections(registryAddress)).wait()
+
+  const connectorAddr = await pool.localBridgeReceiver();
   const amount1 = "200000000000000000";
   const relayFeePct = "100000000000000000";
   const asset = await pool.asset();
   const assetContract = await hre.ethers.getContractAt("ERC20", asset);
   await assetContract.approve(poolAddress, amount1);
+  console.log(connectorAddr)
   await assetContract.transfer(connectorAddr, amount1);
   const initializePool = await pool.userDepositAndSetPosition(
     amount1,
@@ -49,7 +54,9 @@ async function main() {
   const depositId1 = eventLogs1[0].args[0];
   const acrossSetAndDepositMessage1 = eventLogs1[eventLogs1.length - 1].args[0];
 
-  const connector = await hre.ethers.getContractAt("BridgedConnector", connectorAddr);
+  console.log(acrossSetAndDepositMessage1, "ACROSS MESSAGE")
+
+  const connector = await hre.ethers.getContractAt("BridgeReceiver", connectorAddr);
   const positionBalSend1 = await (await connector.handleAcrossMessage(
     asset,
     amount1,
@@ -59,6 +66,7 @@ async function main() {
   )).wait();
   const methodHash1 = positionBalSend1.logs[positionBalSend1.logs.length - 1].args[0];
   const payload1 = positionBalSend1.logs[positionBalSend1.logs.length - 1].args[1];
+  console.log("gopken", positionBalSend1.logs)
   await pool.receiveHandler(methodHash1, payload1);
   let poolToken = await pool.poolToken();
   console.log("POOL TOKEN: ", poolToken);

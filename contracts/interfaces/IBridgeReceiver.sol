@@ -9,4 +9,11 @@ interface IBridgeReceiver {
         address,
         bytes memory
     ) external;
+
+    function handleV3AcrossMessage(
+        address,
+        uint256,
+        address,
+        bytes memory
+    ) external;
 }

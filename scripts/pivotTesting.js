@@ -20,7 +20,7 @@ async function main() {
     console.log(managerDepo1.target);
     const registry1 = await hre.ethers.getContractAt("Registry", await manager1.registry());
 
-    const connector1 = await registry1.chainIdToBridgedConnector(hre.network.config.chainId)
+    const connector1 = await registry1.chainIdToBridgeReceiver(hre.network.config.chainId)
 
 
 
@@ -28,12 +28,12 @@ async function main() {
         value: 0
     });
 
-    const connector2 = await registry2.chainIdToBridgedConnector(80001)
+    const connector2 = await registry2.chainIdToBridgeReceiver(80001)
 
-    await registry1.addBridgedConnector(80001, connector2)
+    await registry1.addBridgeReceiver(80001, connector2)
 
 
-    await registry2.addBridgedConnector(hre.network.config.chainId, connector1)
+    await registry2.addBridgeReceiver(hre.network.config.chainId, connector1)
 
 
 
@@ -47,6 +47,8 @@ async function main() {
 
     // Enter new position sequence
     const pool = await hre.ethers.getContractAt("PoolControl", poolAddress);
+    await (await manager1.initializeContractConnections(poolAddress)).wait()
+    console.log('Bridged Connector: ', await pool.localBridgeReceiver())
     const amount1 = "200000000000000000";
     const relayFeePct = "100000000000000000";
     const asset = await pool.asset();
@@ -66,35 +68,35 @@ async function main() {
     const depositId1 = eventLogs1[0].args[0];
     const acrossSetAndDepositMessage1 = eventLogs1[eventLogs1.length - 1].args[0];
 
-    const connectorCont1 = await hre.ethers.getContractAt("BridgedConnector", connector1);
+    const connectorCont1 = await hre.ethers.getContractAt("BridgeReceiver", connector1);
 
-    const positionBalSend1 = await (await connectorCont1.handleAcrossMessage(
-        asset,
-        amount1,
-        true,
-        "0x944038aEEB5076e8D95604C11c6cCd7392F774E1",
-        acrossSetAndDepositMessage1
-    )).wait();
-    const methodHash1 = positionBalSend1.logs[positionBalSend1.logs.length - 1].args[0];
-    const payload1 = positionBalSend1.logs[positionBalSend1.logs.length - 1].args[1];
-    await pool.receiveHandler(methodHash1, payload1);
+    // const positionBalSend1 = await (await connectorCont1.handleAcrossMessage(
+    //     asset,
+    //     amount1,
+    //     true,
+    //     "0x944038aEEB5076e8D95604C11c6cCd7392F774E1",
+    //     acrossSetAndDepositMessage1
+    // )).wait();
+    // const methodHash1 = positionBalSend1.logs[positionBalSend1.logs.length - 1].args[0];
+    // const payload1 = positionBalSend1.logs[positionBalSend1.logs.length - 1].args[1];
+    // await pool.receiveHandler(methodHash1, payload1);
     let poolToken = await pool.poolToken();
     console.log("POOL TOKEN: ", poolToken);
     poolToken = await hre.ethers.getContractAt("PoolToken", poolToken);
+    console.log("ZERO PIVOT POSITION STATUS: ", await pool.currentPositionAddress(), await pool.currentPositionChain(), await pool.currentPositionProtocolHash(), await pool.currentRecordPositionValue())
 
     const pivotTx = (await (await pool.sendPositionChange("0x0000000000000000000000000000000000000000000000000000000000000000")).wait())
-    console.log("A=>B lzSend data", pivotTx.logs[0].args)
 
 
     const bridgePositionTx = await (await connectorCont1.receiveHandler(pivotTx.logs[0].args[0], pivotTx.logs[0].args[1])).wait();
 
     // Get the log data from this tx
 
-    console.log("handleAcrossMessage B=>A", bridgePositionTx.logs)
+    // console.log("handleAcrossMessage B=>A", bridgePositionTx.logs)
 
     // Call handleAcrossMessage from the second connector
 
-    const connectorCont2 = await hre.ethers.getContractAt("BridgedConnector", connector2);
+    const connectorCont2 = await hre.ethers.getContractAt("BridgeReceiver", connector2);
 
 
     const enterPositionTx = await (await connectorCont2.handleAcrossMessage(
@@ -105,11 +107,12 @@ async function main() {
         bridgePositionTx.logs[0].args[0]
     )).wait()
 
-    const pivotCallback = await (await pool.receiveHandler(enterPositionTx.logs[0].args[0], enterPositionTx.logs[0].args[1])).wait();
+
+    const pivotCallback = await (await pool.receiveHandler(enterPositionTx.logs[enterPositionTx.logs.length - 1].args[0], enterPositionTx.logs[enterPositionTx.logs.length - 1].args[1])).wait();
 
 
     // read from pool state about where the current position address/id/chain
-    console.log("FIRST PIVOT POSITION STATUS: ", await pool.currentPositionAddress(), await pool.currentPositionChain(), await pool.currentPositionProtocolHash(), await pool.currentRecordPositionValue())
+    console.log("FIRST PIVOT POSITION STATUS: ", await pool.currentPositionAddress(), await pool.currentPositionChain(), await pool.lastPositionChain(), await pool.currentPositionProtocolHash(), await pool.currentRecordPositionValue())
 
 
     // make a pivot back to the 'original' position
@@ -139,9 +142,9 @@ async function main() {
 
     console.log(enterPositionTx2.logs[0].args)
 
-    const pivotCallback2 = await (await pool.receiveHandler(enterPositionTx2.logs[0].args[0], enterPositionTx2.logs[0].args[1])).wait();
+    const pivotCallback2 = await (await pool.receiveHandler(enterPositionTx2.logs[enterPositionTx2.logs.length - 1].args[0], enterPositionTx2.logs[enterPositionTx2.logs.length - 1].args[1])).wait();
 
-    console.log("SECOND PIVOT POSITION STATUS: ", await pool.currentPositionAddress(), await pool.currentPositionChain(), await pool.currentPositionProtocolHash(), await pool.currentRecordPositionValue())
+    console.log("SECOND PIVOT POSITION STATUS: ", await pool.currentPositionAddress(), await pool.currentPositionChain(), await pool.lastPositionChain(), await pool.currentPositionProtocolHash(), await pool.currentRecordPositionValue())
 
 }
 

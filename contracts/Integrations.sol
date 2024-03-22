@@ -30,7 +30,7 @@ contract Integrations {
     function routeExternalProtocolInteraction(
         bytes32 protocolHash,
         bytes32 operation
-    ) internal {
+    ) public {
         if (protocolHash == keccak256(abi.encode("aave"))) {
             aaveConnection(operation);
         } else if (protocolHash == keccak256(abi.encode("compound"))) {

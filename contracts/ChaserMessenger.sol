@@ -277,7 +277,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
 
         if (_method == bytes4(keccak256(abi.encode("AbPivotMovePosition")))) {
             try bridgeFunctions.executeExitPivot(_poolAddress, _data) {
-                emit ExecutionMessage("exitPivot success");
+                emit ExecutionMessage("AbPivotMovePosition success");
             } catch Error(string memory reason) {
                 emit ExecutionMessage(reason);
             }
@@ -285,7 +285,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
 
         if (_method == bytes4(keccak256(abi.encode("AbWithdrawOrderUser")))) {
             try bridgeFunctions.userWithdrawSequence(_poolAddress, _data) {
-                emit ExecutionMessage("userWithdrawOrder success");
+                emit ExecutionMessage("AbWithdrawOrderUser success");
             } catch Error(string memory reason) {
                 emit ExecutionMessage(reason);
             }
@@ -297,7 +297,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             _method == bytes4(keccak256(abi.encode("AbMessagePositionBalance")))
         ) {
             try bridgeFunctions.sendPositionBalance(_poolAddress, bytes32("")) {
-                emit ExecutionMessage("getPositionBalance success");
+                emit ExecutionMessage("AbMessagePositionBalance success");
             } catch Error(string memory reason) {
                 emit ExecutionMessage(reason);
             }
@@ -307,7 +307,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             //Reads data to be sent back to pool
             testFlag = true;
             try bridgeFunctions.sendPositionData(_poolAddress) {
-                emit ExecutionMessage("pivotCompleted success");
+                emit ExecutionMessage("AbMessagePositionData success");
             } catch Error(string memory reason) {
                 emit ExecutionMessage(reason);
             }
@@ -326,7 +326,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             _method == bytes4(keccak256(abi.encode("BaMessagePositionBalance")))
         ) {
             try IPoolControl(_poolAddress).receivePositionBalance(_data) {
-                emit ExecutionMessage("receivePositionBalance success");
+                emit ExecutionMessage("BaMessagePositionBalance success");
             } catch Error(string memory reason) {
                 emit ExecutionMessage(reason);
             }
@@ -354,7 +354,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
                     positionAmount
                 )
             {
-                emit ExecutionMessage("pivotCompleted success");
+                emit ExecutionMessage("BaPivotMovePosition success");
             } catch Error(string memory reason) {
                 emit ExecutionMessage(reason);
             }

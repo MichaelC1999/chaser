@@ -45,6 +45,13 @@ interface IBridgeLogic {
         bytes memory
     ) external;
 
+    function handleV3AcrossMessage(
+        address,
+        uint256,
+        address,
+        bytes memory
+    ) external;
+
     function handleUserDeposit(address, address, bytes32, uint256) external;
 
     function handlePositionInitializer(

@@ -77,13 +77,21 @@ contract Registry is OwnerIsCreator {
         chainIdToSpokePoolAddress[80001] = address(
             0x4589Fbf26C6a456f075b5628178AF68abE03C5fF
         );
+
+        chainIdToSpokePoolAddress[84532] = address(
+            0x82B564983aE7274c86695917BBf8C99ECb6F0F8F
+        );
         chainIdToSpokePoolAddress[421613] = address(
             0xd08baaE74D6d2eAb1F3320B2E1a53eeb391ce8e5
         );
 
         chainIdToSpokePoolAddress[11155111] = address(
-            0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96
+            0x5ef6C01E11889d86803e0B23e3cB3F9E9d97B662
         ); // Can bridge 0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9 to 421613
+
+        chainIdToSpokePoolAddress[0] = chainIdToSpokePoolAddress[
+            currentChainId
+        ];
 
         chainIdToUmaAddress[5] = address(
             0x9923D42eF695B5dd9911D05Ac944d4cAca3c4EAB
@@ -92,9 +100,11 @@ contract Registry is OwnerIsCreator {
             0x263351499f82C107e540B01F0Ca959843e22464a
         );
 
-        chainIdToSelector[11155111] = 16015286601757825753;
+        // chainIdToSelector[84532] = 10344971235874465080;
 
-        chainIdToSelector[80001] = 12532609583862916517;
+        // chainIdToSelector[11155111] = 16015286601757825753;
+
+        // chainIdToSelector[80001] = 12532609583862916517;
 
         chainIdToRouter[11155111] = address(
             0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59
@@ -102,12 +112,19 @@ contract Registry is OwnerIsCreator {
         chainIdToRouter[80001] = address(
             0x1035CabC275068e0F4b745A29CEDf38E13aF41b1
         );
+        chainIdToRouter[84532] = address(
+            0xD3b06cEbF099CE7DA4AcCf578aaebFDBd6e88a93
+        );
 
         chainIdToLinkAddress[11155111] = address(
             0x779877A7B0D9E8603169DdbD7836e478b4624789
         );
         chainIdToLinkAddress[80001] = address(
             0x326C977E6efc84E512bB9C30f76E30c160eD06FB
+        );
+
+        chainIdToLinkAddress[84532] = address(
+            0xE4aB69C077896252FAFBD49EFD26B5D171A32410
         );
     }
 
@@ -151,14 +168,17 @@ contract Registry is OwnerIsCreator {
 
     uint256 public poolCount = 0;
 
-    function addBridgeLogic(address _bridgeLogicAddress, address _messengerAddress, address _bridgeReceiverAddress) external onlyOwner {
+    function addBridgeLogic(
+        address _bridgeLogicAddress,
+        address _messengerAddress,
+        address _bridgeReceiverAddress
+    ) external onlyOwner {
         // require(
         //     msg.sender == manager,
         //     "Only Manager may call deployBridgeReceiver"
         // ); IMPORTANT - UNCOMMENT
 
         bridgeLogicAddress = _bridgeLogicAddress;
-
 
         receiverAddress = _bridgeReceiverAddress;
 
@@ -275,7 +295,7 @@ contract Registry is OwnerIsCreator {
         //IMPORTANT - NEEDS ACCESS CONTROL
 
         chainIdToMessageReceiver[chainId] = receiver;
-        address messengerAddress = chainIdToMessageReceiver[currentChainId];
+        address messengerAddress = chainIdToMessageReceiver[currentChainId]; // Could this be failing on polygon? currentChainId invalid or points to invalid messenger for polygon
         IChaserMessenger(messengerAddress).allowlistSender(receiver, true);
     }
 
@@ -299,8 +319,8 @@ contract Registry is OwnerIsCreator {
 
         uint64 currentChainSelector = chainIdToSelector[currentChainId];
         uint64 destinationChainSelector = chainIdToSelector[_chainId];
-        address messageReceiver = chainIdToMessageReceiver[_chainId];
         address messengerAddress = chainIdToMessageReceiver[currentChainId];
+        address messageReceiver = chainIdToMessageReceiver[_chainId];
 
         if (destinationChainSelector == 0 || currentChainSelector == 0) {
             // TESTING - CAN REMOVE
@@ -309,17 +329,19 @@ contract Registry is OwnerIsCreator {
             require(poolAddress != address(0), "POOL");
             bytes memory data = abi.encode(_method, _poolAddress, _data);
             bytes32 messageId = bytes32(
-                            keccak256(
-                                abi.encode(msg.sender, _poolAddress, _data)
-                            )
-                        );
-
-            emit CCIPMessageSent(
-                messageId,
-                data
+                keccak256(abi.encode(msg.sender, _poolAddress, _data))
             );
+
+            emit CCIPMessageSent(messageId, data);
             emit Marker("Above Log is CCIP Message, below is method sent");
-            (bytes4 decmethod, address decpoolAddress, bytes memory decdata) = IChaserMessenger(messengerAddress).ccipDecodeReceive(messageId, data);
+            (
+                bytes4 decmethod,
+                address decpoolAddress,
+                bytes memory decdata
+            ) = IChaserMessenger(messengerAddress).ccipDecodeReceive(
+                    messageId,
+                    data
+                );
             emit MessageMethod(decmethod);
             return;
         }

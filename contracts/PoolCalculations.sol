@@ -48,7 +48,7 @@ contract PoolCalculations {
         require(userPoolTokenBalance > 0, "User has no deposits in pool");
         uint256 poolTokenSupply = poolToken.totalSupply();
 
-        uint256 scaledRatio = (10 ** 18); // scaledRatio defaults to 1, if the user has all pool tokens
+        uint256 scaledRatio = (10 ** 18); // scaledRatio defaults to 1, if the user has all pool tokens IMPORTANT - SHOULD THIS BE 10 ** 19? As 1 ETH IS 10**19 WEI
         if (userPoolTokenBalance != poolTokenSupply) {
             scaledRatio =
                 (userPoolTokenBalance * (10 ** 18)) /
@@ -57,7 +57,6 @@ contract PoolCalculations {
 
         bytes memory data = abi.encode(
             withdrawId,
-            msg.sender,
             _amount,
             _poolNonce,
             scaledRatio
@@ -70,12 +69,11 @@ contract PoolCalculations {
         uint256 totalAvailableForUser,
         uint256 amount,
         address _poolToken
-    ) external view returns (address depositor, uint256 poolTokensToBurn) {
+    ) external view returns (address, uint256) {
         address depositor = withdrawIdToDepositor[withdrawId];
         IERC20 poolToken = IERC20(_poolToken);
 
         uint256 userPoolTokenBalance = poolToken.balanceOf(depositor);
-        // asset/totalAvailableForUser=x/userPoolTokenBalance
 
         // IMPORTANT - IF totalAvailableForUser IS VERY CLOSE TO amount, MAKE amount = totalAvailableForUser
         if (totalAvailableForUser < amount) {
@@ -87,6 +85,8 @@ contract PoolCalculations {
             uint256 ratio = (amount * (10 ** 18)) / (totalAvailableForUser);
             poolTokensToBurn = (ratio * userPoolTokenBalance) / (10 ** 18);
         }
+
+        return (depositor, poolTokensToBurn);
     }
 
     function createDepositOrder(

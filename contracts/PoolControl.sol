@@ -13,7 +13,6 @@ import {IPoolToken} from "./interfaces/IPoolToken.sol";
 import {IArbitrationContract} from "./interfaces/IArbitrationContract.sol";
 
 contract PoolControl {
-
     //IMPORTANT - POOL SHOULD NOT BE UPGRADEABLE, COULD CAUSE ISSUES WITH CROSS CHAIN IDENTIFICATION OF POOL, WHEN PROXY POINTS TO ONE ADDRESS ON HOME CHAIN AFTER UPGRADE, AND OTHER ADDRESS ON DESTINATION CHAIN
 
     uint256 localChain;
@@ -79,7 +78,7 @@ contract PoolControl {
         uint256 _localChain,
         address _registry,
         address _poolCalculations
-    ) public  {
+    ) public {
         localChain = _localChain;
         currentPositionChain = 0;
         poolId = keccak256(abi.encode(address(this), _poolName));
@@ -96,16 +95,26 @@ contract PoolControl {
     }
 
     function receivePositionInitialized(bytes memory _data) external {
-        (uint256 positionAmount, uint256 depositAmountReceived, address marketAddress, bytes32 depositId) = abi
-            .decode(_data, (uint256, uint256, address, bytes32));
+        (
+            uint256 positionAmount,
+            uint256 depositAmountReceived,
+            address marketAddress,
+            bytes32 depositId
+        ) = abi.decode(_data, (uint256, uint256, address, bytes32));
         //Receives the current value of the entire position. Sets this to a contract wide state (or mapping with timestamp => uint balance, and save timestamp to contract wide state)
 
         currentRecordPositionValue = positionAmount;
         if (depositId != bytes32("")) {
-            poolCalculations.updateDepositReceived(depositId, depositAmountReceived);
+            poolCalculations.updateDepositReceived(
+                depositId,
+                depositAmountReceived
+            );
 
             pivotCompleted(marketAddress, positionAmount);
-            require(poolCalculations.depositIdToTokensMinted(depositId) == false, "Deposit has already minted tokens");
+            require(
+                poolCalculations.depositIdToTokensMinted(depositId) == false,
+                "Deposit has already minted tokens"
+            );
 
             poolCalculations.depositIdMinted(depositId);
 
@@ -120,15 +129,26 @@ contract PoolControl {
 
     function receivePositionBalance(bytes memory _data) external {
         // Decode the payload data
-        (uint256 positionAmount, uint256 depositAmountReceived, bytes32 depositId) = abi
-            .decode(_data, (uint256, uint256, bytes32));
+        (
+            uint256 positionAmount,
+            uint256 depositAmountReceived,
+            bytes32 depositId
+        ) = abi.decode(_data, (uint256, uint256, bytes32));
         //Receives the current value of the entire position. Sets this to a contract wide state (or mapping with timestamp => uint balance, and save timestamp to contract wide state)
-        poolCalculations.updateDepositReceived(depositId, depositAmountReceived);
+        poolCalculations.updateDepositReceived(
+            depositId,
+            depositAmountReceived
+        );
 
         currentRecordPositionValue = positionAmount;
-        if (depositId != bytes32("")) {
 
-            require(poolCalculations.depositIdToTokensMinted(depositId) == false, "Deposit has already minted tokens");
+        poolNonce += 1;
+
+        if (depositId != bytes32("")) {
+            require(
+                poolCalculations.depositIdToTokensMinted(depositId) == false,
+                "Deposit has already minted tokens"
+            );
 
             poolCalculations.depositIdMinted(depositId);
 
@@ -159,12 +179,14 @@ contract PoolControl {
 
         bytes memory data;
 
-        try poolCalculations.createWithdrawOrder(
-            _amount,
-            poolNonce,
-            poolToken,
-            msg.sender
-        ) returns (bytes memory withdrawOrder) {
+        try
+            poolCalculations.createWithdrawOrder(
+                _amount,
+                poolNonce,
+                poolToken,
+                msg.sender
+            )
+        returns (bytes memory withdrawOrder) {
             data = withdrawOrder;
         } catch Error(string memory reason) {
             revert WithdrawOrderFailure(reason);
@@ -174,12 +196,7 @@ contract PoolControl {
 
         emit LzMessageSent(method, data);
 
-        registry.sendMessage(
-            currentPositionChain,
-            method,
-            address(this),
-            data
-        );
+        registry.sendMessage(currentPositionChain, method, address(this), data);
     }
 
     /**
@@ -239,14 +256,14 @@ contract PoolControl {
      * @notice This function simultaneously sets the first position and deposits the first funds
      * @notice After executing, other functions are called withdata generated in this function, in order to direction the position entrance
      * @param _amount The amount of the initial deposit
-     * @param _relayFeePct The Across Bridge relay fee %
+     * @param _totalFee The Across Bridge relay fee
      * @param _targetPositionMarketId The market Id to be processed by Logic/Integrator to derive the market address
      * @param _targetPositionChain The destination chain on which the first position exists
      * @param _targetPositionProtocol The protocol that the position is made on
      */
     function userDepositAndSetPosition(
         uint256 _amount,
-        int64 _relayFeePct,
+        uint256 _totalFee,
         string memory _targetPositionMarketId,
         uint256 _targetPositionChain,
         string memory _targetPositionProtocol
@@ -310,7 +327,7 @@ contract PoolControl {
                 depositId,
                 _amount,
                 msg.sender,
-                _relayFeePct,
+                _totalFee,
                 message
             );
         }
@@ -320,9 +337,9 @@ contract PoolControl {
      * @notice Make a deposit on the pool
      * @dev This function creates the deposit data and routes the function call depending on whether or not the position is local or cross chain
      * @param _amount The amount of the deposit
-     * @param _relayFeePct The Across Bridge relay fee % (irrelevant if local deposit)
+     * @param _totalFee The Across Bridge relay fee % (irrelevant if local deposit)
      */
-    function userDeposit(uint256 _amount, int64 _relayFeePct) external {
+    function userDeposit(uint256 _amount, uint256 _totalFee) external {
         // IMPORTANT - While assertion is open, user deposits sit in the pool rather than being sent.
 
         bytes32 depositId = poolCalculations.createDepositOrder(
@@ -346,7 +363,7 @@ contract PoolControl {
                 depositId,
                 _amount,
                 msg.sender,
-                _relayFeePct,
+                _totalFee,
                 message
             );
         }
@@ -381,14 +398,14 @@ contract PoolControl {
      * @notice Complete the process of sending funds to the BridgeReceiver on another chain for entering the position
      * @dev This function is the first "A" step of the "A=>B=>A" deposit sequence
      * @param _depositId The id of the deposit, used for data lookup
-     * @param _relayFeePct The Across Bridge relay fee %
+     * @param _feeTotal The Across Bridge relay fee %
      * @param _message Bytes that are passed in the Across "message" parameter, particularly to help set the position
      */
     function enterFundsCrossChain(
         bytes32 _depositId,
         uint256 _amount,
         address _sender,
-        int64 _relayFeePct,
+        uint256 _feeTotal,
         bytes memory _message
     ) internal {
         require(
@@ -397,9 +414,7 @@ contract PoolControl {
         );
 
         // fund entrance can automatically bridge into position.
-        address acrossSpokePool = registry.chainIdToSpokePoolAddress(
-            localChain
-        );
+        address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
 
         uint256 receivingChain = currentPositionChain;
         if (currentPositionChain == 0) {
@@ -419,17 +434,50 @@ contract PoolControl {
 
         emit AcrossMessageSent(_message);
 
-        //When assertion is settled, pivotPending state is true and no deposits are allowed until new position is successfully engaged
-        ISpokePool(acrossSpokePool).deposit(
+        crossChainBridge(
+            _sender,
+            acrossSpokePool,
             bridgeReceiver,
-            address(asset),
             _amount,
+            _feeTotal,
             receivingChain,
-            _relayFeePct,
-            uint32(block.timestamp),
-            _message,
-            (2 ** 256 - 1)
+            _message
         );
+
+        //When assertion is settled, pivotPending state is true and no deposits are allowed until new position is successfully engaged
+    }
+
+    function crossChainBridge(
+        address _sender,
+        address acrossSpokePool,
+        address bridgeReceiver,
+        uint256 _amount,
+        uint256 feeTotal,
+        uint256 receivingChain,
+        bytes memory _message
+    ) internal {
+        try
+            ISpokePool(acrossSpokePool).depositV3(
+                _sender,
+                bridgeReceiver,
+                address(asset),
+                address(0),
+                _amount,
+                _amount - feeTotal, // IMPORTANT - SEEK ORACLE SOLUTION TO BRING API FEE CALC ON CHAIN
+                receivingChain,
+                address(0),
+                uint32(block.timestamp),
+                uint32(block.timestamp + 30000),
+                0,
+                _message
+            )
+        {
+            emit ExecutionMessage("Successful Spokepool Deposit");
+        } catch Error(string memory reason) {
+            emit ExecutionMessage(
+                string(abi.encode("Failed Spokepool Deposit: ", reason))
+            );
+        }
     }
 
     function queryMovePosition(
@@ -535,15 +583,15 @@ contract PoolControl {
         bytes32 _depositId,
         uint256 _poolPositionAmount
     ) internal {
-            uint256 poolTokenSupply = IPoolToken(poolToken).totalSupply();
+        uint256 poolTokenSupply = IPoolToken(poolToken).totalSupply();
 
-            (uint256 poolTokensToMint, address depositor) = poolCalculations
-                .calculatePoolTokensToMint(
-                    _depositId,
-                    _poolPositionAmount,
-                    poolTokenSupply
-                );
-            IPoolToken(poolToken).mint(depositor, poolTokensToMint);
+        (uint256 poolTokensToMint, address depositor) = poolCalculations
+            .calculatePoolTokensToMint(
+                _depositId,
+                _poolPositionAmount,
+                poolTokenSupply
+            );
+        IPoolToken(poolToken).mint(depositor, poolTokensToMint);
     }
 
     function finalizeWithdrawOrder(
@@ -561,12 +609,20 @@ contract PoolControl {
 
         poolNonce += 1;
         userHasPendingWithdraw[depositor] = false;
-        IPoolToken(poolToken).burn(depositor, poolTokensToBurn);
-        asset.transfer(depositor, _amount);
-    }
 
-    function receivePositionData(bytes memory _data) external {
-        emit AcrossMessageSent(_data);
+        try IPoolToken(poolToken).burn(depositor, poolTokensToBurn) {
+            emit ExecutionMessage("Burn Success");
+        } catch Error(string memory reason) {
+            emit ExecutionMessage(string(abi.encode("BURN FAILURE: ", reason)));
+        }
+
+        try asset.transfer(depositor, _amount) {} catch Error(
+            string memory reason
+        ) {
+            emit ExecutionMessage(
+                string(abi.encode("Transfer Failure: ", reason))
+            );
+        }
     }
 
     /**
@@ -575,9 +631,7 @@ contract PoolControl {
      * @param _amount The amount of assets to deposit
      */
     function spokePoolPreparation(address _sender, uint256 _amount) internal {
-        address acrossSpokePool = registry.chainIdToSpokePoolAddress(
-            localChain
-        );
+        address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
         require(acrossSpokePool != address(0), "SPOKE ADDR");
         uint256 senderAssetBalance = asset.balanceOf(_sender);
         require(
@@ -586,6 +640,10 @@ contract PoolControl {
         );
         asset.transferFrom(_sender, address(this), _amount);
         asset.approve(acrossSpokePool, _amount);
+    }
+
+    function receivePositionData(bytes memory _data) external {
+        emit AcrossMessageSent(_data);
     }
 
     function createPivotExitMessage(

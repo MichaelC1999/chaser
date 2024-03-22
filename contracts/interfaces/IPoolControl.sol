@@ -66,6 +66,13 @@ interface IPoolControl {
         bytes memory
     ) external;
 
+    function handleV3AcrossMessage(
+        address,
+        uint256,
+        address,
+        bytes memory
+    ) external;
+
     function userWithdrawOrder(uint256) external;
 
     function pivotPosition() external;
@@ -99,5 +106,4 @@ interface IPoolControl {
     function receivePositionBalance(bytes memory) external;
 
     function receivePositionInitialized(bytes memory) external;
-    
 }

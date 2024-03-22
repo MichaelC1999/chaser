@@ -6,7 +6,7 @@ require('hardhat-contract-sizer');
 require('dotenv').config({ path: __dirname + '/.env' });
 
 module.exports = {
-  defaultNetwork: "sepolia",
+  defaultNetwork: "base",
   solidity: {
     version: "0.8.22",
     settings: {
@@ -38,6 +38,11 @@ module.exports = {
     mumbai: {
       url: "https://polygon-mumbai.infura.io/v3/" + process.env.INFURA_API_KEY,
       chainId: 80001,
+      accounts: [process.env.WALLET_PK]
+    },
+    base: {
+      url: "https://sepolia.base.org",
+      chainId: 84532,
       accounts: [process.env.WALLET_PK]
     }
   },

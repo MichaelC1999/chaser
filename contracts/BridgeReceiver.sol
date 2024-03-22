@@ -30,7 +30,9 @@ contract BridgeReceiver {
         bridgeLogic = IBridgeLogic(_bridgeLogicAddress);
     }
 
-    function decodeMessageEvent(bytes memory message) external view returns (bytes4, address, bytes memory) {
+    function decodeMessageEvent(
+        bytes memory message
+    ) external view returns (bytes4, address, bytes memory) {
         return abi.decode(message, (bytes4, address, bytes));
     }
 
@@ -38,13 +40,12 @@ contract BridgeReceiver {
      * @notice Standard Across Message reception
      * @dev This function separates messages by method and executes the different logic for each based off of the first 4 bytes of the message
      */
-    function handleAcrossMessage(
+    function handleV3AcrossMessage(
         address tokenSent,
         uint256 amount,
-        bool fillCompleted,
         address relayer,
         bytes memory message
-    ) public {
+    ) external {
         (bytes4 method, address poolAddress, bytes memory data) = abi.decode(
             message,
             (bytes4, address, bytes)
@@ -81,7 +82,7 @@ contract BridgeReceiver {
                     poolNonce
                 )
             {
-                emit ExecutionMessage("enterPivot success");
+                emit ExecutionMessage("BbPivotBridgeMovePosition success");
             } catch Error(string memory reason) {
                 emit ExecutionMessage(reason);
             }
@@ -106,7 +107,7 @@ contract BridgeReceiver {
                     amount
                 )
             {
-                emit ExecutionMessage("userDeposit success");
+                emit ExecutionMessage("AbBridgeDepositUser success");
             } catch Error(string memory reason) {
                 emit ExecutionMessage(reason);
             }
@@ -139,7 +140,7 @@ contract BridgeReceiver {
                     protocolHash
                 )
             {
-                emit ExecutionMessage("positionInitializer success");
+                emit ExecutionMessage("AbBridgePositionInitializer success");
             } catch Error(string memory reason) {
                 emit ExecutionMessage(reason);
             }
@@ -171,7 +172,7 @@ contract BridgeReceiver {
                     totalAvailableForUser
                 )
             {
-                emit ExecutionMessage("userWithdrawOrder success");
+                emit ExecutionMessage("BaBridgeWithdrawOrderUser success");
             } catch Error(string memory reason) {
                 emit ExecutionMessage(reason);
             }
