@@ -42,18 +42,7 @@ contract PoolCalculations {
 
         emit WithdrawRecorded(withdrawId, _amount);
 
-        IERC20 poolToken = IERC20(_poolToken);
-
-        uint256 userPoolTokenBalance = poolToken.balanceOf(_sender);
-        require(userPoolTokenBalance > 0, "User has no deposits in pool");
-        uint256 poolTokenSupply = poolToken.totalSupply();
-
-        uint256 scaledRatio = (10 ** 18); // scaledRatio defaults to 1, if the user has all pool tokens IMPORTANT - SHOULD THIS BE 10 ** 19? As 1 ETH IS 10**19 WEI
-        if (userPoolTokenBalance != poolTokenSupply) {
-            scaledRatio =
-                (userPoolTokenBalance * (10 ** 18)) /
-                (poolTokenSupply);
-        }
+        uint256 scaledRatio = getScaledRatio(_poolToken, _sender);
 
         bytes memory data = abi.encode(
             withdrawId,
@@ -64,12 +53,35 @@ contract PoolCalculations {
         return data;
     }
 
+    function getScaledRatio(
+        address _poolToken,
+        address _sender
+    ) public view returns (uint256) {
+        IERC20 poolToken = IERC20(_poolToken);
+
+        uint256 userPoolTokenBalance = poolToken.balanceOf(_sender);
+        if (userPoolTokenBalance == 0) {
+            return 0;
+        }
+        uint256 poolTokenSupply = poolToken.totalSupply();
+        require(poolTokenSupply > 0, "Pool Token has no supply");
+
+        uint256 scaledRatio = (10 ** 18); // scaledRatio defaults to 1, if the user has all pool tokens IMPORTANT - SHOULD THIS BE 10 ** 19? As 1 ETH IS 10**19 WEI
+        if (userPoolTokenBalance != poolTokenSupply) {
+            scaledRatio =
+                (userPoolTokenBalance * (10 ** 18)) /
+                (poolTokenSupply);
+        }
+        return scaledRatio;
+    }
+
     function getWithdrawOrderFulfillment(
         bytes32 withdrawId,
         uint256 totalAvailableForUser,
         uint256 amount,
         address _poolToken
     ) external view returns (address, uint256) {
+        //amount gets passed from the BridgeLogic as the input amount, before bridging/protocol fees deduct from the received amount. This amount reflects the total amount of asset removed from the position
         address depositor = withdrawIdToDepositor[withdrawId];
         IERC20 poolToken = IERC20(_poolToken);
 
@@ -94,9 +106,9 @@ contract PoolCalculations {
         uint256 _amount
     ) external returns (bytes32) {
         // Generate a deposit ID
-        bytes32 depositId = bytes32(keccak256(
-            abi.encode(msg.sender, _sender, _amount, block.timestamp)
-        ));
+        bytes32 depositId = bytes32(
+            keccak256(abi.encode(msg.sender, _sender, _amount, block.timestamp))
+        );
 
         // Map deposit ID to depositor and deposit amount
         depositIdToDepositor[depositId] = _sender;
@@ -107,7 +119,10 @@ contract PoolCalculations {
         return depositId;
     }
 
-    function updateDepositReceived(bytes32 _depositId, uint256 _depositAmountReceived) external {
+    function updateDepositReceived(
+        bytes32 _depositId,
+        uint256 _depositAmountReceived
+    ) external {
         depositIdToDepositAmount[_depositId] = _depositAmountReceived;
     }
 
@@ -120,15 +135,14 @@ contract PoolCalculations {
         uint256 _totalPoolPositionAmount,
         uint256 _poolTokenSupply
     ) external view returns (uint256, address) {
-
-        // IMPORTANT - THE assetAmount RECORDED LOCALLY IS DIFFERENT THAN THE ACTUAL DEPOSIT ON THE DESTINATION CHAIN, ACROSS FEES
+        // IMPORTANT - THE assetAmount RECORDED LOCALLY IS DIFFERENT THAN THE ACTUAL DEPOSIT ON THE DESTINATION CHAIN, ACROSS FEES (COULD PASS THE AMOUNT ACTUALLY DEPOSITED IN MESSAGE TO FINALIZE DEPOSIT)
 
         uint256 assetAmount = depositIdToDepositAmount[_depositId];
         address depositor = depositIdToDepositor[_depositId];
         uint256 poolTokensToMint;
         if (_totalPoolPositionAmount == assetAmount) {
-        // Take the rounded down base 10 log of total supplied tokens by user
-        // Make the initial supply 10 ^ (18 + base10 log)
+            // Take the rounded down base 10 log of total supplied tokens by user
+            // Make the initial supply 10 ^ (18 + base10 log)
             uint256 supplyFactor = (Math.log10(assetAmount));
             poolTokensToMint = 10 ** supplyFactor;
         } else {

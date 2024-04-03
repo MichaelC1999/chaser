@@ -175,6 +175,10 @@ contract PoolControl {
             pivotPending == false,
             "Withdraws are blocked until the Pivot is completed"
         );
+        require(
+            IPoolToken(poolToken).balanceOf(msg.sender) > 0,
+            "User has no position"
+        );
         userHasPendingWithdraw[msg.sender] = true;
 
         bytes memory data;
@@ -296,15 +300,16 @@ contract PoolControl {
         bytes memory data = abi.encode(
             depositId,
             msg.sender,
+            address(0), // IMPORTANT - THIS ADDRESS MUST BE VALIDATED AND PROVIDED FROM UMA ORACLE, POINTS TO CONTRACT TO INVEST INTO
             targetPositionMarketId,
-            currentPositionProtocolHash
+            targetPositionProtocolHash
         );
 
         if (targetPositionChain == localChain) {
             localBridgeLogic.initializePoolPosition(
                 address(this),
                 address(asset),
-                currentPositionProtocolHash,
+                targetPositionProtocolHash,
                 _targetPositionMarketId,
                 poolNonce,
                 _amount
@@ -597,15 +602,19 @@ contract PoolControl {
     function finalizeWithdrawOrder(
         bytes32 _withdrawId,
         uint256 _amount,
-        uint256 _totalAvailableForUser
+        uint256 _totalAvailableForUser,
+        uint256 _positionValue,
+        uint256 _inputAmount
     ) public {
         (address depositor, uint256 poolTokensToBurn) = poolCalculations
             .getWithdrawOrderFulfillment(
                 _withdrawId,
                 _totalAvailableForUser,
-                _amount,
+                _inputAmount,
                 poolToken
             );
+
+        currentRecordPositionValue = _positionValue;
 
         poolNonce += 1;
         userHasPendingWithdraw[depositor] = false;
@@ -658,6 +667,7 @@ contract PoolControl {
         bytes memory data = abi.encode(
             poolNonce,
             protocolHash,
+            address(0), // IMPORTANT - REPLACE WITH MARKET ADDRESS VALIDATED IN ARBITRATION
             requestMarketId,
             destinationChainId,
             destinationBridgeReceiver

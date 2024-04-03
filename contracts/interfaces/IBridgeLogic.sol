@@ -60,6 +60,7 @@ interface IBridgeLogic {
         address,
         bytes32,
         address,
+        address,
         string memory,
         bytes32
     ) external;

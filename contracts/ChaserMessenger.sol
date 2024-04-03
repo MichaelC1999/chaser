@@ -219,25 +219,25 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         return messageId;
     }
 
-    function ccipReceiveManual(    
+    function ccipReceiveManual(
         bytes32 messageId, // MessageId corresponding to ccipSend on source.
-    bytes memory data) external {
+        bytes memory data
+    ) external {
         Client.Any2EVMMessage memory any2EvmMessage = Client.Any2EVMMessage({
-                        messageId: messageId,
-                        sourceChainSelector: 0,
-                        sender: abi.encode(msg.sender),
-                        data: data,
-                        destTokenAmounts: new Client.EVMTokenAmount[](0)
-                    });
+            messageId: messageId,
+            sourceChainSelector: 0,
+            sender: abi.encode(msg.sender),
+            data: data,
+            destTokenAmounts: new Client.EVMTokenAmount[](0)
+        });
         //IMPORTANT - REMOVE TESTING
         _ccipReceive(any2EvmMessage);
     }
 
     function ccipDecodeReceive(
-    bytes32 messageId, // MessageId corresponding to ccipSend on source.
-    bytes memory data
-        ) external view returns (bytes4, address, bytes memory) {
-
+        bytes32 messageId, // MessageId corresponding to ccipSend on source.
+        bytes memory data
+    ) external view returns (bytes4, address, bytes memory) {
         (bytes4 _method, address _poolAddress, bytes memory _data) = abi.decode(
             data,
             (bytes4, address, bytes)
@@ -291,8 +291,6 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             }
         }
 
-        if (_method == bytes4(keccak256(abi.encode("AbPivotMovePosition")))) {}
-
         if (
             _method == bytes4(keccak256(abi.encode("AbMessagePositionBalance")))
         ) {
@@ -331,9 +329,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
                 emit ExecutionMessage(reason);
             }
         }
-        if (
-            _method == bytes4(keccak256(abi.encode("BaPositionInitialized")))
-        ) {
+        if (_method == bytes4(keccak256(abi.encode("BaPositionInitialized")))) {
             try IPoolControl(_poolAddress).receivePositionInitialized(_data) {
                 emit ExecutionMessage("BaPositionInitialized success");
             } catch Error(string memory reason) {

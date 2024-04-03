@@ -12,6 +12,10 @@ interface IChaserRegistry {
 
     function disablePool(address) external;
 
+    function getPoolBroker(address, address) external returns (address);
+
+    function addIntegrator(address) external;
+
     function sendMessage(uint, bytes4, address, bytes memory) external;
 
     function routerAddress() external view returns (address);
@@ -22,6 +26,8 @@ interface IChaserRegistry {
         external
         view
         returns (address, address, uint64);
+
+    function poolAddressToBroker(address) external view returns (address);
 
     function chainIdToBridgeReceiver(uint256) external view returns (address);
 

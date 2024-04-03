@@ -119,16 +119,15 @@ contract BridgeReceiver {
             (
                 bytes32 depositId,
                 address userAddress,
+                address marketAddress,
                 string memory marketId,
                 bytes32 protocolHash
-            ) = abi.decode(data, (bytes32, address, string, bytes32));
-
+            ) = abi.decode(data, (bytes32, address, address, string, bytes32));
             try ERC20(tokenSent).transfer(address(bridgeLogic), amount) {
                 emit ExecutionMessage("transfer success");
             } catch Error(string memory reason) {
                 emit ExecutionMessage(reason);
             }
-
             try
                 bridgeLogic.handlePositionInitializer(
                     amount,
@@ -136,6 +135,7 @@ contract BridgeReceiver {
                     tokenSent,
                     depositId,
                     userAddress,
+                    marketAddress,
                     marketId,
                     protocolHash
                 )
@@ -154,10 +154,12 @@ contract BridgeReceiver {
             //Take amount in asset sent through bridge and totalAvailableForUser, take this proportion
             //Burn the users pool tokens based off this proportion
             //Send user their tokens
-            (bytes32 withdrawId, uint256 totalAvailableForUser) = abi.decode(
-                data,
-                (bytes32, uint256)
-            );
+            (
+                bytes32 withdrawId,
+                uint256 totalAvailableForUser,
+                uint256 positionValue,
+                uint256 inputAmount
+            ) = abi.decode(data, (bytes32, uint256, uint256, uint256));
 
             try ERC20(tokenSent).transfer(poolAddress, amount) {
                 emit ExecutionMessage("transfer success");
@@ -169,7 +171,9 @@ contract BridgeReceiver {
                 IPoolControl(poolAddress).finalizeWithdrawOrder(
                     withdrawId,
                     amount,
-                    totalAvailableForUser
+                    totalAvailableForUser,
+                    positionValue,
+                    inputAmount
                 )
             {
                 emit ExecutionMessage("BaBridgeWithdrawOrderUser success");

@@ -101,7 +101,13 @@ interface IPoolControl {
 
     function pivotCompleted(address, uint256) external;
 
-    function finalizeWithdrawOrder(bytes32, uint256, uint256) external;
+    function finalizeWithdrawOrder(
+        bytes32,
+        uint256,
+        uint256,
+        uint256,
+        uint256
+    ) external;
 
     function receivePositionBalance(bytes memory) external;
 

@@ -5,6 +5,8 @@ import {BridgeReceiver} from "./BridgeReceiver.sol";
 import {BridgeLogic} from "./BridgeLogic.sol";
 import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
 import {IChaserMessenger} from "./interfaces/IChaserMessenger.sol";
+import {PoolBroker} from "./PoolBroker.sol";
+
 import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.sol";
 
 import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
@@ -154,11 +156,15 @@ contract Registry is OwnerIsCreator {
 
     mapping(uint256 => address) public poolCountToPool;
 
+    mapping(address => address) public poolAddressToBroker;
+
     address public manager;
 
     address public bridgeLogicAddress;
 
     address public receiverAddress;
+
+    address public integratorAddress;
 
     address public arbitrationContract; // The address of the arbitrationContract on the pool chain
 
@@ -299,6 +305,12 @@ contract Registry is OwnerIsCreator {
         IChaserMessenger(messengerAddress).allowlistSender(receiver, true);
     }
 
+    function addIntegrator(address _integratorAddress) external {
+        //IMPORTANT - NEEDS ACCESS CONTROL
+
+        integratorAddress = _integratorAddress;
+    }
+
     function sendMessage(
         uint256 _chainId,
         bytes4 _method,
@@ -356,6 +368,22 @@ contract Registry is OwnerIsCreator {
             poolAddress,
             _data
         );
+    }
+
+    function getPoolBroker(
+        address poolAddress,
+        address assetAddress
+    ) public returns (address) {
+        address instance;
+        // poolBroker lookup function
+        //If poolAddress does not have its equivalent on this chain, deploy a broker
+        if (poolAddressToBroker[poolAddress] == address(0)) {
+            PoolBroker poolBroker = new PoolBroker();
+            poolBroker.addConfig(poolAddress, assetAddress, integratorAddress);
+            poolAddressToBroker[poolAddress] = address(poolBroker);
+        }
+
+        return poolAddressToBroker[poolAddress];
     }
 
     function addArbitrationContract(address _arbitrationContract) external {
