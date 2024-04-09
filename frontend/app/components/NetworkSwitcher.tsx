@@ -1,73 +1,58 @@
-import { Box, Button, Dialog, DialogContent, DialogTitle, Typography } from '@mui/material';
 import React, { useEffect, useState } from 'react';
+import { fromHex } from 'viem'
+
 
 export function NetworkSwitcher() {
     const windowOverride: any = typeof window !== 'undefined' ? window : null;
     const [errorMessage, setErrorMessage] = useState<string>("");
     const [isEthereumAvailable, setIsEthereumAvailable] = useState(false);
+    const [chainId, setChainId] = useState("")
 
     useEffect(() => {
         if (typeof window !== 'undefined' && 'ethereum' in window) {
             setIsEthereumAvailable(true);
+            getChainId()
         }
     }, [])
+
+    const getChainId = async () => {
+        setChainId(await windowOverride.ethereum.request({ method: 'eth_chainId' }))
+    }
+
+    const newChain: any = chainId
 
     const switchNetwork = async () => {
         try {
             // Prompt user to switch to Sepolia
             await windowOverride?.ethereum?.request({
                 method: 'wallet_switchEthereumChain',
-                params: [{ chainId: '0x5' }],
+                params: [{ chainId: '0x14a34' }],
             });
         } catch (switchError: any) {
+            console.log(switchError.message)
+
             setErrorMessage(switchError.message);
         }
     }
 
     if (isEthereumAvailable) {
-        if (windowOverride?.ethereum?.networkVersion == "5") {
-            // This component renders on all pages. If the network is Sepolia, render nothing
+        if (chainId == "0x14a34" || fromHex(newChain, 'number') == 0) {
             return null;
         }
     } else {
         // If injected provider is not in use, do not render this modal by default
         return null;
     }
-
     return (
-        <div>
-            <Dialog open={true} aria-labelledby="network-switcher-title">
-                <DialogTitle className="center" id="network-switcher-title">
-                    Network Switcher
-                </DialogTitle>
-                <DialogContent>
-                    <Box display="flex" flexDirection="column" alignItems="center" >
-                        <Typography variant="body1">
-                            This dApp is deployed on Goerli (Chain ID 5)
-                        </Typography>
-                        <Typography variant="body1">
-                            You are currently connected to Chain ID {windowOverride?.ethereum?.networkVersion || "N/A"}
-                        </Typography>
-
-                        {switchNetwork && (
-                            <Box mt={2}>
-                                <Button
-                                    variant="contained"
-                                    color="primary"
-                                    onClick={() => switchNetwork()}
-                                >
-                                    Switch to Sepolia
-                                </Button>
-                            </Box>
-                        )}
-                        <Box mt={2}>
-                            <Typography variant="body2" color="error">
-                                {errorMessage}
-                            </Typography>
-                        </Box>
-                    </Box>
-                </DialogContent>
-            </Dialog>
+        <div className="popup-container">
+            <div className="popup">
+                <div className="popup-title">Network Switcher</div>
+                <div className="popup-message">Chaser is interfaced on Base Sepolia (Chain ID 84532)</div>
+                <div className="popup-message">
+                    You are currently connected to Chain ID {fromHex(newChain, 'number') || "N/A"}
+                </div>
+                <button onClick={switchNetwork} className="popup-ok-button">Switch to Base</button>
+            </div>
         </div>
     );
 }

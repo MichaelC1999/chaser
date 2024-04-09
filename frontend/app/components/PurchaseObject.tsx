@@ -21,7 +21,7 @@ const PurchaseObject = ({ date, amount, txHash }: PurchaseObjectProps) => {
             alignItems="center"
             style={{ cursor: "pointer" }}
             borderRadius="4px"
-            onClick={() => window.open("https://goerli.etherscan.io/tx/" + txHash, "_blank")}
+            onClick={() => window.open("https://sepolia.etherscan.io/tx/" + txHash, "_blank")}
         >
             <div style={{
                 color: "white",
@@ -32,7 +32,7 @@ const PurchaseObject = ({ date, amount, txHash }: PurchaseObjectProps) => {
                 fontSize: "20px"
             }}>
                 <span style={{ width: "100%", textAlign: "justify" }}>
-                    {truncateDecimal(amount)} on {formatDate(date)}{"\u200B"}
+                    {truncateDecimal(amount)} LOTUS on {formatDate(date)}{"\u200B"}
                 </span>
             </div>
         </Box>

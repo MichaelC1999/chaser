@@ -9,7 +9,6 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  color: white;
 }
 
 a {
@@ -19,6 +18,7 @@ a {
 
 .sectionHeader {
   font-size: 24px;
+  margin-bottom: 20px;
 }
 
 .fullWidth {
@@ -27,4 +27,311 @@ a {
 
 .center {
   text-align: center;
+}
+
+.popup-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  /* Ensure it's above everything */
+}
+
+.popup {
+  background-color: white;
+  color: #1f2c33;
+  width: 850px;
+  /* Updated width */
+  height: 280px;
+  /* Updated height */
+  border-radius: 3px;
+  border: 1px black solid;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  /* Evenly space children vertically */
+  align-items: center;
+  padding: 20px;
+}
+
+.popup-title {
+  font-size: 21px;
+  /* Assuming body font size is 16px */
+  text-align: center;
+}
+
+.popup-message {
+  font-size: 16px;
+  text-align: center;
+  margin: 10px;
+}
+
+.popup-ok-button {
+  width: 70%;
+  padding: 10px 20px;
+  text-align: center;
+  border: none;
+  background-color: #1f2c33;
+  color: white;
+  cursor: pointer;
+}
+
+.root {
+  width: 100%;
+  height: 100vh;
+  background-color: #1f2c33;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center center;
+}
+
+.header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-top: 4px;
+  padding-left: 12px;
+}
+
+.contentContainer {
+  width: 100%;
+  margin-top: 32px;
+  z-index: 2;
+}
+
+.background-image {
+  position: absolute;
+  top: 50%;
+  /* Position the image 50% from the top of the viewport */
+  right: 30px;
+  /* 30px from the right of the viewport */
+  transform: translateY(-50%);
+  /* Center the image vertically at its position */
+  /* Optional styles below */
+  max-width: 100%;
+  /* Ensures the image is responsive */
+  height: auto;
+  /* Maintains the aspect ratio */
+  z-index: 0;
+}
+
+.chaserHeader {
+  margin-left: 84px;
+
+  font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  font-size: 42px;
+  color: white;
+
+}
+
+.childContainer {
+  display: flex;
+  width: 100%;
+  margin-top: 20px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.button {
+  cursor: pointer;
+  margin: 10px 0;
+  padding: 6px 20px;
+  font-size: 16px;
+  border-color: rgb(207, 204, 204);
+  border-width: 1px;
+  border-radius: 4px;
+  background-color: #1f2c33;
+  /* Default background color */
+  color: white;
+  /* Default text color */
+}
+
+.button:hover {
+  color: #1f2c33;
+  background-color: white;
+
+}
+
+.buttonConnected {
+  background-color: rgb(40, 42, 141);
+  border-color: white;
+}
+
+.pool-page-container {
+  display: flex;
+  justify-content: space-around;
+  align-items: start;
+  /* Align to the top */
+  height: 100vh;
+  width: 80vw;
+  padding: 10px;
+  /* Adjust as necessary */
+  box-sizing: border-box;
+  overflow: hidden;
+  /* Prevent page scrolling */
+}
+
+/* Additional CSS for NewPoolInputs and EnabledPools to ensure they take up half the space each */
+.new-pool-inputs,
+.enabled-pools {
+  flex: 1;
+}
+
+.new-pool-inputs label,
+.pool-row td {
+  /* color: white; */
+}
+
+.loader {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+
+  margin: 50px;
+  /* position: fixed;
+  top: 50%;
+  left: 50%; */
+  transform: translate(-50%, -50%);
+}
+
+.loaderBig {
+  width: 80px;
+  height: 80px;
+}
+
+.small-loader {
+  border: 3px solid #f3f3f3;
+  /* Light grey border */
+  border-top: 3px solid #3498db;
+  /* Blue border-top */
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  margin: 3px;
+  animation: spin 1s linear infinite;
+}
+
+.new-pool-inputs {
+  display: flex;
+  flex-direction: column;
+  padding: 20px 0;
+  overflow-y: auto;
+  /* Make it scrollable */
+  max-height: calc(100vh - 20px);
+  /* Adjust height based on parent container */
+  box-sizing: border-box;
+}
+
+.new-pool-inputs label {
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+
+.new-pool-inputs input,
+.new-pool-inputs select,
+.new-pool-inputs textarea {
+  width: 100%;
+  padding: 8px;
+  margin-top: 5px;
+  box-sizing: border-box;
+}
+
+.enabled-pools {
+  overflow-y: auto;
+  max-height: calc(100vh - 20px);
+  /* Adjust as per parent container height */
+  box-sizing: border-box;
+}
+
+.enabled-pools table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.enabled-pools th,
+.enabled-pools td {
+  text-align: left;
+  padding: 5px;
+}
+
+.enabled-pools thead {
+  position: sticky;
+  top: 0;
+  font-size: 26px;
+}
+
+.enabled-pools {
+  background-color: #f3f3f3;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.enabled-pools>* {
+  color: #1f2c33;
+}
+
+.MainPage {
+  /* display: flex; */
+  /* justify-content: center; */
+  gap: 20px;
+  width: 70%;
+  /* This accounts for space around components */
+}
+
+.infoSpan {
+  background-color: #1f2c33;
+  border-radius: 12px;
+  padding: 8px;
+  margin-right: 6px;
+}
+
+.interactionSection {
+  margin-right: 32px;
+  width: 30%;
+}
+
+.interactionSection input {
+  text-align: left;
+  padding: 10px;
+  width: 100%;
+}
+
+.interactionSection button {
+  width: 100%;
+}
+
+.component-container {
+  /* width: 32%; */
+  /* height: 600px; */
+  /* margin: 0 10px; */
+  margin-left: 120px;
+  /* border: 1px solid white; */
+  border-radius: 8px;
+  overflow: auto;
+  padding: 10px;
+  color: white;
+  /* Add padding for internal spacing */
+}
+
+.component-container span {
+  display: block;
+}
+
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }

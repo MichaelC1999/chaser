@@ -1,0 +1,148 @@
+[
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_bridgeLogicAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_registryAddress",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+            }
+        ],
+        "name": "ExecutionMessage",
+        "type": "event"
+    },
+    {
+        "inputs": [],
+        "name": "bridgeLogicAddress",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_poolAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_assetAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_marketAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "_protocolHash",
+                "type": "bytes32"
+            }
+        ],
+        "name": "getCurrentPosition",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "string",
+                "name": "strToHash",
+                "type": "string"
+            }
+        ],
+        "name": "hasher",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "registryAddress",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "protocolHash",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "operation",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+            },
+            {
+                "internalType": "address",
+                "name": "poolAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "assetAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "marketAddress",
+                "type": "address"
+            }
+        ],
+        "name": "routeExternalProtocolInteraction",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]

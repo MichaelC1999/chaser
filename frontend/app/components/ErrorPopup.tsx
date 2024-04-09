@@ -1,38 +1,31 @@
-import { Box, Button, Dialog, DialogContent, DialogTitle, Typography } from '@mui/material';
-import React from 'react';
+'use client';
 
-interface ErrorPopupProps {
-    errorMessageCallback: () => void;
-    errorMessage: string;
-}
+import React, { useEffect, useState } from 'react';
 
-function ErrorPopup({ errorMessage, errorMessageCallback }: ErrorPopupProps) {
-    const open = errorMessage !== "";
+const ErrorPopup = ({ errorMessage, errorMessageCallback }: any) => {
+    if (errorMessage === '') return null;
+    const [shouldRender, setShouldRender] = useState(false);
+    const windowOverride: any = typeof window !== 'undefined' ? window : null;
+
+    useEffect(() => {
+        const networkVersion = windowOverride.ethereum?.networkVersion;
+        if (networkVersion === "11155111") {
+            setShouldRender(true);
+        }
+    }, []);
+
+    if (!shouldRender) {
+        return null;
+    }
     return (
-        <Dialog open={open} aria-labelledby="error-popup-title">
-            <DialogTitle id="error-popup-title">
-                <Typography variant="h5" align="center">
-                    Error
-                </Typography>
-            </DialogTitle>
-            <DialogContent>
-                <Box display="flex" flexDirection="column" alignItems="center" >
-                    <Typography variant="body1">
-                        {errorMessage}
-                    </Typography>
-                    <Box mt={2}>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            onClick={errorMessageCallback}
-                        >
-                            OK
-                        </Button>
-                    </Box>
-                </Box>
-            </DialogContent>
-        </Dialog>
+        <div className="popup-container">
+            <div className="popup">
+                <div className="popup-title">Error</div>
+                <div className="popup-message">{errorMessage}</div>
+                <button onClick={errorMessageCallback} className="popup-ok-button">OK</button>
+            </div>
+        </div>
     );
-}
+};
 
 export default ErrorPopup;
