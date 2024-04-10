@@ -6,12 +6,12 @@ import {IAavePool} from "./interfaces/IAavePool.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IChaserMessenger} from "./interfaces/IChaserMessenger.sol";
 import {ISpokePool} from "./interfaces/ISpokePool.sol";
+import {IPoolControl} from "./interfaces/IPoolControl.sol";
 import {IIntegrator} from "./interfaces/IIntegrator.sol";
 import {BridgeReceiver} from "./BridgeReceiver.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract BridgeLogic {
-    //IMPORTANT - HOW TO HANDLE TWO POOLS DEPOSITING INTO THE SAME MARKET? When deposit into external protocol's market is made, read the a/c token amount and save in poolAddr => uint mapping
     uint256 managerChainId;
 
     IChaserRegistry public registry;
@@ -69,7 +69,6 @@ contract BridgeLogic {
         bytes32 currentNonceHash = keccak256(abi.encode(poolAddress, 0));
         bridgeNonce[poolAddress] = 0;
         nonceToPositionValue[currentNonceHash] = 0;
-        // IMPORTANT - SET THE PIVOT HERE BEFORE THE DEPOSIT IS RECEIVED AND TRANSFERED
         poolToCurrentPositionMarket[poolAddress] = marketAddress;
         poolToAsset[poolAddress] = tokenSent;
 
@@ -173,12 +172,10 @@ contract BridgeLogic {
         emit PositionBalanceSent(positionAmount, _poolAddress, _depositId);
         emit LzMessageSent(method, data);
 
-        try registry.sendMessage(managerChainId, method, _poolAddress, data) {
-            emit ExecutionMessage("sendMessage success");
-        } catch Error(string memory reason) {
-            emit ExecutionMessage(
-                string(abi.encodePacked("BridgeLogic: ", reason))
-            );
+        if (managerChainId == registry.currentChainId()) {
+            IPoolControl(_poolAddress).receivePositionBalance(data);
+        } else {
+            registry.sendMessage(managerChainId, method, _poolAddress, data);
         }
     }
 
@@ -221,12 +218,10 @@ contract BridgeLogic {
         );
         emit LzMessageSent(method, data);
 
-        try registry.sendMessage(managerChainId, method, _poolAddress, data) {
-            emit ExecutionMessage("sendMessage success");
-        } catch Error(string memory reason) {
-            emit ExecutionMessage(
-                string(abi.encodePacked("BridgeLogic: ", reason))
-            );
+        if (managerChainId == registry.currentChainId()) {
+            IPoolControl(_poolAddress).receivePositionInitialized(data);
+        } else {
+            registry.sendMessage(managerChainId, method, _poolAddress, data);
         }
     }
 
@@ -276,8 +271,6 @@ contract BridgeLogic {
         address marketAddress = poolToCurrentPositionMarket[_poolAddress];
         bytes memory data = abi.encode(marketAddress, _amount);
 
-        emit LzMessageSent(method, data);
-
         try registry.sendMessage(managerChainId, method, _poolAddress, data) {
             emit ExecutionMessage("sendMessage success");
         } catch Error(string memory reason) {
@@ -318,19 +311,18 @@ contract BridgeLogic {
             keccak256(abi.encode("BbPivotBridgeMovePosition"))
         );
 
-        bytes memory data = abi.encode(
-            protocolHash,
-            targetMarketAddress,
-            targetMarketId,
-            bridgeNonce[poolAddress]
+        bytes memory message = abi.encode(
+            method,
+            poolAddress,
+            abi.encode(
+                protocolHash,
+                targetMarketAddress,
+                targetMarketId,
+                bridgeNonce[poolAddress]
+            )
         );
 
-        bytes memory message = abi.encode(method, poolAddress, data);
-
         emit AcrossMessageSent(message);
-
-        uint256 currentChainId = registry.currentChainId();
-        emit Numbers(currentChainId, destinationChainId);
 
         address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
 
@@ -338,37 +330,26 @@ contract BridgeLogic {
 
         // UPDATEV3
 
-        //         try ISpokePool(acrossSpokePool).depositV3(
-        //     address(this),
-        //     destinationBridgeReceiver,
-        //     poolToAsset[poolAddress],
-        //     address(0),
-        //     _amount,
-        // (_amount / 5) * 4, // IMPORTANT - SEEK ORACLE SOLUTION TO BRING API FEE CALC ON CHAIN
-        //     destinationChainId,
-        //     address(0),
-        //     uint32(block.timestamp),
-        //     uint32(block.timestamp) * 2,
-        //     0,
-        //     message
-        // )
-
-        // ISpokePool(acrossSpokePool).deposit(
-        //     destinationBridgeReceiver,
-        //     poolToAsset[poolAddress],
-        //     amount,
-        //     destinationChainId,
-        //     relayFeePct,
-        //     uint32(block.timestamp),
-        //     message,
-        //     (2 ** 256 - 1)
-        // );
+        ISpokePool(acrossSpokePool).depositV3(
+            address(this),
+            destinationBridgeReceiver,
+            poolToAsset[poolAddress],
+            address(0),
+            _amount,
+            _amount - (_amount / 250), // IMPORTANT - SEEK ORACLE SOLUTION TO BRING API FEE CALC ON CHAIN
+            destinationChainId,
+            address(0),
+            uint32(block.timestamp),
+            uint32(block.timestamp + 30000),
+            0,
+            message
+        );
     }
 
     function executeExitPivot(address _poolAddress, bytes memory _data) public {
         // Withdraw from current position here, bringing funds back to this contract and updating state
         (
-            uint256 poolNonce,
+            ,
             bytes32 protocolHash,
             address targetMarketAddress,
             string memory targetMarketId,
@@ -379,14 +360,15 @@ contract BridgeLogic {
                 (uint256, bytes32, address, string, uint256, address)
             );
 
-        uint256 amount = IIntegrator(integratorAddress).getCurrentPosition(
-            _poolAddress,
-            poolToAsset[_poolAddress],
-            targetMarketAddress,
-            protocolHash
-        );
+        uint256 amount = getPositionBalance(_poolAddress);
 
-        if (registry.currentChainId() == destinationChainId) {
+        uint256 currentChainId = registry.currentChainId();
+        // call withdraw on integrator for entire position amount
+
+        integratorWithdraw(_poolAddress, amount);
+
+        if (currentChainId == destinationChainId) {
+            // Position should be entered from here, to enable pivot when requested from pool on local chain or other chain through messenger contract
             enterPosition(
                 _poolAddress,
                 protocolHash,
@@ -394,7 +376,24 @@ contract BridgeLogic {
                 targetMarketId,
                 amount
             );
+            receiveDepositFromPool(amount, _poolAddress);
+
+            // Pivot was successful, now we need to notify the pool of this
+            if (managerChainId == currentChainId) {
+                // If the Pool is on this same chain, directly call the proper functions on this chain no CCIP
+                address marketAddress = poolToCurrentPositionMarket[
+                    _poolAddress
+                ];
+                IPoolControl(_poolAddress).pivotCompleted(
+                    marketAddress,
+                    amount
+                );
+            } else {
+                // If the Pool is on a different chain, use CCIP to notify the pool
+                sendPivotCompleted(_poolAddress, amount);
+            }
         } else {
+            // If the target pivot is on another chain, needs to besent through Across bridge
             crossChainPivot(
                 _poolAddress,
                 protocolHash,
@@ -476,8 +475,6 @@ contract BridgeLogic {
             "Withdraw Amount Too High"
         );
 
-        // IMPORTANT - IF amountToWithdraw IS VERY CLOSE TO userMaxWithdraw, MAKE amountToWithdraw = userMaxWithdraw
-
         uint256 amountToWithdraw = amount;
         if (userMaxWithdraw < amount) {
             amountToWithdraw = userMaxWithdraw;
@@ -513,40 +510,18 @@ contract BridgeLogic {
             keccak256(abi.encode("BaBridgeWithdrawOrderUser"))
         );
 
-        uint256 positionBalance = readBalanceAtNonce(
-            _poolAddress,
-            bridgeNonce[_poolAddress]
-        );
-
         //UPDATEV3 - EXPLORE REDUNDANT TRANSFERS WHERE depositV3 CAN SET THE SENDER, RATHER THAN NEEDING TO TRANSFER TO THIS CONTRACT?
         // IMPORTANT - CALL POSITION MARKET AND MAKE THE WITHDRAW
-        try
-            IIntegrator(integratorAddress).routeExternalProtocolInteraction(
-                poolToCurrentProtocolHash[_poolAddress],
-                keccak256(abi.encode("withdraw")),
-                _amount,
-                _poolAddress,
-                poolToAsset[_poolAddress],
-                poolToCurrentPositionMarket[_poolAddress]
-            )
-        {
-            positionBalance = IIntegrator(integratorAddress).getCurrentPosition(
+        integratorWithdraw(_poolAddress, _amount);
+
+        uint256 positionBalance = IIntegrator(integratorAddress)
+            .getCurrentPosition(
                 _poolAddress,
                 poolToAsset[_poolAddress],
                 poolToCurrentPositionMarket[_poolAddress],
                 poolToCurrentProtocolHash[_poolAddress]
             );
-            setBalanceAtNonce(_poolAddress, positionBalance);
-        } catch Error(string memory reason) {
-            emit ExecutionMessage(
-                string(
-                    abi.encode(
-                        "Integrator routeExternalProtocolInteraction() failure: withdraw - ",
-                        reason
-                    )
-                )
-            );
-        }
+        setBalanceAtNonce(_poolAddress, positionBalance);
 
         bytes memory message = abi.encode(
             method,
@@ -554,36 +529,52 @@ contract BridgeLogic {
             abi.encode(_withdrawId, _userMaxWithdraw, positionBalance, _amount)
         );
 
-        emit AcrossMessageSent(message);
-        try ERC20(poolToAsset[_poolAddress]).approve(acrossSpokePool, _amount) {
-            emit ExecutionMessage("Successful Approval");
-        } catch Error(string memory reason) {
-            emit ExecutionMessage(
-                string(abi.encode("Asset ERC20 Approval Error ", reason))
-            );
-        }
-
-        try
-            ISpokePool(acrossSpokePool).depositV3(
-                address(this),
-                _poolAddress,
-                poolToAsset[_poolAddress],
-                address(0),
+        if (managerChainId == registry.currentChainId()) {
+            ERC20(poolToAsset[_poolAddress]).transfer(_poolAddress, _amount);
+            IPoolControl(_poolAddress).finalizeWithdrawOrder(
+                _withdrawId,
                 _amount,
-                (_amount / 5) * 4, // IMPORTANT - SEEK ORACLE SOLUTION TO BRING API FEE CALC ON CHAIN
-                managerChainId,
-                address(0),
-                uint32(block.timestamp),
-                uint32(block.timestamp + 30000),
-                0,
-                message
-            )
-        {
-            emit ExecutionMessage("Successful Spokepool Deposit");
-        } catch Error(string memory reason) {
-            emit ExecutionMessage(
-                string(abi.encode("Failed Spokepool Deposit: ", reason))
+                _userMaxWithdraw,
+                positionBalance,
+                _amount
             );
+        } else {
+            emit AcrossMessageSent(message);
+            try
+                ERC20(poolToAsset[_poolAddress]).approve(
+                    acrossSpokePool,
+                    _amount
+                )
+            {
+                emit ExecutionMessage("Successful Approval");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(
+                    string(abi.encode("Asset ERC20 Approval Error ", reason))
+                );
+            }
+
+            try
+                ISpokePool(acrossSpokePool).depositV3(
+                    address(this),
+                    _poolAddress,
+                    poolToAsset[_poolAddress],
+                    address(0),
+                    _amount,
+                    _amount - (_amount / 250), // IMPORTANT - SEEK ORACLE SOLUTION TO BRING API FEE CALC ON CHAIN
+                    managerChainId,
+                    address(0),
+                    uint32(block.timestamp),
+                    uint32(block.timestamp + 30000),
+                    0,
+                    message
+                )
+            {
+                emit ExecutionMessage("Successful Spokepool Deposit");
+            } catch Error(string memory reason) {
+                emit ExecutionMessage(
+                    string(abi.encode("Failed Spokepool Deposit: ", reason))
+                );
+            }
         }
     }
 
@@ -621,25 +612,15 @@ contract BridgeLogic {
         ERC20(poolToAsset[_poolAddress]).transfer(integratorAddress, _amount);
 
         // call the current market's deposit method
-        try
-            IIntegrator(integratorAddress).routeExternalProtocolInteraction(
-                protocolHash,
-                operation,
-                _amount,
-                _poolAddress,
-                poolToAsset[_poolAddress],
-                marketAddress
-            )
-        {} catch Error(string memory reason) {
-            emit ExecutionMessage(
-                string(
-                    abi.encode(
-                        "Integrator routeExternalProtocolInteraction() failure: deposit - ",
-                        reason
-                    )
-                )
-            );
-        }
+        IIntegrator(integratorAddress).routeExternalProtocolInteraction(
+            protocolHash,
+            operation,
+            _amount,
+            _poolAddress,
+            poolToAsset[_poolAddress],
+            marketAddress
+        );
+
         uint256 updatedPositionBalance = IIntegrator(integratorAddress)
             .getCurrentPosition(
                 _poolAddress,
@@ -649,6 +630,20 @@ contract BridgeLogic {
             );
 
         setBalanceAtNonce(_poolAddress, updatedPositionBalance);
+    }
+
+    function integratorWithdraw(
+        address _poolAddress,
+        uint256 _amount
+    ) internal {
+        IIntegrator(integratorAddress).routeExternalProtocolInteraction(
+            poolToCurrentProtocolHash[_poolAddress],
+            keccak256(abi.encode("withdraw")),
+            _amount,
+            _poolAddress,
+            poolToAsset[_poolAddress],
+            poolToCurrentPositionMarket[_poolAddress]
+        );
     }
 
     /**
@@ -687,13 +682,19 @@ contract BridgeLogic {
     function getPositionBalance(
         address _poolAddress
     ) public view returns (uint256) {
-        address positionMarket = poolToCurrentPositionMarket[_poolAddress];
-        address asset = poolToAsset[_poolAddress];
-
-        require(asset != address(0), "Invalid Asset Address");
-
-        // IMPORTANT - TEMPORARY LOGIC, SHOULD LINK UP WITH EXTERNAL PROTOCOL FOR READING THE POSITION BALANCE
-        return ERC20(asset).balanceOf(integratorAddress);
+        if (
+            poolToAsset[_poolAddress] == address(0) ||
+            poolToCurrentProtocolHash[_poolAddress] == keccak256(abi.encode(""))
+        ) {
+            return 0;
+        }
+        return
+            IIntegrator(integratorAddress).getCurrentPosition(
+                _poolAddress,
+                poolToAsset[_poolAddress],
+                poolToCurrentPositionMarket[_poolAddress],
+                poolToCurrentProtocolHash[_poolAddress]
+            );
     }
 
     /**
@@ -726,6 +727,10 @@ contract BridgeLogic {
         // uint256 positionValueAtPendingNonce = nonceToPositionValue[    // Assume 799600255908568n
         //     currentPendingNonceHash
         // ];
+
+        if (_scaledRatio == 100000000000000000) {
+            return _currentPositionValue;
+        }
 
         bytes32 poolCompletedNonceHash = keccak256(
             abi.encode(_poolAddress, _poolNonce)

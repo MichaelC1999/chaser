@@ -15,14 +15,14 @@ import {IArbitrationContract} from "./interfaces/IArbitrationContract.sol";
 contract PoolControl {
     //IMPORTANT - POOL SHOULD NOT BE UPGRADEABLE, COULD CAUSE ISSUES WITH CROSS CHAIN IDENTIFICATION OF POOL, WHEN PROXY POINTS TO ONE ADDRESS ON HOME CHAIN AFTER UPGRADE, AND OTHER ADDRESS ON DESTINATION CHAIN
 
-    uint256 localChain;
     bytes32 poolId;
     address deployingUser;
+    uint256 public localChain;
     address public poolToken;
     uint256 public poolNonce = 0;
     string public poolName;
     string public strategySource; // STRATEGY SOURCE CAN BE A REPO URL WITH CODE TO EXECUTE, OR THIS STRING COULD POINT TO AN ADDRESS/CHAIN/METHOD THAT RETURNS THE INSTRUCTIONS
-    bool pivotPending = false;
+    bool public pivotPending = false;
 
     IBridgeLogic public localBridgeLogic;
     IChaserManager public manager;
@@ -53,9 +53,10 @@ contract PoolControl {
     // current state holds the position that funds are currently deposited into. This facilitates withdraws. Current state gets set as chaser + address(this) when the bridge request to withdraw has been sent
     address public currentPositionAddress;
     string public currentPositionMarketId;
-    uint256 public currentPositionChain; //IMPORTANT - CURRENT HARDCODED BEFORE PIVOT FUNCTIONALITY
+    uint256 public currentPositionChain;
     bytes32 public currentPositionProtocolHash;
     uint256 public currentRecordPositionValue; //This holds the most recently recorded value of the entire position sent from the current position chain.
+    uint256 public currentPositionValueTimestamp;
 
     // last state holds the previous position data. In the case of error while bridging, this is to rescue funds
     address public lastPositionAddress;
@@ -103,7 +104,6 @@ contract PoolControl {
         ) = abi.decode(_data, (uint256, uint256, address, bytes32));
         //Receives the current value of the entire position. Sets this to a contract wide state (or mapping with timestamp => uint balance, and save timestamp to contract wide state)
 
-        currentRecordPositionValue = positionAmount;
         if (depositId != bytes32("")) {
             poolCalculations.updateDepositReceived(
                 depositId,
@@ -141,6 +141,7 @@ contract PoolControl {
         );
 
         currentRecordPositionValue = positionAmount;
+        currentPositionValueTimestamp = block.timestamp;
 
         poolNonce += 1;
 
@@ -166,7 +167,6 @@ contract PoolControl {
      * @param _amount The amount to withdraw, denominated in the pool asset
      */
     function userWithdrawOrder(uint256 _amount) external {
-        //IMPORTANT - Since we dont know the actual amount of pool tokens to be burnt from the withdraw, we should lock withdraws from the user until all pending withdraws are completed
         require(
             userHasPendingWithdraw[msg.sender] == false,
             "User may only open new withdraw order if they do not have a pending withdraw order"
@@ -181,26 +181,26 @@ contract PoolControl {
         );
         userHasPendingWithdraw[msg.sender] = true;
 
-        bytes memory data;
-
-        try
-            poolCalculations.createWithdrawOrder(
-                _amount,
-                poolNonce,
-                poolToken,
-                msg.sender
-            )
-        returns (bytes memory withdrawOrder) {
-            data = withdrawOrder;
-        } catch Error(string memory reason) {
-            revert WithdrawOrderFailure(reason);
-        }
+        bytes memory data = poolCalculations.createWithdrawOrder(
+            _amount,
+            poolNonce,
+            poolToken,
+            msg.sender
+        );
 
         bytes4 method = bytes4(keccak256(abi.encode("AbWithdrawOrderUser")));
 
         emit LzMessageSent(method, data);
-
-        registry.sendMessage(currentPositionChain, method, address(this), data);
+        if (currentPositionChain == localChain) {
+            localBridgeLogic.userWithdrawSequence(address(this), data);
+        } else {
+            registry.sendMessage(
+                currentPositionChain,
+                method,
+                address(this),
+                data
+            );
+        }
     }
 
     /**
@@ -215,12 +215,7 @@ contract PoolControl {
 
         bytes memory data = abi.encode("TEST");
 
-        registry.sendMessage(
-            80001, //IMPORTANT - CHANGE TO currentPositionChain
-            method,
-            address(this),
-            data
-        );
+        registry.sendMessage(80001, method, address(this), data);
     }
 
     /**
@@ -232,12 +227,7 @@ contract PoolControl {
         bytes memory data = abi.encode("TEST");
         bytes4 method = bytes4(keccak256(abi.encode("AbMessagePositionData")));
 
-        registry.sendMessage(
-            80001, //IMPORTANT - CHANGE TO currentPositionChain
-            method,
-            address(this),
-            data
-        );
+        registry.sendMessage(80001, method, address(this), data);
     }
 
     /**
@@ -247,12 +237,7 @@ contract PoolControl {
         // Uses lzSend to request an address from the registry on another chain
         bytes memory data;
         bytes4 method = bytes4(keccak256(abi.encode("getRegistryAddress")));
-        registry.sendMessage(
-            80001, //IMPORTANT - CHANGE TO currentPositionChain
-            method,
-            address(this),
-            data
-        );
+        registry.sendMessage(80001, method, address(this), data);
     }
 
     /**
@@ -282,7 +267,6 @@ contract PoolControl {
             "The position may only be set before the first deposit has settled"
         );
 
-        // IMPORTANT - Check protocol enabled
         bytes32 _targetPositionProtocolHash = keccak256(
             abi.encode(_targetPositionProtocol)
         );
@@ -306,22 +290,17 @@ contract PoolControl {
         );
 
         if (targetPositionChain == localChain) {
-            localBridgeLogic.initializePoolPosition(
+            asset.transferFrom(msg.sender, address(localBridgeLogic), _amount);
+            localBridgeLogic.handlePositionInitializer(
+                _amount,
                 address(this),
                 address(asset),
-                targetPositionProtocolHash,
-                _targetPositionMarketId,
-                poolNonce,
-                _amount
+                depositId,
+                msg.sender,
+                address(0),
+                targetPositionMarketId,
+                targetPositionProtocolHash
             );
-            enterFundsLocalChain(depositId, _amount, msg.sender);
-            address marketAddress = localBridgeLogic
-                .poolToCurrentPositionMarket(address(this));
-
-            uint256 positionAmount = localBridgeLogic.getPositionBalance(
-                address(this)
-            );
-            pivotCompleted(marketAddress, positionAmount);
         } else {
             bytes4 method = bytes4(
                 keccak256(abi.encode("AbBridgePositionInitializer"))
@@ -345,15 +324,19 @@ contract PoolControl {
      * @param _totalFee The Across Bridge relay fee % (irrelevant if local deposit)
      */
     function userDeposit(uint256 _amount, uint256 _totalFee) external {
-        // IMPORTANT - While assertion is open, user deposits sit in the pool rather than being sent.
-
         bytes32 depositId = poolCalculations.createDepositOrder(
             msg.sender,
             _amount
         );
 
         if (currentPositionChain == localChain) {
-            enterFundsLocalChain(depositId, _amount, msg.sender);
+            asset.transferFrom(msg.sender, address(localBridgeLogic), _amount);
+            localBridgeLogic.handleUserDeposit(
+                address(this),
+                msg.sender,
+                depositId,
+                _amount
+            );
         } else {
             bytes4 method = bytes4(
                 keccak256(abi.encode("AbBridgeDepositUser"))
@@ -386,16 +369,10 @@ contract PoolControl {
     ) internal {
         asset.transferFrom(_sender, address(localBridgeLogic), _amount);
 
-        localBridgeLogic.receiveDepositFromPool(
-            _amount,
-            _depositId,
-            address(this),
-            _sender
-        );
-
         currentRecordPositionValue = localBridgeLogic.getPositionBalance(
             address(this)
         );
+        currentPositionValueTimestamp = block.timestamp;
         mintUserPoolTokens(_depositId, currentRecordPositionValue);
     }
 
@@ -506,22 +483,18 @@ contract PoolControl {
 
     function sendPositionChange(
         string memory requestMarketId,
-        bytes32 protocolHash
+        string memory targetProtocol,
+        uint256 destinationChainId
     ) external {
-        uint256 destinationChainId = 1337;
-        if (currentPositionChain == 1337) {
-            destinationChainId = 80001; // REMOVE - TESTING
-        }
-
         bytes memory pivotMessage = createPivotExitMessage(
-            protocolHash,
+            keccak256(abi.encode(targetProtocol)),
             requestMarketId,
             destinationChainId
         );
 
         targetPositionMarketId = requestMarketId;
         targetPositionChain = destinationChainId;
-        targetPositionProtocolHash = protocolHash;
+        targetPositionProtocolHash = keccak256(abi.encode(targetProtocol));
 
         pivotPending = true;
 
@@ -529,15 +502,9 @@ contract PoolControl {
 
         // IF POSITION NEEDS TO PIVOT *FROM* THIS CHAIN (LOCAL/BRIDGE LOGIC)
         // THIS IF STATEMENT DETERMINES WHETHER TO ACTION THE EXITPIVOT LOCALLY OR THROUGH CROSS CHAIN
-        //IMPORTANT - NEED TO REDO FOR CCIP AND NEW EXECUTEEXITPIVOT FUNCTIONALITY
         if (currentPositionChain == localChain) {
-            address destinationBridgeReceiver = registry
-                .chainIdToBridgeReceiver(destinationChainId);
-
             localBridgeLogic.executeExitPivot(address(this), pivotMessage);
         } else {
-            bytes memory data = abi.encode("TEST");
-
             bytes4 method = bytes4(
                 keccak256(abi.encode("AbPivotMovePosition"))
             );
@@ -546,7 +513,7 @@ contract PoolControl {
                 currentPositionChain,
                 method,
                 address(this),
-                data
+                pivotMessage
             );
         }
     }
@@ -564,6 +531,7 @@ contract PoolControl {
         currentPositionChain = targetPositionChain;
         currentPositionProtocolHash = targetPositionProtocolHash;
         currentRecordPositionValue = positionAmount;
+        currentPositionValueTimestamp = block.timestamp;
 
         targetPositionMarketId = "";
         targetPositionChain = 0;
@@ -615,6 +583,7 @@ contract PoolControl {
             );
 
         currentRecordPositionValue = _positionValue;
+        currentPositionValueTimestamp = block.timestamp;
 
         poolNonce += 1;
         userHasPendingWithdraw[depositor] = false;

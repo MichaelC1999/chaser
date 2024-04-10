@@ -20,10 +20,12 @@ contract PoolCalculations {
     mapping(bytes32 => bool) public depositIdToTokensMinted;
 
     mapping(bytes32 => address) public withdrawIdToDepositor;
-    mapping(bytes32 => uint256) public withdrawIdToDepositAmount;
+    mapping(bytes32 => uint256) public withdrawIdToAmount;
 
     event DepositRecorded(bytes32, uint256);
     event WithdrawRecorded(bytes32, uint256);
+
+    //IMPORTANT - NEED FUNCTION FOR RESETTING STATE WHEN DEPOSIT FAILS ON DESTINATION NETWORK
 
     function createWithdrawOrder(
         uint256 _amount,
@@ -38,7 +40,7 @@ contract PoolCalculations {
         );
 
         withdrawIdToDepositor[withdrawId] = _sender;
-        withdrawIdToDepositAmount[withdrawId] = _amount;
+        withdrawIdToAmount[withdrawId] = _amount;
 
         emit WithdrawRecorded(withdrawId, _amount);
 
@@ -66,7 +68,7 @@ contract PoolCalculations {
         uint256 poolTokenSupply = poolToken.totalSupply();
         require(poolTokenSupply > 0, "Pool Token has no supply");
 
-        uint256 scaledRatio = (10 ** 18); // scaledRatio defaults to 1, if the user has all pool tokens IMPORTANT - SHOULD THIS BE 10 ** 19? As 1 ETH IS 10**19 WEI
+        uint256 scaledRatio = (10 ** 18);
         if (userPoolTokenBalance != poolTokenSupply) {
             scaledRatio =
                 (userPoolTokenBalance * (10 ** 18)) /
@@ -80,16 +82,16 @@ contract PoolCalculations {
         uint256 totalAvailableForUser,
         uint256 amount,
         address _poolToken
-    ) external view returns (address, uint256) {
+    ) external returns (address, uint256) {
         //amount gets passed from the BridgeLogic as the input amount, before bridging/protocol fees deduct from the received amount. This amount reflects the total amount of asset removed from the position
         address depositor = withdrawIdToDepositor[withdrawId];
+
         IERC20 poolToken = IERC20(_poolToken);
 
         uint256 userPoolTokenBalance = poolToken.balanceOf(depositor);
 
-        // IMPORTANT - IF totalAvailableForUser IS VERY CLOSE TO amount, MAKE amount = totalAvailableForUser
         if (totalAvailableForUser < amount) {
-            amount = totalAvailableForUser; // IMPORTANT - IF THE CALCULATED TOTAL AVAILABLE FOR USER IS LESS THAN THE AMOUNT BRIDGED BACK, ONLY TRANSFER THE CALCULATED AMOUNT TO USER
+            amount = totalAvailableForUser;
         }
 
         uint256 poolTokensToBurn = userPoolTokenBalance;
@@ -135,8 +137,6 @@ contract PoolCalculations {
         uint256 _totalPoolPositionAmount,
         uint256 _poolTokenSupply
     ) external view returns (uint256, address) {
-        // IMPORTANT - THE assetAmount RECORDED LOCALLY IS DIFFERENT THAN THE ACTUAL DEPOSIT ON THE DESTINATION CHAIN, ACROSS FEES (COULD PASS THE AMOUNT ACTUALLY DEPOSITED IN MESSAGE TO FINALIZE DEPOSIT)
-
         uint256 assetAmount = depositIdToDepositAmount[_depositId];
         address depositor = depositIdToDepositor[_depositId];
         uint256 poolTokensToMint;
@@ -153,6 +153,4 @@ contract PoolCalculations {
 
         return (poolTokensToMint, depositor);
     }
-
-    // Add other helper functions as needed
 }

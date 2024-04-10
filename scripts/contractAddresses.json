@@ -1,24 +1,24 @@
 {
   "base": {
-    "registryAddress": "0x35B062ac5EfADf328AE6f3782AB0762f90A41619",
-    "bridgeLogicAddress": "0x021Aa3C392B1Afe5DDD6e5ECf30AF28C1aF031bB",
-    "messengerAddress": "0x6f9b42dA4F886066b03766ff8c03485859deF8cD",
-    "receiverAddress": "0xdcA2369F6e9b14DCFB9bd13FE15a4a8eA066b4BD",
+    "registryAddress": "0x3078E2C384fECEb2d12389eAE57156251B0c27Ce",
+    "bridgeLogicAddress": "0x718495d05ca58BDB4B3557023E4Bd65b8850420C",
+    "messengerAddress": "0x5d6738f75bCE40730df7AF6702FBc757Cae30143",
+    "receiverAddress": "0x72846ed268763dE23aCF56c1df2202E45C52bFDd",
     "spokePool": "0x82B564983aE7274c86695917BBf8C99ECb6F0F8F",
     "WETH": "0x4200000000000000000000000000000000000006",
-    "managerAddress": "0x2404eF9EF229686c66bb9a99a6fb56Fb584Ee6eD",
-    "poolCalculationsAddress": "0xD01e4226eA559e4Cd107241f985fb973Bb7d78D9",
-    "integratorAddress": "0x393B088fa543A26D4035F2295e1F0B37f6f7C2D4",
-    "poolAddress": "0x165420042556a628940ed2eb64fbcbda4d837cec"
+    "managerAddress": "0x387C0c8BD3c27AD1C40a15457A15aE9aEAe6c4e4",
+    "poolCalculationsAddress": "0xB0Dc97a1EDd51c0A7bfd8B9f05A6ABd867423355",
+    "integratorAddress": "0x8bf0Ea4858ff3B4b53046D657215a64306769e2c",
+    "poolAddress": "0x75dBCfe2379232E1713b937273E1bC2E0b4DaB6C"
   },
   "sepolia": {
-    "registryAddress": "0xa385e3a9027b33708253F439A3c0452459e0046a",
+    "registryAddress": "0x71db983467FaA27Aad1497a9A3eC902Da963a5B0",
     "poolCalculationsAddress": "0x536556B3576921264d3639FdD4Ac35363a843F81",
-    "bridgeLogicAddress": "0x7247cfFE0e543A86B62457194fE023725fC57bdF",
-    "messengerAddress": "0x4A3d8805F9b7C8A7124CDca49097B1B09E833526",
-    "receiverAddress": "0x9d38AbC7EEE1d72e51444e2eAF89253C915bfA6b",
+    "bridgeLogicAddress": "0xc80FBb7a61023DFEE9594c5c18bA0a9693C87324",
+    "messengerAddress": "0xbC1a7842aA83D4CFF32aFe8216C25520961C4587",
+    "receiverAddress": "0x5E2Ee5fB61da9E1f1B128d0B236E74420DaA39D0",
     "spokePool": "0x5ef6C01E11889d86803e0B23e3cB3F9E9d97B662",
     "WETH": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
-    "integratorAddress": "0x93947624E1686a0e41EDe1f3CeB25863a760CCb9"
+    "integratorAddress": "0x4dcAF04750Cb0f9999fA5837a0662648BE348015"
   }
 }

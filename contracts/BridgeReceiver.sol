@@ -62,9 +62,10 @@ contract BridgeReceiver {
         ) {
             (
                 bytes32 protocolHash,
+                address targetMarketAddress,
                 string memory targetMarketId,
                 uint256 poolNonce
-            ) = abi.decode(data, (bytes32, string, uint256));
+            ) = abi.decode(data, (bytes32, address, string, uint256));
 
             try ERC20(tokenSent).transfer(address(bridgeLogic), amount) {
                 emit ExecutionMessage("transfer success");
@@ -78,6 +79,7 @@ contract BridgeReceiver {
                     amount,
                     poolAddress,
                     protocolHash,
+                    targetMarketAddress,
                     targetMarketId,
                     poolNonce
                 )

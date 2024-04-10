@@ -70,6 +70,7 @@ interface IBridgeLogic {
         uint256,
         address,
         bytes32,
+        address,
         string memory,
         uint256
     ) external;

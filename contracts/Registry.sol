@@ -102,11 +102,11 @@ contract Registry is OwnerIsCreator {
             0x263351499f82C107e540B01F0Ca959843e22464a
         );
 
-        // chainIdToSelector[84532] = 10344971235874465080;
+        chainIdToSelector[84532] = 10344971235874465080;
 
-        // chainIdToSelector[11155111] = 16015286601757825753;
+        chainIdToSelector[11155111] = 16015286601757825753;
 
-        // chainIdToSelector[80001] = 12532609583862916517;
+        chainIdToSelector[80001] = 12532609583862916517;
 
         chainIdToRouter[11155111] = address(
             0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59
@@ -182,7 +182,7 @@ contract Registry is OwnerIsCreator {
         // require(
         //     msg.sender == manager,
         //     "Only Manager may call deployBridgeReceiver"
-        // ); IMPORTANT - UNCOMMENT
+        // );
 
         bridgeLogicAddress = _bridgeLogicAddress;
 
@@ -200,10 +200,6 @@ contract Registry is OwnerIsCreator {
         returns (address, address, uint256)
     {
         address chainlinkRouter = chainIdToRouter[currentChainId];
-        if (chainlinkRouter == address(0)) {
-            // IMPORTANT - REMOVE
-            chainlinkRouter = address(this);
-        }
         address linkAddress = chainIdToLinkAddress[currentChainId];
         uint64 selector = chainIdToSelector[currentChainId];
 
@@ -334,15 +330,13 @@ contract Registry is OwnerIsCreator {
         address messengerAddress = chainIdToMessageReceiver[currentChainId];
         address messageReceiver = chainIdToMessageReceiver[_chainId];
 
+        bytes memory data = abi.encode(_method, _poolAddress, _data);
+        bytes32 messageId = bytes32(keccak256(abi.encode("CCIPMESSAGE")));
         if (destinationChainSelector == 0 || currentChainSelector == 0) {
             // TESTING - CAN REMOVE
             //FOR CHAINS UNSUPPORTED BY CCIP, TEMPORARILY JUST GENERATE THE MESSAGE OBJECT FOR USER TO MANUALLY PASS
 
             require(poolAddress != address(0), "POOL");
-            bytes memory data = abi.encode(_method, _poolAddress, _data);
-            bytes32 messageId = bytes32(
-                keccak256(abi.encode(msg.sender, _poolAddress, _data))
-            );
 
             emit CCIPMessageSent(messageId, data);
             emit Marker("Above Log is CCIP Message, below is method sent");
@@ -360,6 +354,7 @@ contract Registry is OwnerIsCreator {
 
         require(messageReceiver != address(0), "RECEIVER");
         require(destinationChainSelector != 0, "Invalid Chain Selector");
+        emit CCIPMessageSent(messageId, data);
 
         IChaserMessenger(messengerAddress).sendMessagePayLINK(
             destinationChainSelector,

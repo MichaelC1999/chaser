@@ -77,9 +77,10 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
 
         allowlistSourceChain(16015286601757825753, true);
         allowlistSourceChain(12532609583862916517, true);
+        allowlistSourceChain(10344971235874465080, true);
         allowlistDestinationChain(16015286601757825753, true);
         allowlistDestinationChain(12532609583862916517, true);
-
+        allowlistDestinationChain(10344971235874465080, true);
         transferOwnership(_registry);
     }
 
@@ -106,17 +107,17 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         uint64 _destinationChainSelector,
         bool allowed
     ) public {
-        bool callerPermitted = false;
-        if (msg.sender == owner()) {
-            callerPermitted = true;
-        }
-        if (msg.sender == address(this)) {
-            callerPermitted = true;
-        }
-        require(
-            callerPermitted == true,
-            "Function only callable internally or by owner"
-        );
+        // bool callerPermitted = false;
+        // if (msg.sender == owner()) {
+        //     callerPermitted = true;
+        // }
+        // if (msg.sender == address(this)) {
+        //     callerPermitted = true;
+        // }
+        // require(
+        //     callerPermitted == true,
+        //     "Function only callable internally or by owner"
+        // );
         allowlistedDestinationChains[_destinationChainSelector] = allowed;
     }
 
@@ -165,16 +166,6 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         onlyAllowlistedDestinationChain(_destinationChainSelector) // IMPORTANT - REMOVE THIS AND CHECK REQUIRE CHAIN SELECTOR
         returns (bytes32)
     {
-        // IMPORTANT - further debug this function
-
-        // HOW SHOULD DATA BE PASSED TO THIS FUNCTION? HOW SHOULD IT BE PROCESSED? HOW SHOULD IT BE FORMATTED TO BE SENT?
-        // Pass in bytes4 method, address poolAddress, bytes memory _data
-        // Process by encoding all these inputs together as a bytes memory
-        //
-
-        // IMPORTANT - SHOULD LINK BALANCE BE HELD IN MESSENGER? OR LOGIC/POOL?
-
-        // Create an EVM2AnyMessage struct in memory with necessary information for sending a cross-chain message
         require(_receiver != address(0), "RECEIVER");
         require(_poolAddress != address(0), "POOL");
         require(address(s_linkToken) != address(0), "FEETOKEN");
@@ -246,7 +237,6 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         return (_method, _poolAddress, _data);
     }
 
-    /// handle a received message
     // function _ccipReceive(
     //     Client.Any2EVMMessage memory any2EvmMessage
     // )
@@ -261,11 +251,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
     function _ccipReceive(
         Client.Any2EVMMessage memory any2EvmMessage
     ) internal override {
-        // testFlag = true;
-
         s_lastReceivedMessageId = any2EvmMessage.messageId; // fetch the messageId
-
-        // s_lastReceivedText = abi.decode(any2EvmMessage.data, (string)); // abi-decoding of the sent text
 
         // // decode any2EvmMessage.data
         (bytes4 _method, address _poolAddress, bytes memory _data) = abi.decode(
@@ -389,7 +375,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
                 tokenAmounts: new Client.EVMTokenAmount[](0), // Empty array aas no tokens are transferred
                 extraArgs: Client._argsToBytes(
                     // Additional arguments, setting gas limit
-                    Client.EVMExtraArgsV1({gasLimit: 200_000})
+                    Client.EVMExtraArgsV1({gasLimit: 2_000_000})
                 ),
                 // Set the feeToken to a feeTokenAddress, indicating specific asset will be used for fees
                 feeToken: _feeTokenAddress

@@ -174,6 +174,20 @@ const sepoliaDeployments = async () => {
 
   console.log("Token Transfer: ", (await (await aaveTestToken.transfer(deployments.sepolia["integratorAddress"], amount)).wait()).hash)
 
+  const compTestToken = await hre.ethers.getContractAt("ERC20", "0x2D5ee574e710219a521449679A4A7f2B43f046ad");
+
+  const compAmount = "50000000000000000"
+
+  console.log("Token Transfer: ", (await (await compTestToken.transfer(deployments.sepolia["integratorAddress"], compAmount)).wait()).hash)
+
+
+  const WETH = await hre.ethers.getContractAt("ERC20", deployments.sepolia["WETH"]);
+
+  const WETHAmount = "5000000"
+
+  console.log("Token Transfer: ", (await (await WETH.transfer(deployments.sepolia["integratorAddress"], compAmount)).wait()).hash)
+
+
 
 
   await (await bridgeLogicContract.addConnections(messengerAddress, receiverAddress, integratorAddress)).wait()
@@ -221,7 +235,6 @@ const basePoolDeploy = async () => {
 
   console.log("Pool Address: ", poolAddress);
 
-  await basePositionSetDeposit()
 }
 
 const basePositionSetDeposit = async () => {
@@ -230,7 +243,7 @@ const basePositionSetDeposit = async () => {
 
   const WETH = await hre.ethers.getContractAt("ERC20", deployments.base["WETH"]);
 
-  const amount = "1000000000000000"
+  const amount = "1200000000000000"
 
   await WETH.approve(deployments.base["poolAddress"], amount)
 
@@ -239,9 +252,9 @@ const basePositionSetDeposit = async () => {
     amount,
     totalFeeCalc(amount),
     "0x0242242424242",
-    11155111,
-    "aave",
-    { gasLimit: 1000000 }
+    84532,
+    "compound",
+    { gasLimit: 8000000 }
   )
 
   console.log(`Pool 0x...${deployments.base["poolAddress"].slice(34)} position set and initial deposit tx hash: `, (await tx.wait()).hash)
@@ -332,6 +345,29 @@ const poolStatRead = async () => {
     await calcContract.getScaledRatio(await pool.poolToken(), "0xF80cAb395657197967EaEdf94bD7f8a75Ad8F373"),
     await tokenContract.balanceOf("0xF80cAb395657197967EaEdf94bD7f8a75Ad8F373"))
 
+  const bridgeLogicAddress = deployments.base["bridgeLogicAddress"]
+  const bridgeLogic = await hre.ethers.getContractAt("BridgeLogic", bridgeLogicAddress);
+
+
+  const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.base["integratorAddress"]);
+
+  // Get hash of protocol
+  const protocolHash = await integratorContract.hasher("aave")
+  console.log(await bridgeLogic.poolToAsset(deployments.base["poolAddress"]),
+    await bridgeLogic.poolToCurrentPositionMarket(deployments.base["poolAddress"]),
+    await bridgeLogic.poolToCurrentProtocolHash(deployments.base["poolAddress"]),)
+
+  const curPos = await bridgeLogic.getPositionBalance(deployments.base["poolAddress"])
+  // const curPos = await integratorContract.getCurrentPosition(
+  //   deployments.base["poolAddress"],
+  //   deployments.base["WETH"],
+  //   "0x07eA79F68B2B3df564D0A34F8e19D9B1e339814b",
+  //   protocolHash
+  // );
+
+  console.log('CURRENT POSITION VALUE + INTEREST: ', curPos)
+
+
 }
 
 const baseDeposit = async () => {
@@ -341,10 +377,11 @@ const baseDeposit = async () => {
 
   const WETH = await hre.ethers.getContractAt("ERC20", deployments.base["WETH"]);
   await WETH.approve(deployments.base["poolAddress"], amount)
+  console.log('test')
   const tx = await pool.userDeposit(
     amount,
     totalFeeCalc(amount),
-    { gasLimit: 1000000 }
+    { gasLimit: 2000000 }
   )
 
   console.log("Non position set Deposit: ", (await tx.wait()).hash)
@@ -355,8 +392,23 @@ const baseWithdraw = async () => {
 
   const pool = await hre.ethers.getContractAt("PoolControl", deployments.base["poolAddress"])
   const amount = "1200000000000000"
-  const tx = await pool.userWithdrawOrder(amount, { gasLimit: 1000000 })
+  const tx = await pool.userWithdrawOrder(amount, { gasLimit: 8000000 })
   console.log((await tx.wait()).hash)
+}
+
+const baseCallPivot = async () => {
+  const pool = await hre.ethers.getContractAt("PoolControl", deployments.base["poolAddress"])
+  const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.base["integratorAddress"]);
+
+  // Get hash of protocol
+  const protocolHash = await integratorContract.hasher("aave")
+  console.log("PIVOT TRANSACTION: ", (await (await pool.sendPositionChange(
+    "0x0585585858585",
+    protocolHash,
+    11155111,
+    { gasLimit: 3000000 }
+
+  )).wait()).hash)
 }
 
 const sepoliaIntegrationsTest = async () => {
@@ -383,14 +435,18 @@ const sepoliaIntegrationsTest = async () => {
   const bridgeLogic = await hre.ethers.getContractAt("BridgeLogic", bridgeLogicAddress);
 
   //Check aToken balance of ntegrator
-  const curPos = await integratorContract.getCurrentPosition(
-    deployments.base["poolAddress"],
-    "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357",
-    "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951",
-    protocolHash
-  );
+  // const curPos = await integratorContract.getCurrentPosition(
+  //   deployments.base["poolAddress"],
+  //   "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357",
+  //   "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951",
+  //   protocolHash
+  // );
+  console.log(await bridgeLogic.poolToCurrentPositionMarket(deployments.base["poolAddress"]), await bridgeLogic.poolToCurrentMarketId(deployments.base["poolAddress"]), await bridgeLogic.poolToCurrentProtocolHash(deployments.base["poolAddress"]))
+  const curPos = await bridgeLogic.getPositionBalance(deployments.base["poolAddress"])
 
-  console.log(await bridgeLogic.getUserMaxWithdraw(curPos, "333333348757782935", deployments.base["poolAddress"], 2))
+  console.log(curPos)
+
+  // console.log(await bridgeLogic.getUserMaxWithdraw(curPos, "333333348757782935", deployments.base["poolAddress"], 2))
   //Check user max withdraw
   //   getUserMaxWithdraw(
   //     uint256 _currentPositionValue,
@@ -420,24 +476,25 @@ const manualAcrossMessageHandle = async (message) => {
 
 
 
-  const messengerContract = await hre.ethers.getContractAt("ChaserMessenger", deployments.sepolia["messengerAddress"])
+  const messengerContract = await hre.ethers.getContractAt("ChaserMessenger", deployments.base["messengerAddress"])
 
   // console.log((await (await messengerContract.allowlistSourceChain("10344971235874465080", true)).wait()).hash)
 
 
-  // Simulate the receiver on sepolia getting bridged WETH, by sending WETH from within sepolia to the receiver
+  // Simulate the receiver on base getting bridged WETH, by sending WETH from within base to the receiver
   const WETH = await hre.ethers.getContractAt("ERC20", wethAddr);
-  const amount = "800000000000000"
+  const amount = "3187200000000000"
+
   console.log((await (await WETH.transfer(deployments.sepolia["receiverAddress"], amount)).wait()).hash)
 
   // Paste the message from the V3FundsDeposited event that succeeded on the origin chain
   console.log(await receiverContract.decodeMessageEvent(trimMessageData))
 
 
-  // const registryContract = await hre.ethers.getContractAt("Registry", deployments.sepolia["registryAddress"]);
+  // const registryContract = await hre.ethers.getContractAt("Registry", deployments.base["registryAddress"]);
   // console.log(await registryContract.currentChainId(), await registryContract.managerChainId())
-
-  console.log("Across Handle Hash: ", (await (await receiverContract.handleV3AcrossMessage(wethAddr, amount, wethAddr, trimMessageData, { gasLimit: 2000000 })).wait()).hash)
+  // const calcContract = await hre.ethers.getContractAt("PoolCalculations", deployments.base["poolCalculationsAddress"])
+  console.log("Across Handle Hash: ", (await (await receiverContract.handleV3AcrossMessage(wethAddr, amount, wethAddr, trimMessageData, { gasLimit: 8000000 })).wait()).hash)
   // -Call handleV3AcrossMessage passing in weth as tokenSent, amount, and message
 
 }
@@ -459,6 +516,8 @@ async function mainExecution() {
     // IF YOU EXECUTED THE PRIOR SECTION AND/OR WOULD LIKE TO DEPLOY YOUR POOL FOR TESTING - EXECUTE THE FOLLOWING FUNCTION
     // This function also sends the initial deposit funds through the bridge into the investment as the position is set on sepolia
     // await basePoolDeploy()
+    // await basePositionSetDeposit()
+
     // --------------------------------------------------------------------------------------------
     // AFTER EXECUTING basePoolDeploy() OR baseDeposit(), WAIT FOR THE ETHEREUM SEPOLIA ACROSS SPOKEPOOL TO RECEIVE THE DEPOSIT
     // GET THE MESSAGE DATA FROM BASESCAN, COPYING THE HEX DATA BYTES FROM EVENT "0x244e451036514e829e60556484796d2251dc3d952cd079db45d2bfb4c0aff2a1"
@@ -469,16 +528,16 @@ async function mainExecution() {
     // await baseDeposit()
     // REMINDER TO REVISIT THE ABOVE SECTION TO SIMULATE THE CCIP TRIGGER MESSAGE FOR EXECUTING THE DEPOSIT ON ETHEREUM SEPOLIA
     // --------------------------------------------------------------------------------------------
+    await poolStatRead()
 
     // await baseWithdraw()
 
     // await sepoliaSimulateCCIPReceive("0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001003705af6d000000000000000000000000000000000000000000000000000000000000000000000000000000009bdc76b596051e1e86eadb2e2af2a491e32bfa48000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000803f4c40f2d9e47df3a43c5c97200a65dd80990bf9d69827733cf5f393681c90dc000000000000000000000000000000000000000000000000000886c98b760000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000004a03cea247fc197")
     // --------------------------------------------------------------------------------------------
-    // 
+    // await baseCallPivot()
     // await poolStatRead()
-    // basePositionSetDeposit()
     // sepoliaReceivers()
-    // await manualAcrossMessageHandle("0x12577EEA0000000000000000000000000000000000000000000000000000000000000000000000000000000046041CBD9968AAE798F29D2095BD045083371172000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000E06A4FF7C345D364217AE748AF80B5FE7AF995A809A147ACDEA9E5DDE9474E45E20000000000000000000000001CA2B10C61D0D92F2096209385C6CB33E3691B5E000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000A09FEB863AA30F231A3EAF7FDDFCA683271726A67CF44A3119BA749239384D5FE8000000000000000000000000000000000000000000000000000000000000000F3078303234323234323432343234320000000000000000000000000000000000")
+    // await manualAcrossMessageHandle("0x5EDBEC1200000000000000000000000000000000000000000000000000000000000000000000000000000000DB775565DFBBFE98CE6DD2872EA2FA86CDB37C85000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000C09FEB863AA30F231A3EAF7FDDFCA683271726A67CF44A3119BA749239384D5FE8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000F3078303538353538353835383538350000000000000000000000000000000000")
 
     // await sepoliaIntegrationsTest()
 
