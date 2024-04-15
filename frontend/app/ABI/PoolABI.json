@@ -239,6 +239,19 @@
     },
     {
         "inputs": [],
+        "name": "currentPositionValueTimestamp",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
         "name": "currentRecordPositionValue",
         "outputs": [
             {
@@ -286,13 +299,6 @@
     {
         "inputs": [],
         "name": "getPositionData",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "getRegistryAddress",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -351,6 +357,19 @@
     },
     {
         "inputs": [],
+        "name": "localChain",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
         "name": "manager",
         "outputs": [
             {
@@ -371,6 +390,11 @@
             },
             {
                 "internalType": "uint256",
+                "name": "nonce",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
                 "name": "positionAmount",
                 "type": "uint256"
             }
@@ -378,6 +402,19 @@
         "name": "pivotCompleted",
         "outputs": [],
         "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "pivotPending",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -436,17 +473,17 @@
         "inputs": [
             {
                 "internalType": "string",
-                "name": "requestProtocolSlug",
+                "name": "_requestProtocolSlug",
                 "type": "string"
             },
             {
                 "internalType": "string",
-                "name": "requestMarketId",
+                "name": "_requestMarketId",
                 "type": "string"
             },
             {
                 "internalType": "uint256",
-                "name": "bond",
+                "name": "_bond",
                 "type": "uint256"
             }
         ],
@@ -518,13 +555,18 @@
         "inputs": [
             {
                 "internalType": "string",
-                "name": "requestMarketId",
+                "name": "_requestMarketId",
                 "type": "string"
             },
             {
-                "internalType": "bytes32",
-                "name": "protocolHash",
-                "type": "bytes32"
+                "internalType": "string",
+                "name": "_targetProtocol",
+                "type": "string"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_destinationChainId",
+                "type": "uint256"
             }
         ],
         "name": "sendPositionChange",

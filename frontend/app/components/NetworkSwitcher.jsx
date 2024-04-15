@@ -3,8 +3,8 @@ import { fromHex } from 'viem'
 
 
 export function NetworkSwitcher() {
-    const windowOverride: any = typeof window !== 'undefined' ? window : null;
-    const [errorMessage, setErrorMessage] = useState<string>("");
+    const windowOverride = typeof window !== 'undefined' ? window : null;
+    const [errorMessage, setErrorMessage] = useState("");
     const [isEthereumAvailable, setIsEthereumAvailable] = useState(false);
     const [chainId, setChainId] = useState("")
 
@@ -19,16 +19,21 @@ export function NetworkSwitcher() {
         setChainId(await windowOverride.ethereum.request({ method: 'eth_chainId' }))
     }
 
-    const newChain: any = chainId
+    const newChain = chainId
 
     const switchNetwork = async () => {
         try {
             // Prompt user to switch to Sepolia
             await windowOverride?.ethereum?.request({
+                method: 'wallet_addEthereumChain',
+                params: [{ chainId: '0x14a34', rpcUrls: ["https://sepolia.base.org"], chainName: "Base Sepolia", nativeCurrency: { symbol: "ETH", decimals: 18, name: "Ether" } }],
+            });
+            await windowOverride?.ethereum?.request({
                 method: 'wallet_switchEthereumChain',
                 params: [{ chainId: '0x14a34' }],
             });
-        } catch (switchError: any) {
+        } catch (switchError) {
+
             console.log(switchError.message)
 
             setErrorMessage(switchError.message);

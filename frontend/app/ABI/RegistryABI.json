@@ -150,12 +150,12 @@
         "inputs": [
             {
                 "internalType": "uint256",
-                "name": "chainId",
+                "name": "_chainId",
                 "type": "uint256"
             },
             {
                 "internalType": "address",
-                "name": "receiver",
+                "name": "_receiver",
                 "type": "address"
             }
         ],
@@ -167,13 +167,26 @@
     {
         "inputs": [
             {
+                "internalType": "address",
+                "name": "_integratorAddress",
+                "type": "address"
+            }
+        ],
+        "name": "addIntegrator",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
                 "internalType": "uint256",
-                "name": "chainId",
+                "name": "_chainId",
                 "type": "uint256"
             },
             {
                 "internalType": "address",
-                "name": "receiver",
+                "name": "_receiver",
                 "type": "address"
             }
         ],
@@ -186,7 +199,7 @@
         "inputs": [
             {
                 "internalType": "address",
-                "name": "poolAddress",
+                "name": "_poolAddress",
                 "type": "address"
             }
         ],
@@ -390,7 +403,7 @@
         "inputs": [
             {
                 "internalType": "address",
-                "name": "poolAddress",
+                "name": "_poolAddress",
                 "type": "address"
             }
         ],
@@ -403,7 +416,7 @@
         "inputs": [
             {
                 "internalType": "string",
-                "name": "protocol",
+                "name": "_protocol",
                 "type": "string"
             }
         ],
@@ -416,7 +429,7 @@
         "inputs": [
             {
                 "internalType": "string",
-                "name": "slug",
+                "name": "_slug",
                 "type": "string"
             }
         ],
@@ -429,7 +442,7 @@
         "inputs": [
             {
                 "internalType": "string",
-                "name": "protocol",
+                "name": "_protocol",
                 "type": "string"
             }
         ],
@@ -442,23 +455,60 @@
         "inputs": [
             {
                 "internalType": "string",
-                "name": "slug",
+                "name": "_slug",
                 "type": "string"
             },
             {
                 "internalType": "string",
-                "name": "protocol",
+                "name": "_protocol",
                 "type": "string"
             },
             {
                 "internalType": "uint256",
-                "name": "chainId",
+                "name": "_chainId",
                 "type": "uint256"
             }
         ],
         "name": "enableSlug",
         "outputs": [],
         "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_poolAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_assetAddress",
+                "type": "address"
+            }
+        ],
+        "name": "getPoolBroker",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "integratorAddress",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -524,6 +574,25 @@
         "type": "function"
     },
     {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "poolAddressToBroker",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
         "inputs": [],
         "name": "poolCount",
         "outputs": [
@@ -578,7 +647,7 @@
         "inputs": [
             {
                 "internalType": "string",
-                "name": "protocol",
+                "name": "_protocol",
                 "type": "string"
             }
         ],
@@ -638,7 +707,7 @@
         "inputs": [
             {
                 "internalType": "string",
-                "name": "slug",
+                "name": "_slug",
                 "type": "string"
             }
         ],
@@ -657,7 +726,7 @@
         "inputs": [
             {
                 "internalType": "string",
-                "name": "slug",
+                "name": "_slug",
                 "type": "string"
             }
         ],
@@ -676,7 +745,7 @@
         "inputs": [
             {
                 "internalType": "string",
-                "name": "slug",
+                "name": "_slug",
                 "type": "string"
             }
         ],

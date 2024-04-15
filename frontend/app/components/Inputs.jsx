@@ -1,17 +1,15 @@
 import { ethers } from 'ethers';
 import React, { useEffect, useMemo, useState } from 'react';
 import RegistryABI from '../ABI/RegistryABI.json'; // Adjust the path as needed
-import Loader from './Loader';
-import EnabledPools from './EnabledPools';
-import Pools from './Pools';
+import Pools from './Pools.jsx';
+import contractAddresses from '../JSON/contractAddresses.json'
+
 
 // Inputs.js
-function Inputs({ step, setStep }: any) {
+function Inputs({ step, setStep, setErrorMessage }) {
   const [poolCount, setPoolCount] = useState(null);
-  const [txPopupData, setTxPopupData] = useState({})
 
-
-  const windowOverride: any = useMemo(() => (
+  const windowOverride = useMemo(() => (
     typeof window !== 'undefined' ? window : null
   ), []);
 
@@ -19,8 +17,8 @@ function Inputs({ step, setStep }: any) {
     windowOverride ? new ethers.BrowserProvider(windowOverride.ethereum) : null
   ), [windowOverride]);
 
-  const registry: any = useMemo(() => (
-    provider ? new ethers.Contract(process.env.NEXT_PUBLIC_REGISTRY_ADDRESS || "0x0", RegistryABI, provider) : null
+  const registry = useMemo(() => (
+    provider ? new ethers.Contract(contractAddresses["base"].registryAddress || "0x0", RegistryABI, provider) : null
   ), [provider]);
 
 
@@ -40,7 +38,7 @@ function Inputs({ step, setStep }: any) {
   let inputs = null;
 
   if (step === 0) {
-    inputs = <Pools />
+    inputs = <Pools setErrorMessage={(x) => setErrorMessage(x)} />
   }
   return (
     <div className="component-container">

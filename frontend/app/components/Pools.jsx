@@ -1,26 +1,24 @@
 'use client';
 
 import { useEffect, useMemo, useState } from "react";
-import ErrorPopup from "./ErrorPopup";
+import ErrorPopup from "./ErrorPopup.jsx";
 import { ethers } from 'ethers';
 import RegistryABI from '../ABI/RegistryABI.json'; // Adjust the path as needed
-import ManagerABI from '../ABI/ManagerABI.json'; // Adjust the path as needed
-import Loader from "./Loader";
-import NewPoolInputs from "./NewPoolInputs";
-import EnabledPools from "./EnabledPools";
-import TxPopup from "./TxPopup";
+import NewPoolInputs from "./NewPoolInputs.jsx";
+import EnabledPools from "./EnabledPools.jsx";
+import TxPopup from "./TxPopup.jsx";
+import contractAddresses from '../JSON/contractAddresses.json'
 
 
-export default function Pools() {
+export default function Pools({ setErrorMessage }) {
     // const router = useRouter()
-    const [errorMessage, setErrorMessage] = useState("")
     const [newPool, toggleNewPool] = useState(false)
 
     const [poolCount, setPoolCount] = useState(null);
     const [txPopupData, setTxPopupData] = useState({})
 
 
-    const windowOverride: any = useMemo(() => (
+    const windowOverride = useMemo(() => (
         typeof window !== 'undefined' ? window : null
     ), []);
 
@@ -28,10 +26,25 @@ export default function Pools() {
         windowOverride ? new ethers.BrowserProvider(windowOverride.ethereum) : null
     ), [windowOverride]);
 
-    const registry: any = useMemo(() => (
-        provider ? new ethers.Contract(process.env.NEXT_PUBLIC_REGISTRY_ADDRESS || "0x0", RegistryABI, provider) : null
+    const registry = useMemo(() => (
+        provider ? new ethers.Contract(contractAddresses["base"].registryAddress || "0x0", RegistryABI, provider) : null
     ), [provider]);
 
+    useEffect(() => {
+        if (!ethers.isAddress(windowOverride?.ethereum?.selectedAddress)) {
+            connect()
+        }
+    }, [])
+
+    const connect = async () => {
+        // If the user is not signed into metamask, execute this logic
+        try {
+            await provider.send("eth_requestAccounts", []);
+            await provider.getSigner();
+        } catch (err) {
+            setErrorMessage("Connection Error: " + err?.info?.error?.message ?? err?.message);
+        }
+    }
 
     useEffect(() => {
         const fetchPoolCount = async () => {
@@ -50,14 +63,11 @@ export default function Pools() {
 
 
     if (newPool) {
-        inputs = <NewPoolInputs provider={provider} setTxPopupData={setTxPopupData} />
-
-
+        inputs = <NewPoolInputs provider={provider} setTxPopupData={setTxPopupData} setErrorMessage={(x) => setErrorMessage(x)} />
     } else {
         inputs = (<>
-            <EnabledPools poolCount={Number(poolCount)} provider={provider} registry={registry} />
+            <EnabledPools poolCount={Number(poolCount)} provider={provider} registry={registry} setErrorMessage={(x) => setErrorMessage(x)} />
         </>)
-
     }
 
     let txPopup = null
@@ -69,7 +79,6 @@ export default function Pools() {
         <button onClick={() => toggleNewPool(!newPool)} className="button">{newPool ? "View Pool List" : "Create New Pool"}</button>
         {inputs}
         {txPopup}
-
     </>
     );
 }

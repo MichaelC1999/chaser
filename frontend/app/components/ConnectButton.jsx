@@ -1,17 +1,8 @@
 import React, { useMemo } from 'react';
 import { ethers } from 'ethers';
 
-interface ConnectButtonProps {
-    connected: Boolean | null;
-    setErrorMessage: (message: string) => void;
-}
-
-type StyleProps = {
-    connected?: Boolean | null;
-};
-
-const ConnectButton = ({ connected, setErrorMessage }: ConnectButtonProps) => {
-    const windowOverride: any = typeof window !== 'undefined' ? window : null;
+const ConnectButton = ({ connected, setErrorMessage }) => {
+    const windowOverride = typeof window !== 'undefined' ? window : null;
 
     // Instantiate the provider, if the window object remains the same no need to recalculate
     const provider = useMemo(() => {
@@ -24,7 +15,7 @@ const ConnectButton = ({ connected, setErrorMessage }: ConnectButtonProps) => {
             try {
                 await provider.send("eth_requestAccounts", []);
                 await provider.getSigner();
-            } catch (err: any) {
+            } catch (err) {
                 setErrorMessage("Connection Error: " + err?.info?.error?.message ?? err?.message);
             }
         }
@@ -35,7 +26,7 @@ const ConnectButton = ({ connected, setErrorMessage }: ConnectButtonProps) => {
     }
     return (
         connected !== null ? <button className={classes} onClick={connect}>
-            {connected ? "Connected" : "Connect"}
+            {connected ? '0x...' + (windowOverride?.ethereum?.selectedAddress?.slice(36) ?? "0000") : "Connect"}
         </button> : null
     );
 };

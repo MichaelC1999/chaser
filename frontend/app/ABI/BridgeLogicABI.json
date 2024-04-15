@@ -234,37 +234,37 @@
         "inputs": [
             {
                 "internalType": "address",
-                "name": "tokenSent",
+                "name": "_tokenSent",
                 "type": "address"
             },
             {
                 "internalType": "uint256",
-                "name": "amount",
+                "name": "_amount",
                 "type": "uint256"
             },
             {
                 "internalType": "address",
-                "name": "poolAddress",
+                "name": "_poolAddress",
                 "type": "address"
             },
             {
                 "internalType": "bytes32",
-                "name": "protocolHash",
+                "name": "_protocolHash",
                 "type": "bytes32"
             },
             {
                 "internalType": "address",
-                "name": "marketAddress",
+                "name": "_marketAddress",
                 "type": "address"
             },
             {
                 "internalType": "string",
-                "name": "targetMarketId",
+                "name": "_targetMarketId",
                 "type": "string"
             },
             {
                 "internalType": "uint256",
-                "name": "poolNonce",
+                "name": "_poolNonce",
                 "type": "uint256"
             }
         ],
@@ -277,42 +277,42 @@
         "inputs": [
             {
                 "internalType": "uint256",
-                "name": "amount",
+                "name": "_amount",
                 "type": "uint256"
             },
             {
                 "internalType": "address",
-                "name": "poolAddress",
+                "name": "_poolAddress",
                 "type": "address"
             },
             {
                 "internalType": "address",
-                "name": "tokenSent",
+                "name": "_tokenSent",
                 "type": "address"
             },
             {
                 "internalType": "bytes32",
-                "name": "depositId",
+                "name": "_depositId",
                 "type": "bytes32"
             },
             {
                 "internalType": "address",
-                "name": "userAddress",
+                "name": "_userAddress",
                 "type": "address"
             },
             {
                 "internalType": "address",
-                "name": "marketAddress",
+                "name": "_marketAddress",
                 "type": "address"
             },
             {
                 "internalType": "string",
-                "name": "marketId",
+                "name": "_marketId",
                 "type": "string"
             },
             {
                 "internalType": "bytes32",
-                "name": "protocolHash",
+                "name": "_protocolHash",
                 "type": "bytes32"
             }
         ],
@@ -325,22 +325,22 @@
         "inputs": [
             {
                 "internalType": "address",
-                "name": "poolAddress",
+                "name": "_poolAddress",
                 "type": "address"
             },
             {
                 "internalType": "address",
-                "name": "userAddress",
+                "name": "_userAddress",
                 "type": "address"
             },
             {
                 "internalType": "bytes32",
-                "name": "depositId",
+                "name": "_depositId",
                 "type": "bytes32"
             },
             {
                 "internalType": "uint256",
-                "name": "amount",
+                "name": "_amount",
                 "type": "uint256"
             }
         ],

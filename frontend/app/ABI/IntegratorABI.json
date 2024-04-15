@@ -111,32 +111,32 @@
         "inputs": [
             {
                 "internalType": "bytes32",
-                "name": "protocolHash",
+                "name": "_protocolHash",
                 "type": "bytes32"
             },
             {
                 "internalType": "bytes32",
-                "name": "operation",
+                "name": "_operation",
                 "type": "bytes32"
             },
             {
                 "internalType": "uint256",
-                "name": "amount",
+                "name": "_amount",
                 "type": "uint256"
             },
             {
                 "internalType": "address",
-                "name": "poolAddress",
+                "name": "_poolAddress",
                 "type": "address"
             },
             {
                 "internalType": "address",
-                "name": "assetAddress",
+                "name": "_assetAddress",
                 "type": "address"
             },
             {
                 "internalType": "address",
-                "name": "marketAddress",
+                "name": "_marketAddress",
                 "type": "address"
             }
         ],

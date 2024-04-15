@@ -1,7 +1,8 @@
 import React from 'react';
-import PoolRow from './PoolRow'; // Import PoolRow component
+import PoolRow from './PoolRow.jsx'; // Import PoolRow component
 
-const EnabledPools = ({ poolCount, provider, registry }: any) => {
+const EnabledPools = ({ poolCount, provider, registry, setErrorMessage }) => {
+
     return (
         <div className="enabled-pools">
             <table>
@@ -14,7 +15,7 @@ const EnabledPools = ({ poolCount, provider, registry }: any) => {
                 </thead>
                 <tbody>
                     {Array.from({ length: poolCount }, (_, index) => (
-                        <PoolRow key={index} poolNumber={index} provider={provider} registry={registry} />
+                        <PoolRow key={index} poolNumber={index} provider={provider} registry={registry} setErrorMessage={(x) => setErrorMessage(x)} />
                     ))}
                 </tbody>
             </table>
