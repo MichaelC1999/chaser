@@ -78,7 +78,7 @@ const PivotMechanism = ({ poolData, provider, setErrorMessage, txData, setTxData
                 }
 
                 if (networks[poolData?.currentChain] !== networks[targetChain] && poolData?.currentChain) {
-                    message += ` The funds on ${networks[poolData?.currentChain]} will be bridged through Across to ${networks[targetChain]}`;
+                    message += `. The funds on ${networks[poolData?.currentChain]} will be bridged through Across to ${networks[targetChain]}`;
                     if (eventData.depositId) {
                         message += ' with a depositID of ' + eventData.depositId;
                     }

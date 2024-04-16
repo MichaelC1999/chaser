@@ -63,7 +63,6 @@ export default function Page() {
             const poolCalc = new ethers.Contract(contractAddresses["base"].poolCalculationsAddress || "0x0", PoolCalculationsABI, provider);
 
             try {
-
                 returnObject.poolTokenAddress = await pool.poolToken()
                 if (returnObject.poolTokenAddress) {
                     const poolToken = new ethers.Contract(returnObject.poolTokenAddress || "0x0", PoolTokenABI, provider);
@@ -90,12 +89,12 @@ export default function Page() {
 
             }
 
-
             try {
 
                 returnObject.name = await pool.poolName()
                 returnObject.nonce = await pool.poolNonce()
             } catch (err) {
+
             }
 
             try {
@@ -204,6 +203,13 @@ export default function Page() {
 
         if (prevStep === 4) {
             stepToSet = 5;
+        }
+
+        if (poolData?.isPivoting === poolData?.nonce?.toString() === "1") {
+            stepToSet = 6
+        }
+        if (!poolData?.isPivoting === poolData?.nonce?.toString() === "2" && poolData?.protocol === "aave") {
+            stepToSet = 7
         }
 
         setStep(stepToSet)
