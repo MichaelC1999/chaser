@@ -1,24 +1,24 @@
 {
   "base": {
-    "registryAddress": "0xB56468EB2B4272d16313B06534FBFa84D2dDd51b",
-    "bridgeLogicAddress": "0x6e8743dD7c3eF08bB5D2aa6299A5712008F115C0",
-    "messengerAddress": "0x1762B031DAa022E9C6B78ab2BB87BB7334c788fE",
-    "receiverAddress": "0x64Fdd304C7691c9CDaD366e9537cD60927a3BE1c",
+    "registryAddress": "0xFeeF552a1A27ABAb7d272Fbea977244b4eE7e04B",
+    "bridgeLogicAddress": "0x2dC8bF1505F3B484A65f47AdAd88Cb7E11c63087",
+    "messengerAddress": "0x49a6b0E10c22416849C75dd6134D43D44C768497",
+    "receiverAddress": "0x37e6c0101D1a5F4a10fb4CF66D2526f6A7f0A7Aa",
     "spokePool": "0x82B564983aE7274c86695917BBf8C99ECb6F0F8F",
     "WETH": "0x4200000000000000000000000000000000000006",
-    "managerAddress": "0x4C40696f27FAA51805Dbc70ba08d9852F4a037CE",
-    "poolCalculationsAddress": "0xe670857cAB12DBC136994bAe10Dd0Db6dec87030",
-    "integratorAddress": "0x1a07C3D490eeA71e03e8D9e8eFF200D2748a533e",
+    "managerAddress": "0xcDB5FE8f1b8CA12a4071627e92c8dDF500084027",
+    "poolCalculationsAddress": "0xDea54d625F4b5456ACD99c273D9F9af6351C6a03",
+    "integratorAddress": "0xE518f12A14116AADB522AbA68C188502b963651E",
     "poolAddress": "0x453696507c2c69c4dea22cb34157ece9af4d546f"
   },
   "sepolia": {
-    "registryAddress": "0x9ba1bfa306B663a043d887Ba63186A9a380be8a5",
+    "registryAddress": "0x19F3678A2E4E9b9E73E57540B9696BE56f0A4F4B",
     "poolCalculationsAddress": "0x536556B3576921264d3639FdD4Ac35363a843F81",
-    "bridgeLogicAddress": "0x15dAd7dC7594D81cA92ebe4EEFDE199F096765b2",
-    "messengerAddress": "0xB5C4722a0b2D640A3916425Be27559eDc9ae90eb",
-    "receiverAddress": "0x5c012511211F2b499C59Cb1bf37Edc00eAEf9AE9",
+    "bridgeLogicAddress": "0x61d0E685255ABA256e152B9C1a2F9E9A2E3BD53A",
+    "messengerAddress": "0x310390b23C20E3D58a2B6390deb45fA91977ca2C",
+    "receiverAddress": "0x5F2E5A82590795f341aC25742b829dc26758C94B",
     "spokePool": "0x5ef6C01E11889d86803e0B23e3cB3F9E9d97B662",
     "WETH": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
-    "integratorAddress": "0x25703650da38d672ea6A3Aa85550bE895b016943"
+    "integratorAddress": "0x38f86880005913423fD19fe07C0e799505D9fb4f"
   }
 }

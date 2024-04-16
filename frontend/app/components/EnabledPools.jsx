@@ -14,6 +14,13 @@ const EnabledPools = ({ poolCount, provider, registry, setErrorMessage }) => {
                     </tr>
                 </thead>
                 <tbody>
+                    {
+                        poolCount === 0 ? (<tr>
+                            <th>
+                                No Pools Have Been Deployed on Chaser!
+                            </th>
+                        </tr>) : null
+                    }
                     {Array.from({ length: poolCount }, (_, index) => (
                         <PoolRow key={index} poolNumber={index} provider={provider} registry={registry} setErrorMessage={(x) => setErrorMessage(x)} />
                     ))}
