@@ -10,7 +10,7 @@ function DemoPopup({ step, clearDemoStep, turnOffDemo }) {
     "After checking some other protocols, we saw that the WETH market on Aave Sepolia yields 0.23%, higher than the 0.00071% we are currently yielding on Compound Base Sepolia. As you can see in the 'Pivot Position' section, Aave and Sepolia have been pre-filled.\n\n\bSend the Pivot.", //tx executes
     "As was stated in the TX popup, this pivot has multiple steps and will take up to 30 minutes to finalize. It uses the Across bridge to send the deposits to Sepolia, deposit into Aave, and then send a CCIP callback message to Base Sepolia to confirm that the new position was set.",
     'Keep in mind that in production, there will be an entire process for proposing a new market to pivot investment to. To streamline testing and demo, moving funds between markets is done with a single function call triggered by the "Send Pivot" button. Look at the "Is Pivoting" row above. Once the pivot has completed, this value will be marked false.',
-    "There is currently a Pivot being executed on this pool. Keep waiting for the bridging and callbacks to finalize.",
+    "There is currently a pivot being executed on this pool. Keep waiting for the bridging and callbacks to finalize.",
     "Now that we see that the Pivot was successful has finalized, it is now time to withdraw your funds. Set an amount and then click the 'withdraw' button."
   ]
 

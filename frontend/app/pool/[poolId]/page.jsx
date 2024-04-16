@@ -205,10 +205,10 @@ export default function Page() {
             stepToSet = 5;
         }
 
-        if (poolData?.isPivoting === poolData?.nonce?.toString() === "1") {
+        if (poolData?.isPivoting && poolData?.nonce?.toString() === "1" && prevStep !== 6) {
             stepToSet = 6
         }
-        if (!poolData?.isPivoting === poolData?.nonce?.toString() === "2" && poolData?.protocol === "aave") {
+        if (!poolData?.isPivoting && poolData?.nonce?.toString() === "2" && protocolHashes[poolData?.protocol] === "aave" && prevStep !== 7) {
             stepToSet = 7
         }
 
