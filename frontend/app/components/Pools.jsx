@@ -52,7 +52,7 @@ export default function Pools({ setErrorMessage }) {
                 return;
             }
             const count = await registry.poolCount();
-            setPoolCount(count);
+            setPoolCount(Number(count));
         };
 
         fetchPoolCount();
@@ -66,7 +66,7 @@ export default function Pools({ setErrorMessage }) {
         inputs = <NewPoolInputs provider={provider} setTxPopupData={setTxPopupData} setErrorMessage={(x) => setErrorMessage(x)} />
     } else {
         inputs = (<>
-            <EnabledPools poolCount={Number(poolCount)} provider={provider} registry={registry} setErrorMessage={(x) => setErrorMessage(x)} />
+            <EnabledPools poolCount={poolCount} provider={provider} registry={registry} setErrorMessage={(x) => setErrorMessage(x)} />
         </>)
     }
 
