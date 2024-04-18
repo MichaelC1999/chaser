@@ -5,20 +5,18 @@ interface IArbitrationContract {
     function getData(bytes32) external view returns (bool, bytes memory);
 
     function queryMovePosition(
+        address,
+        uint256,
         string memory,
         string memory,
         uint256,
+        string memory,
+        string memory,
         uint256,
-        string memory
+        uint256
     ) external;
 
     function assertDataFor(
-        bytes memory,
-        address,
-        uint256
-    ) external returns (bytes32);
-
-    function assertDataForInternal(
         bytes memory,
         address,
         uint256

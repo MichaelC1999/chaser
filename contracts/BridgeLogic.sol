@@ -56,75 +56,88 @@ contract BridgeLogic {
     }
 
     function handlePositionInitializer(
-        uint256 amount,
-        address poolAddress,
-        address tokenSent,
-        bytes32 depositId,
-        address userAddress,
-        address marketAddress,
-        string memory marketId,
-        bytes32 protocolHash
+        uint256 _amount,
+        address _poolAddress,
+        address _tokenSent,
+        bytes32 _depositId,
+        address _userAddress,
+        address _marketAddress,
+        string memory _marketId,
+        bytes32 _protocolHash
     ) external {
         // IMPORTANT - DOES THIS ONLY GET INITIALIZED ON THE POOLS FIRST POSITION?
-        bytes32 currentNonceHash = keccak256(abi.encode(poolAddress, 0));
-        bridgeNonce[poolAddress] = 0;
+        bytes32 currentNonceHash = keccak256(abi.encode(_poolAddress, 0));
+        bridgeNonce[_poolAddress] = 0;
         nonceToPositionValue[currentNonceHash] = 0;
-        poolToCurrentPositionMarket[poolAddress] = marketAddress;
-        poolToAsset[poolAddress] = tokenSent;
+        poolToCurrentPositionMarket[_poolAddress] = _marketAddress;
+        poolToAsset[_poolAddress] = _tokenSent;
 
         enterPosition(
-            poolAddress,
-            protocolHash,
-            marketAddress,
-            marketId,
-            amount
+            _poolAddress,
+            _protocolHash,
+            _marketAddress,
+            _marketId,
+            _amount
         );
-        bytes32 userPoolHash = keccak256(abi.encode(userAddress, poolAddress));
+        bytes32 userPoolHash = keccak256(
+            abi.encode(_userAddress, _poolAddress)
+        );
         userDepositNonce[userPoolHash] += 1;
-        userCumulativeDeposits[userPoolHash] += amount;
-        receiveDepositFromPool(amount, poolAddress);
-        sendPositionInitialized(poolAddress, depositId, amount);
+        userCumulativeDeposits[userPoolHash] += _amount;
+        receiveDepositFromPool(_amount, _poolAddress);
+        sendPositionInitialized(_poolAddress, _depositId, _amount);
     }
 
     function handleEnterPivot(
-        address tokenSent,
-        uint256 amount,
-        address poolAddress,
-        bytes32 protocolHash,
-        address marketAddress,
-        string memory targetMarketId,
-        uint256 poolNonce
+        address _tokenSent,
+        uint256 _amount,
+        address _poolAddress,
+        bytes32 _protocolHash,
+        address _marketAddress,
+        string memory _targetMarketId,
+        uint256 _poolNonce
     ) external {
-        poolToAsset[poolAddress] = tokenSent;
+        poolToAsset[_poolAddress] = _tokenSent;
 
-        bytes32 currentNonceHash = keccak256(
-            abi.encode(poolAddress, poolNonce)
-        );
-        bridgeNonce[poolAddress] = poolNonce;
-        nonceToPositionValue[currentNonceHash] = amount;
+        bridgeNonce[_poolAddress] = _poolNonce;
+        // nonceToPositionValue[currentNonceHash] = _amount;
         enterPosition(
-            poolAddress,
-            protocolHash,
-            marketAddress,
-            targetMarketId,
-            amount
+            _poolAddress,
+            _protocolHash,
+            _marketAddress,
+            _targetMarketId,
+            _amount
         );
-        receiveDepositFromPool(amount, poolAddress);
-        sendPivotCompleted(poolAddress, amount);
+        uint256 currentChainId = registry.currentChainId();
+
+        receiveDepositFromPool(_amount, _poolAddress);
+        if (managerChainId == currentChainId) {
+            // If the Pool is on this same chain, directly call the proper functions on this chain no CCIP
+            IPoolControl(_poolAddress).pivotCompleted(
+                _marketAddress,
+                bridgeNonce[_poolAddress],
+                _amount
+            );
+        } else {
+            // If the Pool is on a different chain, use CCIP to notify the pool
+            sendPivotCompleted(_poolAddress, _amount);
+        }
     }
 
     function handleUserDeposit(
-        address poolAddress,
-        address userAddress,
-        bytes32 depositId,
-        uint256 amount
+        address _poolAddress,
+        address _userAddress,
+        bytes32 _depositId,
+        uint256 _amount
     ) external {
-        bytes32 userPoolHash = keccak256(abi.encode(userAddress, poolAddress));
+        bytes32 userPoolHash = keccak256(
+            abi.encode(_userAddress, _poolAddress)
+        );
         userDepositNonce[userPoolHash] += 1;
-        userCumulativeDeposits[userPoolHash] += amount;
+        userCumulativeDeposits[userPoolHash] += _amount;
 
-        receiveDepositFromPool(amount, poolAddress);
-        sendPositionBalance(poolAddress, depositId, amount);
+        receiveDepositFromPool(_amount, _poolAddress);
+        sendPositionBalance(_poolAddress, _depositId, _amount);
     }
 
     /**
@@ -269,7 +282,11 @@ contract BridgeLogic {
     ) internal {
         bytes4 method = bytes4(keccak256(abi.encode("BaPivotMovePosition")));
         address marketAddress = poolToCurrentPositionMarket[_poolAddress];
-        bytes memory data = abi.encode(marketAddress, _amount);
+        bytes memory data = abi.encode(
+            marketAddress,
+            bridgeNonce[_poolAddress],
+            _amount
+        );
 
         try registry.sendMessage(managerChainId, method, _poolAddress, data) {
             emit ExecutionMessage("sendMessage success");
@@ -281,31 +298,28 @@ contract BridgeLogic {
     }
 
     function enterPosition(
-        address poolAddress,
-        bytes32 protocolHash,
-        address marketAddress,
-        string memory targetMarketId,
-        uint256 amount
+        address _poolAddress,
+        bytes32 _protocolHash,
+        address _marketAddress,
+        string memory _targetMarketId,
+        uint256 _amount
     ) internal {
-        poolToCurrentMarketId[poolAddress] = targetMarketId;
-        poolToCurrentPositionMarket[poolAddress] = marketAddress;
-        poolToCurrentProtocolHash[poolAddress] = protocolHash;
-        positionEntranceAmount[poolAddress] = amount;
-        // Approve this address for amount
-        // Call the deposit function
+        poolToCurrentMarketId[_poolAddress] = _targetMarketId;
+        poolToCurrentPositionMarket[_poolAddress] = _marketAddress;
+        poolToCurrentProtocolHash[_poolAddress] = _protocolHash;
+        positionEntranceAmount[_poolAddress] = _amount;
     }
 
     function crossChainPivot(
-        address poolAddress,
-        bytes32 protocolHash,
-        address targetMarketAddress,
-        string memory targetMarketId,
-        uint256 destinationChainId,
-        address destinationBridgeReceiver,
+        address _poolAddress,
+        bytes32 _protocolHash,
+        address _targetMarketAddress,
+        string memory _targetMarketId,
+        uint256 _destinationChainId,
+        address _destinationBridgeReceiver,
         uint256 _amount
     ) internal {
-        //IMPORTANT - SHOULD NONCE BE SENT TO THE OTHER CONNECTOR?
-        // --Yes, pool nonce should be maintained equally between different chains
+        // Pool nonce should be maintained equally between different chains
 
         bytes4 method = bytes4(
             keccak256(abi.encode("BbPivotBridgeMovePosition"))
@@ -313,31 +327,29 @@ contract BridgeLogic {
 
         bytes memory message = abi.encode(
             method,
-            poolAddress,
+            _poolAddress,
             abi.encode(
-                protocolHash,
-                targetMarketAddress,
-                targetMarketId,
-                bridgeNonce[poolAddress]
+                _protocolHash,
+                _targetMarketAddress,
+                _targetMarketId,
+                bridgeNonce[_poolAddress]
             )
         );
 
-        emit AcrossMessageSent(message);
-
         address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
 
-        ERC20(poolToAsset[poolAddress]).approve(acrossSpokePool, _amount);
+        ERC20(poolToAsset[_poolAddress]).approve(acrossSpokePool, _amount);
 
-        // UPDATEV3
+        emit AcrossMessageSent(message);
 
         ISpokePool(acrossSpokePool).depositV3(
             address(this),
-            destinationBridgeReceiver,
-            poolToAsset[poolAddress],
+            _destinationBridgeReceiver,
+            poolToAsset[_poolAddress],
             address(0),
             _amount,
-            _amount - (_amount / 250), // IMPORTANT - SEEK ORACLE SOLUTION TO BRING API FEE CALC ON CHAIN
-            destinationChainId,
+            _amount - (_amount / 250),
+            _destinationChainId,
             address(0),
             uint32(block.timestamp),
             uint32(block.timestamp + 30000),
@@ -349,21 +361,16 @@ contract BridgeLogic {
     function executeExitPivot(address _poolAddress, bytes memory _data) public {
         // Withdraw from current position here, bringing funds back to this contract and updating state
         (
-            ,
             bytes32 protocolHash,
             address targetMarketAddress,
             string memory targetMarketId,
             uint256 destinationChainId,
             address destinationBridgeReceiver
-        ) = abi.decode(
-                _data,
-                (uint256, bytes32, address, string, uint256, address)
-            );
+        ) = abi.decode(_data, (bytes32, address, string, uint256, address));
 
         uint256 amount = getPositionBalance(_poolAddress);
 
         uint256 currentChainId = registry.currentChainId();
-        // call withdraw on integrator for entire position amount
 
         integratorWithdraw(_poolAddress, amount);
 
@@ -386,6 +393,7 @@ contract BridgeLogic {
                 ];
                 IPoolControl(_poolAddress).pivotCompleted(
                     marketAddress,
+                    bridgeNonce[_poolAddress],
                     amount
                 );
             } else {
@@ -404,13 +412,6 @@ contract BridgeLogic {
                 amount
             );
         }
-        // This function is to withdraw from current position and pivot to another investment market/chain
-        // What data do we need to execute pool pivots?
-        // - This contract already maintains state about the current pool
-        // - Needs message with data from pool about the target position
-        // - Data includes -Pool id that will be pivoting position,-Destination protocol, chain, pool-If any funds/data needs to be sent back to pool control
-        // - exitPivot: bytes32 destinationProtocol, bytes20 destinationMarket, uint256 destinationChainId
-        //Send funds and outward across message to next position
     }
 
     function userWithdrawSequence(
@@ -452,7 +453,6 @@ contract BridgeLogic {
             uint256 scaledRatio
         ) = abi.decode(_data, (bytes32, uint256, uint256, uint256));
 
-        address assetAddress = poolToAsset[_poolAddress];
         bytes32 protocolHash = poolToCurrentProtocolHash[_poolAddress];
         address marketAddress = poolToCurrentPositionMarket[_poolAddress];
         uint256 currentPositionValue = IIntegrator(integratorAddress)
@@ -502,7 +502,6 @@ contract BridgeLogic {
         address _poolAddress,
         bytes32 _withdrawId
     ) internal {
-        // Calls the spokePool deposit function to send user deposit funds
         address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
         require(acrossSpokePool != address(0), "Spokepool zero address");
 
@@ -510,8 +509,6 @@ contract BridgeLogic {
             keccak256(abi.encode("BaBridgeWithdrawOrderUser"))
         );
 
-        //UPDATEV3 - EXPLORE REDUNDANT TRANSFERS WHERE depositV3 CAN SET THE SENDER, RATHER THAN NEEDING TO TRANSFER TO THIS CONTRACT?
-        // IMPORTANT - CALL POSITION MARKET AND MAKE THE WITHDRAW
         integratorWithdraw(_poolAddress, _amount);
 
         uint256 positionBalance = IIntegrator(integratorAddress)
@@ -540,19 +537,7 @@ contract BridgeLogic {
             );
         } else {
             emit AcrossMessageSent(message);
-            try
-                ERC20(poolToAsset[_poolAddress]).approve(
-                    acrossSpokePool,
-                    _amount
-                )
-            {
-                emit ExecutionMessage("Successful Approval");
-            } catch Error(string memory reason) {
-                emit ExecutionMessage(
-                    string(abi.encode("Asset ERC20 Approval Error ", reason))
-                );
-            }
-
+            ERC20(poolToAsset[_poolAddress]).approve(acrossSpokePool, _amount);
             try
                 ISpokePool(acrossSpokePool).depositV3(
                     address(this),
@@ -560,7 +545,7 @@ contract BridgeLogic {
                     poolToAsset[_poolAddress],
                     address(0),
                     _amount,
-                    _amount - (_amount / 250), // IMPORTANT - SEEK ORACLE SOLUTION TO BRING API FEE CALC ON CHAIN
+                    _amount - (_amount / 250),
                     managerChainId,
                     address(0),
                     uint32(block.timestamp),
@@ -571,6 +556,7 @@ contract BridgeLogic {
             {
                 emit ExecutionMessage("Successful Spokepool Deposit");
             } catch Error(string memory reason) {
+                // IMPORTANT - Fund rescue logic
                 emit ExecutionMessage(
                     string(abi.encode("Failed Spokepool Deposit: ", reason))
                 );
@@ -736,7 +722,7 @@ contract BridgeLogic {
             abi.encode(_poolAddress, _poolNonce)
         );
 
-        uint256 positionValueAtPoolRatio = nonceToPositionValue[ // 799600255908568n
+        uint256 positionValueAtPoolRatio = nonceToPositionValue[
             poolCompletedNonceHash
         ];
 
@@ -749,7 +735,7 @@ contract BridgeLogic {
         //     difference = positionValueAtPendingNonce - positionValueAtPoolRatio; //0
         //     calculatedPositionValue = _currentPositionValue - difference;  //Somehow difference is equal to currentPositionValue AND posValPending >= posValPoolRa
         // } else {
-        //     difference = positionValueAtPoolRatio - positionValueAtPendingNonce; //799600255908568n
+        //     difference = positionValueAtPoolRatio - positionValueAtPendingNonce;
         //     calculatedPositionValue = _currentPositionValue + difference;
         // }
 

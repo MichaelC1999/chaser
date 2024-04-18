@@ -20,6 +20,8 @@ interface IChaserRegistry {
 
     function routerAddress() external view returns (address);
 
+    function investmentStrategyContract() external view returns (address);
+
     function bridgeLogicAddress() external view returns (address);
 
     function localCcipConfigs()
@@ -41,11 +43,9 @@ interface IChaserRegistry {
 
     function arbitrationContract() external view returns (address);
 
-    function slugToChainId(string memory) external view returns (uint256);
+    function protocolEnabled(string memory) external view returns (bool);
 
-    function slugToProtocolHash(string memory) external view returns (bytes32);
-
-    function slugEnabled(string memory) external view returns (bool);
+    function hashToProtocol(bytes32) external view returns (string memory);
 
     function checkValidPool(address) external view returns (bool);
 }

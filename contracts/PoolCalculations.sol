@@ -1,18 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/utils/math/Math.sol";
-
-interface IERC20 {
-    function totalSupply() external view returns (uint256);
-
-    function balanceOf(address account) external view returns (uint256);
-
-    function allowance(
-        address owner,
-        address spender
-    ) external view returns (uint256);
-    // Add other ERC20 functions as needed
-}
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract PoolCalculations {
     mapping(bytes32 => address) public depositIdToDepositor;
@@ -78,25 +67,25 @@ contract PoolCalculations {
     }
 
     function getWithdrawOrderFulfillment(
-        bytes32 withdrawId,
-        uint256 totalAvailableForUser,
-        uint256 amount,
+        bytes32 _withdrawId,
+        uint256 _totalAvailableForUser,
+        uint256 _amount,
         address _poolToken
     ) external returns (address, uint256) {
         //amount gets passed from the BridgeLogic as the input amount, before bridging/protocol fees deduct from the received amount. This amount reflects the total amount of asset removed from the position
-        address depositor = withdrawIdToDepositor[withdrawId];
+        address depositor = withdrawIdToDepositor[_withdrawId];
 
         IERC20 poolToken = IERC20(_poolToken);
 
         uint256 userPoolTokenBalance = poolToken.balanceOf(depositor);
 
-        if (totalAvailableForUser < amount) {
-            amount = totalAvailableForUser;
+        if (_totalAvailableForUser < _amount) {
+            _amount = _totalAvailableForUser;
         }
 
         uint256 poolTokensToBurn = userPoolTokenBalance;
-        if (totalAvailableForUser > 0) {
-            uint256 ratio = (amount * (10 ** 18)) / (totalAvailableForUser);
+        if (_totalAvailableForUser > 0) {
+            uint256 ratio = (_amount * (10 ** 18)) / (_totalAvailableForUser);
             poolTokensToBurn = (ratio * userPoolTokenBalance) / (10 ** 18);
         }
 

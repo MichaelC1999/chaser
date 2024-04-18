@@ -6,7 +6,7 @@ interface IStrategy {
         string calldata name
     ) external;
 
-    function strategySourceCode() external view returns (string memory);
+    function strategyCode(uint256) external view returns (bytes memory);
 
-    function strategyName() external view returns (string memory);
+    function strategyName(uint256) external view returns (string memory);
 }

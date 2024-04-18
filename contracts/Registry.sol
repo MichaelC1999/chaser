@@ -12,12 +12,8 @@ import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.s
 import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
 
 contract Registry is OwnerIsCreator {
-    //Addresses managed in registry
     //Contains supported protocols/chains
     // Functions for making sure that a proposal assertion is actually supported
-
-    //_currentChainId is the chain that this registry is currently deployed on
-    //_managerChainId is the chain that has the manager contract and all of the pools
 
     event CCIPMessageSent(bytes32 indexed, bytes);
     event Marker(string);
@@ -28,6 +24,8 @@ contract Registry is OwnerIsCreator {
         uint256 _managerChainId,
         address _managerAddress
     ) {
+        //_currentChainId is the chain that this registry is currently deployed on
+        //_managerChainId is the chain that has the manager contract and all of the pools
         if (_currentChainId == _managerChainId) {
             manager = _managerAddress;
         }
@@ -64,9 +62,9 @@ contract Registry is OwnerIsCreator {
         // chainIdToUmaAddress[137] = address(
         //     0x5953f2538F613E05bAED8A5AeFa8e6622467AD3D
         // );
-        // chainIdToUmaAddress[42161] = address(
-        //     0xa6147867264374F324524E30C02C331cF28aa879
-        // );
+        chainIdToUmaAddress[11155111] = address(
+            0xFd9e2642a170aDD10F53Ee14a93FcF2F31924944
+        );
 
         // TESTNET ADDRESSES
         chainIdToSpokePoolAddress[1337] = address(
@@ -89,7 +87,7 @@ contract Registry is OwnerIsCreator {
 
         chainIdToSpokePoolAddress[11155111] = address(
             0x5ef6C01E11889d86803e0B23e3cB3F9E9d97B662
-        ); // Can bridge 0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9 to 421613
+        );
 
         chainIdToSpokePoolAddress[0] = chainIdToSpokePoolAddress[
             currentChainId
@@ -146,13 +144,9 @@ contract Registry is OwnerIsCreator {
 
     mapping(uint256 => address) public chainIdToUmaAddress;
 
-    mapping(bytes32 => uint256) private hashedSlugToChainId;
-
-    mapping(bytes32 => bool) private hashedSlugToEnabled;
-
     mapping(bytes32 => bool) private hashedProtocolToEnabled;
 
-    mapping(bytes32 => bytes32) private hashedSlugToProtocolHash;
+    mapping(bytes32 => string) public hashToProtocol;
 
     mapping(uint256 => address) public poolCountToPool;
 
@@ -168,11 +162,19 @@ contract Registry is OwnerIsCreator {
 
     address public arbitrationContract; // The address of the arbitrationContract on the pool chain
 
+    address public investmentStrategyContract;
+
     uint256 public currentChainId;
 
     uint256 public managerChainId;
 
     uint256 public poolCount = 0;
+
+    function addInvestmentStrategyContract(
+        address _investmentStrategyContract
+    ) external {
+        investmentStrategyContract = _investmentStrategyContract;
+    }
 
     function addBridgeLogic(
         address _bridgeLogicAddress,
@@ -206,65 +208,26 @@ contract Registry is OwnerIsCreator {
         return (chainlinkRouter, linkAddress, selector);
     }
 
-    function enableProtocol(string memory protocol) external {
+    function enableProtocol(string memory _protocol) external {
         //IMPORTANT - NEEDS ACCESS CONTROL
 
-        bytes32 protocolHash = keccak256(abi.encode(protocol));
+        bytes32 protocolHash = keccak256(abi.encode(_protocol));
         hashedProtocolToEnabled[protocolHash] = true;
+        hashToProtocol[protocolHash] = _protocol;
     }
 
-    function disableProtocol(string memory protocol) external {
+    function disableProtocol(string memory _protocol) external {
         //IMPORTANT - NEEDS ACCESS CONTROL
 
-        bytes32 protocolHash = keccak256(abi.encode(protocol));
+        bytes32 protocolHash = keccak256(abi.encode(_protocol));
         hashedProtocolToEnabled[protocolHash] = false;
     }
 
-    function enableSlug(
-        string memory slug,
-        string memory protocol,
-        uint256 chainId
-    ) external {
-        //IMPORTANT - NEEDS ACCESS CONTROL
-        bytes32 protocolHash = keccak256(abi.encode(protocol));
-        require(
-            hashedProtocolToEnabled[protocolHash] == true,
-            "Slug must pertain to an enabled protocol"
-        );
-
-        bytes32 hash = keccak256(abi.encode(slug));
-        hashedSlugToChainId[hash] = chainId;
-        hashedSlugToEnabled[hash] = true;
-        hashedSlugToProtocolHash[hash] = protocolHash;
-    }
-
-    function disableSlug(string memory slug) public {
-        //IMPORTANT - NEEDS ACCESS CONTROL
-        bytes32 hash = keccak256(abi.encode(slug));
-        hashedSlugToEnabled[hash] = false;
-    }
-
-    function slugToChainId(string memory slug) external view returns (uint256) {
-        bytes32 hash = keccak256(abi.encode(slug));
-        return hashedSlugToChainId[hash];
-    }
-
     function protocolEnabled(
-        string memory protocol
+        string memory _protocol
     ) external view returns (bool) {
-        bytes32 protocolHash = keccak256(abi.encode(protocol));
+        bytes32 protocolHash = keccak256(abi.encode(_protocol));
         return hashedProtocolToEnabled[protocolHash];
-    }
-
-    function slugEnabled(string memory slug) external view returns (bool) {
-        bytes32 hash = keccak256(abi.encode(slug));
-        return hashedSlugToEnabled[hash];
-    }
-
-    function slugToProtocolHash(
-        string memory slug
-    ) external view returns (bytes32) {
-        return keccak256(abi.encode(slug));
     }
 
     function checkValidPool(address _poolAddress) external view returns (bool) {
@@ -275,30 +238,30 @@ contract Registry is OwnerIsCreator {
         return true;
     }
 
-    function addPoolEnabled(address poolAddress) external {
+    function addPoolEnabled(address _poolAddress) external {
         //IMPORTANT - NEEDS ACCESS CONTROL
-        poolCountToPool[poolCount] = poolAddress;
+        poolCountToPool[poolCount] = _poolAddress;
         poolCount += 1;
-        poolEnabled[poolAddress] = true;
+        poolEnabled[_poolAddress] = true;
     }
 
-    function disablePool(address poolAddress) public {
+    function disablePool(address _poolAddress) public {
         //IMPORTANT - NEEDS ACCESS CONTROL
-        poolEnabled[poolAddress] = false;
+        poolEnabled[_poolAddress] = false;
     }
 
-    function addBridgeReceiver(uint chainId, address receiver) public {
+    function addBridgeReceiver(uint _chainId, address _receiver) public {
         //IMPORTANT - NEEDS ACCESS CONTROL
 
-        chainIdToBridgeReceiver[chainId] = receiver;
+        chainIdToBridgeReceiver[_chainId] = _receiver;
     }
 
-    function addMessageReceiver(uint chainId, address receiver) public {
+    function addMessageReceiver(uint _chainId, address _receiver) public {
         //IMPORTANT - NEEDS ACCESS CONTROL
 
-        chainIdToMessageReceiver[chainId] = receiver;
+        chainIdToMessageReceiver[_chainId] = _receiver;
         address messengerAddress = chainIdToMessageReceiver[currentChainId]; // Could this be failing on polygon? currentChainId invalid or points to invalid messenger for polygon
-        IChaserMessenger(messengerAddress).allowlistSender(receiver, true);
+        IChaserMessenger(messengerAddress).allowlistSender(_receiver, true);
     }
 
     function addIntegrator(address _integratorAddress) external {
@@ -366,30 +329,26 @@ contract Registry is OwnerIsCreator {
     }
 
     function getPoolBroker(
-        address poolAddress,
-        address assetAddress
+        address _poolAddress,
+        address _assetAddress
     ) public returns (address) {
         address instance;
         // poolBroker lookup function
-        //If poolAddress does not have its equivalent on this chain, deploy a broker
-        if (poolAddressToBroker[poolAddress] == address(0)) {
+        //If _poolAddress does not have its equivalent on this chain, deploy a broker
+        if (poolAddressToBroker[_poolAddress] == address(0)) {
             PoolBroker poolBroker = new PoolBroker();
-            poolBroker.addConfig(poolAddress, assetAddress, integratorAddress);
-            poolAddressToBroker[poolAddress] = address(poolBroker);
+            poolBroker.addConfig(
+                _poolAddress,
+                _assetAddress,
+                integratorAddress
+            );
+            poolAddressToBroker[_poolAddress] = address(poolBroker);
         }
 
-        return poolAddressToBroker[poolAddress];
+        return poolAddressToBroker[_poolAddress];
     }
 
     function addArbitrationContract(address _arbitrationContract) external {
-        require(
-            msg.sender == manager,
-            "Only the Manager contract may set the arbitration contract"
-        );
         arbitrationContract = _arbitrationContract;
     }
-
-    //HOW SHOULD CROSS CHAIN DEPLOYMENT ADDRESSES BE STORED? CONNECTIONS FOR AAVE ON MAINNET ARBITRUM ETC, WHILE THE REGISTRY IS ONLY ON ARB
-    // -Could keep storage on registry and pass the correct address in the bridge interaction
-    // -hardcode/set/configure on the connection contract to add support for an external on another chain
 }

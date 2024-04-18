@@ -1,6 +1,6 @@
 # Chaser
 
-Chaser revolutionizes DeFi investing by enabling efficient, novel investment strategies on chain. Chaser offers optimal yield by factoring in metrics like historical volatility and current position statistics. Using an automated process, Chaser moves deposits among different protocols and networks to the best possible market for the given strategy. Chaser offers new strategies that were previously impossible:
+Chaser revolutionizes DeFi investing by enabling efficient, novel investment strategies on chain. Chaser offers optimal yield by factoring in metrics like historical volatility and current position statistics. Using an decentralized process, Chaser moves deposits among different protocols and networks to the best possible market for the given strategy. Chaser offers new strategies that were previously impossible:
 
 - Highest yield and lowest volatility over last 30 days 
 - Has no deposits worth +10% of TVL (whale risk)
@@ -8,9 +8,11 @@ Chaser revolutionizes DeFi investing by enabling efficient, novel investment str
 - Protocol has less than 20% of funds loaned out
 - Any yield consistently above 3% over last year
 
-These strategies access yields in well known protocols like Compound and Aave. Chaser allows for easy integration with lending platforms to move deposits into the best possible investment at any given moment. Having the results of calculating these strategies on chain, DAOs and other decentralized protocols can put unused liquidity in a more diverse set of strategies. Being able to consider a market's historical data and position statistics allow protocols more control over risk and exposure.       
+These strategies access yields in well known protocols like Compound and Aave. Chaser allows for easy integration with lending platforms to move deposits into the best possible investment at any given moment. By calculating these strategies on chain, DAOs and other decentralized protocols can enhance liquidity utilization and maximize returns while gaining greater control over risk and exposure.       
 
-Using the UMA Oracle, subgraph data is verified on-chain. In collaboration with the Across bridge and Chainlink CCIP, Chaser facilitates investments from mainnet to markets on multiple networks. The system is designed for simple integration with all protocols, assuming there are trusted, accessible data sources available such as Messari standardized subgraphs.
+Chaser is built with tools like the Across Bridge for cross-chain transactions, Chainlink CCIP for cross-network state management, and the UMA Oracle for decentralized verification of investment propositions. This architecture simplifies the process for DAOs and end users by managing all aspects of cross-chain and cross-protocol routing, significantly reducing the complexities involved in more dynamic DeFi investments.
+
+Through its smart contract architecture, Chaser ensures that all transaction processes—from deposits to withdrawals and strategic pivots—are efficiently executed, providing users with a transparent, reliable, and high-performing investment platform. Whether it's deploying new pools, pivoting investments, or integrating with external protocols, Chaser is engineered to enhance liquidity utilization and maximize returns for decentralized finance investors.
 
 ## Demo
 
@@ -125,7 +127,3 @@ The strategy aspect of determining when a pool should move investment based on c
 - Deposits are credited to the PoolBroker contract for the sake of keeping revenues, balances, and data separated and individual for each pool
 - All withdraw requests have the PoolBroker receive the deposits, then pass them through the Integration contract to wherever the funds reach their destination (pool, other protocol, bridging, etc)
 - NOTE: During development, the Integration contract logic has sections where assetAddresses are changed to hardcoded values. This is because the testnet versions of some assets are different by protocol. The WETH used by Across is different than the WETH used by Aave, for example. 
-
-#### Contract Architecture
-
-In order to make these integrations work, there are 2 impor

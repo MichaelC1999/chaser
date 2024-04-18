@@ -1,24 +1,30 @@
 {
   "base": {
-    "registryAddress": "0xB56468EB2B4272d16313B06534FBFa84D2dDd51b",
-    "bridgeLogicAddress": "0x6e8743dD7c3eF08bB5D2aa6299A5712008F115C0",
-    "messengerAddress": "0x1762B031DAa022E9C6B78ab2BB87BB7334c788fE",
-    "receiverAddress": "0x64Fdd304C7691c9CDaD366e9537cD60927a3BE1c",
+    "registryAddress": "0xD87C5a330ca9aa0096A0B8Ea928CC79fA94737CF",
+    "bridgeLogicAddress": "0x14B6c67A8bb3f9A4ea7d5f9951113c830df05A68",
+    "messengerAddress": "0x8bA7074Eb83C9CE482B2B7eD94928778D572C1aA",
+    "receiverAddress": "0xEcE3d23bcdb76be7E356Ef157f4161de6bf07927",
     "spokePool": "0x82B564983aE7274c86695917BBf8C99ECb6F0F8F",
     "WETH": "0x4200000000000000000000000000000000000006",
-    "managerAddress": "0x4C40696f27FAA51805Dbc70ba08d9852F4a037CE",
-    "poolCalculationsAddress": "0xe670857cAB12DBC136994bAe10Dd0Db6dec87030",
-    "integratorAddress": "0x1a07C3D490eeA71e03e8D9e8eFF200D2748a533e",
-    "poolAddress": "0x453696507c2c69c4dea22cb34157ece9af4d546f"
+    "managerAddress": "0x2B3a46b562Df4F2bDc3DbA6d9bb399ACda7a79d2",
+    "poolCalculationsAddress": "0x16ddFCD9Cb614eA64D0bfC9c8748BF09e684f8e8",
+    "integratorAddress": "0x4534FCD7079457065b8E334dCA14c62b464994B4",
+    "poolAddress": "0x670432d84898c4487aa2d72fb9c62d7d0914f433",
+    "linkToken": "0xE4aB69C077896252FAFBD49EFD26B5D171A32410"
   },
   "sepolia": {
-    "registryAddress": "0x9ba1bfa306B663a043d887Ba63186A9a380be8a5",
-    "poolCalculationsAddress": "0x536556B3576921264d3639FdD4Ac35363a843F81",
-    "bridgeLogicAddress": "0x15dAd7dC7594D81cA92ebe4EEFDE199F096765b2",
-    "messengerAddress": "0xB5C4722a0b2D640A3916425Be27559eDc9ae90eb",
-    "receiverAddress": "0x5c012511211F2b499C59Cb1bf37Edc00eAEf9AE9",
+    "registryAddress": "0x21B8141C5e7eefC72d276e729bD47aF21814e614",
+    "poolCalculationsAddress": "0xd1931916769DE139b333854fD333331Ad28B660C",
+    "bridgeLogicAddress": "0xd339eA663033fcFeeCb6aCe72EBa99c3BCaA9F2E",
+    "messengerAddress": "0xCc95EBFE86Ee1754646f1d434653dE97Ea12Ba7D",
+    "receiverAddress": "0x6bd40A3aA30e917dA299aC4b23256ADfa9F7AFB0",
     "spokePool": "0x5ef6C01E11889d86803e0B23e3cB3F9E9d97B662",
     "WETH": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
-    "integratorAddress": "0x25703650da38d672ea6A3Aa85550bE895b016943"
+    "integratorAddress": "0xc1A99fC62D5B100A4F823123e4Ac246500FD583D",
+    "linkToken": "0x779877A7B0D9E8603169DdbD7836e478b4624789",
+    "managerAddress": "0xa91C7897271a0CB7D64bb5B4F7327568122a3AdC",
+    "poolAddress": "0xeb10b2e5760f4d3291e01241d23058c5f160c3b0",
+    "investmentStrategy": "0xBd3fE5D426827611e827Ac28C2E39E197816516E",
+    "arbitrationContract": "0xb42f9861c96b011735953CB86b7C3a9997f68a24"
   }
 }

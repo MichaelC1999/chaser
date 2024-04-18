@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
-import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./PoolToken.sol";
 import {ISpokePool} from "./interfaces/ISpokePool.sol";
+import {IStrategy} from "./interfaces/IStrategy.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IChaserManager} from "./ChaserManager.sol";
 import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
@@ -21,7 +21,7 @@ contract PoolControl {
     address public poolToken;
     uint256 public poolNonce = 0;
     string public poolName;
-    string public strategySource; // STRATEGY SOURCE CAN BE A REPO URL WITH CODE TO EXECUTE, OR THIS STRING COULD POINT TO AN ADDRESS/CHAIN/METHOD THAT RETURNS THE INSTRUCTIONS
+    uint256 public strategyIndex; // Index in mapping pointing to the strategy code on InvestmentStrategy contract
     bool public pivotPending = false;
 
     IBridgeLogic public localBridgeLogic;
@@ -67,26 +67,26 @@ contract PoolControl {
      * @notice Initial pool configurations and address caching
      * @param _deployingUser The address that called the pool deployment from the manager contract
      * @param _asset The asset that is being invested in this pool
-     * @param _strategySource The source of the strategy for determining investment
+     * @param _strategyIndex The index of the strategy for determining investment
      * @param _poolName The name of the pool
      * @param _localChain The integer Chain ID of this pool
      */
     constructor(
         address _deployingUser,
         address _asset,
-        string memory _strategySource,
+        uint256 _strategyIndex,
         string memory _poolName,
         uint256 _localChain,
         address _registry,
         address _poolCalculations
-    ) public {
+    ) {
         localChain = _localChain;
         currentPositionChain = 0;
         poolId = keccak256(abi.encode(address(this), _poolName));
         poolName = _poolName;
         deployingUser = _deployingUser;
         asset = IERC20(_asset);
-        strategySource = _strategySource;
+        strategyIndex = _strategyIndex;
         registry = IChaserRegistry(_registry);
         poolCalculations = IPoolCalculations(_poolCalculations);
         localBridgeLogic = IBridgeLogic(registry.bridgeLogicAddress());
@@ -110,7 +110,7 @@ contract PoolControl {
                 depositAmountReceived
             );
 
-            pivotCompleted(marketAddress, positionAmount);
+            pivotCompleted(marketAddress, 0, positionAmount);
             require(
                 poolCalculations.depositIdToTokensMinted(depositId) == false,
                 "Deposit has already minted tokens"
@@ -155,9 +155,6 @@ contract PoolControl {
 
             mintUserPoolTokens(depositId, positionAmount);
         }
-
-        //If depositId included in the payload data, mint position tokens for user
-        //Check mapping if depositId has minted position tokens yet
     }
 
     /**
@@ -190,7 +187,6 @@ contract PoolControl {
 
         bytes4 method = bytes4(keccak256(abi.encode("AbWithdrawOrderUser")));
 
-        emit LzMessageSent(method, data);
         if (currentPositionChain == localChain) {
             localBridgeLogic.userWithdrawSequence(address(this), data);
         } else {
@@ -227,16 +223,6 @@ contract PoolControl {
         bytes memory data = abi.encode("TEST");
         bytes4 method = bytes4(keccak256(abi.encode("AbMessagePositionData")));
 
-        registry.sendMessage(80001, method, address(this), data);
-    }
-
-    /**
-     * @notice Send a request to the position chain to get an address from its' registry
-     */
-    function getRegistryAddress() external {
-        // Uses lzSend to request an address from the registry on another chain
-        bytes memory data;
-        bytes4 method = bytes4(keccak256(abi.encode("getRegistryAddress")));
         registry.sendMessage(80001, method, address(this), data);
     }
 
@@ -306,7 +292,6 @@ contract PoolControl {
                 keccak256(abi.encode("AbBridgePositionInitializer"))
             );
             bytes memory message = abi.encode(method, address(this), data);
-            emit CheckId(depositId);
             enterFundsCrossChain(
                 depositId,
                 _amount,
@@ -324,6 +309,10 @@ contract PoolControl {
      * @param _totalFee The Across Bridge relay fee % (irrelevant if local deposit)
      */
     function userDeposit(uint256 _amount, uint256 _totalFee) external {
+        require(
+            pivotPending == false,
+            "If a pivot proposal has been approved, no cross-chain position entrances are allowed"
+        );
         bytes32 depositId = poolCalculations.createDepositOrder(
             msg.sender,
             _amount
@@ -390,11 +379,6 @@ contract PoolControl {
         uint256 _feeTotal,
         bytes memory _message
     ) internal {
-        require(
-            pivotPending == false,
-            "If a pivot proposal has been approved, no cross-chain position entrances are allowed"
-        );
-
         // fund entrance can automatically bridge into position.
         address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
 
@@ -431,22 +415,22 @@ contract PoolControl {
 
     function crossChainBridge(
         address _sender,
-        address acrossSpokePool,
-        address bridgeReceiver,
+        address _acrossSpokePool,
+        address _bridgeReceiver,
         uint256 _amount,
-        uint256 feeTotal,
-        uint256 receivingChain,
+        uint256 _feeTotal,
+        uint256 _receivingChain,
         bytes memory _message
     ) internal {
         try
-            ISpokePool(acrossSpokePool).depositV3(
+            ISpokePool(_acrossSpokePool).depositV3(
                 _sender,
-                bridgeReceiver,
+                _bridgeReceiver,
                 address(asset),
                 address(0),
                 _amount,
-                _amount - feeTotal, // IMPORTANT - SEEK ORACLE SOLUTION TO BRING API FEE CALC ON CHAIN
-                receivingChain,
+                _amount - _feeTotal, // IMPORTANT - SEEK ORACLE SOLUTION TO BRING API FEE CALC ON CHAIN
+                _receivingChain,
                 address(0),
                 uint32(block.timestamp),
                 uint32(block.timestamp + 30000),
@@ -463,42 +447,45 @@ contract PoolControl {
     }
 
     function queryMovePosition(
-        string memory requestProtocolSlug,
-        string memory requestMarketId,
-        uint256 bond
+        string memory _requestProtocol,
+        string memory _requestMarketId,
+        uint256 _requestChainId,
+        uint256 _bond
     ) public {
-        uint256 userAllowance = asset.allowance(
-            msg.sender,
-            address(arbitrationContract)
+        string memory currentPositionProtocol = registry.hashToProtocol(
+            currentPositionProtocolHash
         );
-
         arbitrationContract.queryMovePosition(
-            requestProtocolSlug,
-            requestMarketId,
-            bond,
-            userAllowance,
-            strategySource
+            msg.sender,
+            _requestChainId,
+            _requestProtocol,
+            _requestMarketId,
+            currentPositionChain,
+            currentPositionProtocol,
+            currentPositionMarketId,
+            _bond,
+            strategyIndex
         );
     }
 
     function sendPositionChange(
-        string memory requestMarketId,
-        string memory targetProtocol,
-        uint256 destinationChainId
+        string memory _requestMarketId,
+        string memory _targetProtocol,
+        uint256 _destinationChainId
     ) external {
         bytes memory pivotMessage = createPivotExitMessage(
-            keccak256(abi.encode(targetProtocol)),
-            requestMarketId,
-            destinationChainId
+            keccak256(abi.encode(_targetProtocol)),
+            _requestMarketId,
+            _destinationChainId
         );
 
-        targetPositionMarketId = requestMarketId;
-        targetPositionChain = destinationChainId;
-        targetPositionProtocolHash = keccak256(abi.encode(targetProtocol));
+        targetPositionMarketId = _requestMarketId;
+        targetPositionChain = _destinationChainId;
+        targetPositionProtocolHash = keccak256(abi.encode(_targetProtocol));
 
         pivotPending = true;
 
-        emit Numbers(currentPositionChain, destinationChainId);
+        emit Numbers(currentPositionChain, _destinationChainId);
 
         // IF POSITION NEEDS TO PIVOT *FROM* THIS CHAIN (LOCAL/BRIDGE LOGIC)
         // THIS IF STATEMENT DETERMINES WHETHER TO ACTION THE EXITPIVOT LOCALLY OR THROUGH CROSS CHAIN
@@ -508,7 +495,6 @@ contract PoolControl {
             bytes4 method = bytes4(
                 keccak256(abi.encode("AbPivotMovePosition"))
             );
-            emit LzMessageSent(method, pivotMessage);
             registry.sendMessage(
                 currentPositionChain,
                 method,
@@ -520,6 +506,7 @@ contract PoolControl {
 
     function pivotCompleted(
         address marketAddress,
+        uint256 nonce,
         uint256 positionAmount
     ) public {
         lastPositionAddress = currentPositionAddress;
@@ -536,6 +523,8 @@ contract PoolControl {
         targetPositionMarketId = "";
         targetPositionChain = 0;
         targetPositionProtocolHash = bytes32("");
+
+        poolNonce = nonce;
 
         pivotPending = false;
 
@@ -603,6 +592,14 @@ contract PoolControl {
         }
     }
 
+    function readStrategyCode() external view returns (string memory) {
+        address strategyAddress = registry.investmentStrategyContract();
+        bytes memory strategyBytes = IStrategy(strategyAddress).strategyCode(
+            strategyIndex
+        );
+        return string(strategyBytes);
+    }
+
     /**
      * @notice Transfer deposit funds from user to pool, make approval for funds to the spokepool for moving the funds to the destination chain
      * @param _sender The address of the user who is making the deposit
@@ -625,20 +622,19 @@ contract PoolControl {
     }
 
     function createPivotExitMessage(
-        bytes32 protocolHash,
-        string memory requestMarketId,
-        uint256 destinationChainId
+        bytes32 _protocolHash,
+        string memory _requestMarketId,
+        uint256 _destinationChainId
     ) internal view returns (bytes memory) {
         address destinationBridgeReceiver = registry.chainIdToBridgeReceiver(
-            destinationChainId
+            _destinationChainId
         );
 
         bytes memory data = abi.encode(
-            poolNonce,
-            protocolHash,
+            _protocolHash,
             address(0), // IMPORTANT - REPLACE WITH MARKET ADDRESS VALIDATED IN ARBITRATION
-            requestMarketId,
-            destinationChainId,
+            _requestMarketId,
+            _destinationChainId,
             destinationBridgeReceiver
         );
 

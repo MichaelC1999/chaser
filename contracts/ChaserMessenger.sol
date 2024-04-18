@@ -105,7 +105,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
     /// @dev Updates the allowlist status of a destination chain for transactions.
     function allowlistDestinationChain(
         uint64 _destinationChainSelector,
-        bool allowed
+        bool _allowed
     ) public {
         // bool callerPermitted = false;
         // if (msg.sender == owner()) {
@@ -118,13 +118,13 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         //     callerPermitted == true,
         //     "Function only callable internally or by owner"
         // );
-        allowlistedDestinationChains[_destinationChainSelector] = allowed;
+        allowlistedDestinationChains[_destinationChainSelector] = _allowed;
     }
 
     /// @dev Updates the allowlist status of a source chain for transactions.
     function allowlistSourceChain(
         uint64 _sourceChainSelector,
-        bool allowed
+        bool _allowed
     ) public {
         bool callerPermitted = false;
         if (msg.sender == owner()) {
@@ -137,7 +137,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             callerPermitted == true,
             "Function only callable internally or by owner"
         );
-        allowlistedSourceChains[_sourceChainSelector] = allowed;
+        allowlistedSourceChains[_sourceChainSelector] = _allowed;
     }
 
     /// @dev Updates the allowlist status of a sender for transactions.
@@ -325,14 +325,13 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
 
         if (_method == bytes4(keccak256(abi.encode("sendRegistryAddress")))) {}
         if (_method == bytes4(keccak256(abi.encode("BaPivotMovePosition")))) {
-            (address marketAddress, uint256 positionAmount) = abi.decode(
-                _data,
-                (address, uint256)
-            );
+            (address marketAddress, uint256 nonce, uint256 positionAmount) = abi
+                .decode(_data, (address, uint256, uint256));
 
             try
                 IPoolControl(_poolAddress).pivotCompleted(
                     marketAddress,
+                    nonce,
                     positionAmount
                 )
             {

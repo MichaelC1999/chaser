@@ -28,7 +28,7 @@ contract PoolBroker {
 
     function withdrawAssets(
         address _marketAddress,
-        bytes memory encodedFunction
+        bytes memory _encodedFunction
     ) external {
         require(
             msg.sender == integratorAddress,
@@ -37,7 +37,12 @@ contract PoolBroker {
         // Integrator calls this function
         // Make call to external market for withdraw
         (bool success, bytes memory returnData) = _marketAddress.call(
-            encodedFunction
+            _encodedFunction
+        );
+
+        require(
+            success == true,
+            "The withdraw execution was unsuccessful on the external protocol."
         );
 
         emit Test(returnData);

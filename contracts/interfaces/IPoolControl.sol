@@ -81,8 +81,6 @@ interface IPoolControl {
 
     function getPositionData() external;
 
-    function getRegistryAddress() external;
-
     function receivePositionData(bytes memory) external;
 
     function userDepositAndSetPosition(
@@ -95,11 +93,11 @@ interface IPoolControl {
 
     function userDeposit(uint256, int64) external;
 
-    function sendPositionChange(string memory, bytes32) external;
+    function sendPositionChange(string memory, string memory, uint256) external;
 
     function queryMovePosition(string memory, string memory, uint256) external;
 
-    function pivotCompleted(address, uint256) external;
+    function pivotCompleted(address, uint256, uint256) external;
 
     function finalizeWithdrawOrder(
         bytes32,

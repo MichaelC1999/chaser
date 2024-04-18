@@ -1,6 +1,8 @@
 const hre = require("hardhat");
 const ethers = require("ethers");
 const fs = require('fs');
+const { stringToBytes } = require('viem')
+
 
 const deployments = require('./contractAddresses.json')
 
@@ -61,7 +63,7 @@ const baseDeployments = async () => {
   deployments.base["messengerAddress"] = messengerAddress
   writeAddressesToFile(deployments)
 
-  const linkToken = await hre.ethers.getContractAt("ERC20", "0xE4aB69C077896252FAFBD49EFD26B5D171A32410");
+  const linkToken = await hre.ethers.getContractAt("ERC20", deployments.base["linkToken"]);
 
   const amount = "200000000000000000"
 
@@ -92,6 +94,14 @@ const baseDeployments = async () => {
   console.log('MESSENGER: ', await bridgeLogicContract.messenger(), await registryContract.chainIdToMessageReceiver(84532))
 
   console.log('RECEIVER: ', await bridgeLogicContract.bridgeReceiverAddress(), await registryContract.receiverAddress())
+
+  await (await registryContract.enableProtocol(
+    "aave-v3"
+  )).wait();
+
+  await (await registryContract.enableProtocol(
+    "compound-v3"
+  )).wait();
 
   console.log(deployments.base)
 
@@ -131,7 +141,7 @@ const sepoliaDeployments = async () => {
   const messengerAddress = deployments.sepolia["messengerAddress"]
   writeAddressesToFile(deployments)
 
-  const linkToken = await hre.ethers.getContractAt("ERC20", "0x779877A7B0D9E8603169DdbD7836e478b4624789");
+  const linkToken = await hre.ethers.getContractAt("ERC20", deployments.sepolia["linkToken"]);
   const linkAmount = "500000000000000000"
   console.log("Token Transfer: ", (await (await linkToken.transfer(deployments.sepolia["messengerAddress"], linkAmount)).wait()).hash)
 
@@ -201,7 +211,7 @@ const basePoolDeploy = async () => {
 
   const poolTx = await (await manager.createNewPool(
     deployments.base["WETH"],
-    "",
+    "0",
     "PoolName",
     {
       gasLimit: 7000000
@@ -230,12 +240,12 @@ const basePositionSetDeposit = async () => {
     amount,
     totalFeeCalc(amount),
     "0x0242242424242",
-    84532,
-    "compound",
+    11155111,
+    "aave-v3",
     { gasLimit: 8000000 }
   )
 
-  console.log(`Pool 0x...${deployments.base["poolAddress"].slice(34)} position set and initial deposit tx hash: `, (await tx.wait()).hash)
+  console.log(`Pool 0x...${deployments.sepolia["poolAddress"].slice(34)} position set and initial deposit tx hash: `, (await tx.wait()).hash)
 }
 
 const baseSimulateCCIPReceive = async (messageDataCCIP) => {
@@ -276,6 +286,45 @@ const sepoliaSimulateCCIPReceive = async (messageDataCCIP) => {
   console.log("Transaction Hash: ", (await (await messengerContract.ccipReceiveManual("0x4d1c4fe3f27639b363f9d52e4dcadc62a2d95f9e9730c8b79fbb437d4e7ab563", trimMessageData)).wait()).hash)
 }
 
+const setPivotConfigs = async () => {
+  const pool = await hre.ethers.getContractAt("PoolControl", deployments.sepolia["poolAddress"])
+  const registryContract = await hre.ethers.getContractAt("Registry", deployments.sepolia["registryAddress"]);
+
+
+  // const arbitrationContract = await (await hre.ethers.deployContract("ArbitrationContract", [deployments.sepolia["registryAddress"], 11155111], {
+  //   gasLimit: 7000000,
+  //   value: 0
+  // })).waitForDeployment();
+
+  // const investmentStrategyContract = await (await hre.ethers.deployContract("InvestmentStrategy", [], {
+  //   gasLimit: 7000000,
+  //   value: 0
+  // })).waitForDeployment();
+
+  // console.log(investmentStrategyContract)
+
+  // (await (await registryContract.addInvestmentStrategyContract(deployments.sepolia["investmentStrategy"])).wait());
+  // deployments.sepolia["investmentStrategy"] = investmentStrategyContract.target
+
+  // (await (await registryContract.addArbitrationContract(deployments.sepolia["arbitrationContract"])).wait())
+
+  // deployments.sepolia["arbitrationContract"] = arbitrationContract.target
+  // writeAddressesToFile(deployments)
+
+
+}
+
+const addStrategyCode = async () => {
+  let sourceString = ``
+  const sourceCode = stringToBytes(sourceString)
+  const investmentStrategyContract = await hre.ethers.getContractAt("InvestmentStrategy", deployments.sepolia["investmentStrategy"]);
+
+  console.log(sourceCode)
+  const transactionResponse = await investmentStrategyContract.addStrategy(sourceCode, "lowVolHighYield", { gasLimit: 7000000 });
+  const receipt = await transactionResponse.wait();
+
+}
+
 
 const poolStatRead = async () => {
   const pool = await hre.ethers.getContractAt("PoolControl", deployments.base["poolAddress"])
@@ -294,6 +343,7 @@ const poolStatRead = async () => {
     await pool.currentPositionProtocolHash(),
     await pool.currentRecordPositionValue(),
     await pool.poolNonce(),
+    await pool.localChain(),
     "LASTS: ",
     await pool.lastPositionAddress(),
     await pool.lastPositionChain(),
@@ -313,7 +363,7 @@ const poolStatRead = async () => {
   const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.base["integratorAddress"]);
 
   // Get hash of protocol
-  const protocolHash = await integratorContract.hasher("aave")
+  const protocolHash = await integratorContract.hasher("aave-v3")
   console.log(await bridgeLogic.poolToAsset(deployments.base["poolAddress"]),
     await bridgeLogic.poolToCurrentPositionMarket(deployments.base["poolAddress"]),
     await bridgeLogic.poolToCurrentProtocolHash(deployments.base["poolAddress"]),)
@@ -349,17 +399,31 @@ const baseWithdraw = async () => {
 }
 
 const baseCallPivot = async () => {
-  const pool = await hre.ethers.getContractAt("PoolControl", deployments.base["poolAddress"])
-  const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.base["integratorAddress"]);
+  const pool = await hre.ethers.getContractAt("PoolControl", deployments.sepolia["poolAddress"])
+  const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.sepolia["integratorAddress"]);
+  const registryContract = await hre.ethers.getContractAt("Registry", deployments.sepolia["registryAddress"]);
+
+
 
   // Get hash of protocol
-  console.log("PIVOT TRANSACTION: ", (await (await pool.sendPositionChange(
-    "0x0585585858585",
-    "aave",
-    11155111,
-    { gasLimit: 4000000 }
+  // console.log("PIVOT TRANSACTION: ", (await (await pool.sendPositionChange(
+  //   "0x0585585858585",
+  //   "aave-v3",
+  //   11155111,
+  //   { gasLimit: 4000000 }
 
-  )).wait()).hash)
+  // )).wait()).hash)
+
+
+  // const WETH = await hre.ethers.getContractAt("ERC20", deployments.sepolia["WETH"]);
+  // await (await WETH.transfer(deployments.sepolia["integratorAddress"], "100000000000")).wait()
+
+  const USDC = await hre.ethers.getContractAt("ERC20", "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238");
+  await (await USDC.approve(deployments.sepolia["arbitrationContract"], 500000)).wait()
+
+
+  console.log((await (await pool.queryMovePosition("aave-v3", "eihfe", 11155111, 500000, { gasLimit: 7000000 })).wait()).hash)
+  //IMPORTANT - TEST IF UMA TESTNET FOLLOWS LIVENESS PERIOD
 }
 
 const sepoliaIntegrationsTest = async () => {
@@ -367,7 +431,7 @@ const sepoliaIntegrationsTest = async () => {
   const registryContract = await hre.ethers.getContractAt("Registry", deployments.sepolia["registryAddress"]);
 
   // Get hash of protocol
-  const protocolHash = await integratorContract.hasher("aave")
+  const protocolHash = await integratorContract.hasher("aave-v3")
 
   // Get hash operations
   const operation = await integratorContract.hasher("deposit")
@@ -438,10 +502,11 @@ async function mainExecution() {
     // IF LOOKING TO DEPLOY YOUR OWN INSTANCE OF ALL CONTRACTS - EXECUTE THE FOLLOWING TWO FUNCTIONS ONE AT A TIME.
     // await baseDeployments() //CHECK THAT THE DEFAULT NETWORK IN "..hardhat.config.js" IS base
     // await sepoliaDeployments() //CHANGE THE DEFAULT NETWORK IN "..hardhat.config.js" TO sepolia
-    await baseSecondConfig() //CHANGE THE DEFAULT NETWORK IN "..hardhat.config.js" TO base
+    // await baseSecondConfig() //CHANGE THE DEFAULT NETWORK IN "..hardhat.config.js" TO base
     // --------------------------------------------------------------------------------------------
     // IF YOU EXECUTED THE PRIOR SECTION AND/OR WOULD LIKE TO DEPLOY YOUR POOL FOR TESTING - EXECUTE THE FOLLOWING FUNCTION
     // This function also sends the initial deposit funds through the bridge into the investment as the position is set on sepolia
+    // await setPivotConfigs()
     // await basePoolDeploy()
     // await basePositionSetDeposit()
 
@@ -462,7 +527,7 @@ async function mainExecution() {
     // await sepoliaSimulateCCIPReceive("0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001003705af6d000000000000000000000000000000000000000000000000000000000000000000000000000000009bdc76b596051e1e86eadb2e2af2a491e32bfa48000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000803f4c40f2d9e47df3a43c5c97200a65dd80990bf9d69827733cf5f393681c90dc000000000000000000000000000000000000000000000000000886c98b760000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000004a03cea247fc197")
     // --------------------------------------------------------------------------------------------
     // await baseCallPivot()
-    // await poolStatRead()
+    await poolStatRead()
     // sepoliaReceivers()
     // await manualAcrossMessageHandle("99600000000000", "0xBD4F4B890000000000000000000000000000000000000000000000000000000000000000000000000000000006B838BF89DFBCFA5FFD085B1FCD5BDD873F2E95000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000802B537FE6CC6E2B9E2AAAC4F5DB3F9477626D66FAB37FE70D2213EDC075C5B71900000000000000000000000000000000000000000000000000005A95EE9EA00000000000000000000000000000000000000000000000000000003F4D0505231E00000000000000000000000000000000000000000000000000001B48EB57E000")
 

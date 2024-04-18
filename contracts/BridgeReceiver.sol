@@ -31,9 +31,9 @@ contract BridgeReceiver {
     }
 
     function decodeMessageEvent(
-        bytes memory message
+        bytes memory _message
     ) external view returns (bytes4, address, bytes memory) {
-        return abi.decode(message, (bytes4, address, bytes));
+        return abi.decode(_message, (bytes4, address, bytes));
     }
 
     /**
@@ -46,6 +46,7 @@ contract BridgeReceiver {
         address relayer,
         bytes memory message
     ) external {
+        // IMPORTANT - SHOULD ONLY BE CALLABLE FROM THE SPOKEPOOL
         (bytes4 method, address poolAddress, bytes memory data) = abi.decode(
             message,
             (bytes4, address, bytes)
@@ -67,11 +68,7 @@ contract BridgeReceiver {
                 uint256 poolNonce
             ) = abi.decode(data, (bytes32, address, string, uint256));
 
-            try ERC20(tokenSent).transfer(address(bridgeLogic), amount) {
-                emit ExecutionMessage("transfer success");
-            } catch Error(string memory reason) {
-                emit ExecutionMessage(reason);
-            }
+            ERC20(tokenSent).transfer(address(bridgeLogic), amount);
 
             try
                 bridgeLogic.handleEnterPivot(
@@ -153,9 +150,6 @@ contract BridgeReceiver {
         if (
             method == bytes4(keccak256(abi.encode("BaBridgeWithdrawOrderUser")))
         ) {
-            //Take amount in asset sent through bridge and totalAvailableForUser, take this proportion
-            //Burn the users pool tokens based off this proportion
-            //Send user their tokens
             (
                 bytes32 withdrawId,
                 uint256 totalAvailableForUser,

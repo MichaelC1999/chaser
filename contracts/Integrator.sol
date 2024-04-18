@@ -30,58 +30,57 @@ contract Integrator {
     }
 
     function aaveConnection(
-        bytes32 operation,
-        uint256 amount,
-        address poolAddress,
-        address assetAddress,
-        address marketAddress,
-        address poolBroker
+        bytes32 _operation,
+        uint256 _amount,
+        address _assetAddress,
+        address _marketAddress,
+        address _poolBroker
     ) internal {
-        address trueAsset = assetAddress;
+        address trueAsset = _assetAddress;
         if (chainId == 11155111) {
-            if (marketAddress == address(0)) {
-                marketAddress = address(
+            if (_marketAddress == address(0)) {
+                _marketAddress = address(
                     0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951
                 );
             }
-            assetAddress = address(0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357);
+            _assetAddress = address(0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357);
         }
         if (chainId == 84532) {
-            if (marketAddress == address(0)) {
-                marketAddress = address(
+            if (_marketAddress == address(0)) {
+                _marketAddress = address(
                     0x07eA79F68B2B3df564D0A34F8e19D9B1e339814b
                 );
             }
         }
 
-        if (operation == hasher("deposit")) {
+        if (_operation == hasher("deposit")) {
             emit ExecutionMessage("In deposit");
 
-            ERC20(assetAddress).approve(marketAddress, amount);
+            ERC20(_assetAddress).approve(_marketAddress, _amount);
 
-            IAavePool(marketAddress).supply(
-                assetAddress,
-                amount,
-                poolBroker,
+            IAavePool(_marketAddress).supply(
+                _assetAddress,
+                _amount,
+                _poolBroker,
                 0
             );
         }
-        if (operation == hasher("withdraw")) {
+        if (_operation == hasher("withdraw")) {
             emit ExecutionMessage("In withdraw");
 
             bytes memory encodedFunction = abi.encodeWithSignature(
                 "withdraw(address,uint256,address)",
-                assetAddress,
-                amount,
-                poolBroker
+                _assetAddress,
+                _amount,
+                _poolBroker
             );
 
-            IPoolBroker(poolBroker).withdrawAssets(
-                marketAddress,
+            IPoolBroker(_poolBroker).withdrawAssets(
+                _marketAddress,
                 encodedFunction
             );
 
-            ERC20(trueAsset).transfer(bridgeLogicAddress, amount);
+            ERC20(trueAsset).transfer(bridgeLogicAddress, _amount);
         }
 
         // From subgraph market id, how can we get the address of the contract to call functions on?
@@ -90,74 +89,75 @@ contract Integrator {
     }
 
     function compoundConnection(
-        bytes32 operation,
-        uint256 amount,
-        address poolAddress,
-        address assetAddress,
-        address marketAddress,
-        address poolBroker
+        bytes32 _operation,
+        uint256 _amount,
+        address _assetAddress,
+        address _marketAddress,
+        address _poolBroker
     ) internal {
         // From subgraph market id, how can we get the address of the contract to call functions on?
-        address trueAsset = assetAddress;
+        address trueAsset = _assetAddress;
         if (chainId == 11155111) {
-            if (marketAddress == address(0)) {
-                marketAddress = address(
+            if (_marketAddress == address(0)) {
+                _marketAddress = address(
                     0x2943ac1216979aD8dB76D9147F64E61adc126e96
                 );
             }
-            assetAddress = address(0x2D5ee574e710219a521449679A4A7f2B43f046ad);
+            _assetAddress = address(0x2D5ee574e710219a521449679A4A7f2B43f046ad);
         }
         if (chainId == 84532) {
-            if (marketAddress == address(0)) {
-                marketAddress = address(
+            if (_marketAddress == address(0)) {
+                _marketAddress = address(
                     0x61490650AbaA31393464C3f34E8B29cd1C44118E
                 );
             }
         }
 
-        if (operation == hasher("deposit")) {
+        if (_operation == hasher("deposit")) {
             emit ExecutionMessage("In deposit");
 
-            ERC20(assetAddress).approve(marketAddress, amount);
+            ERC20(_assetAddress).approve(_marketAddress, _amount);
 
-            IComet(marketAddress).supplyTo(poolBroker, assetAddress, amount);
+            IComet(_marketAddress).supplyTo(
+                _poolBroker,
+                _assetAddress,
+                _amount
+            );
         }
-        if (operation == hasher("withdraw")) {
+        if (_operation == hasher("withdraw")) {
             emit ExecutionMessage("In withdraw");
 
             bytes memory encodedFunction = abi.encodeWithSignature(
                 "withdraw(address,uint256)",
-                assetAddress,
-                amount
+                _assetAddress,
+                _amount
             );
 
-            IPoolBroker(poolBroker).withdrawAssets(
-                marketAddress,
+            IPoolBroker(_poolBroker).withdrawAssets(
+                _marketAddress,
                 encodedFunction
             );
 
-            ERC20(trueAsset).transfer(bridgeLogicAddress, amount);
+            ERC20(trueAsset).transfer(bridgeLogicAddress, _amount);
         }
     }
 
     function sparkConnection(
-        bytes32 operation,
-        uint256 amount,
-        address poolAddress,
-        address assetAddress,
-        address marketAddress,
-        address poolBroker
+        bytes32 _operation,
+        uint256 _amount,
+        address _assetAddress,
+        address _marketAddress,
+        address _poolBroker
     ) internal {
         // From subgraph market id, how can we get the address of the contract to call functions on?
     }
 
     function acrossConnection(
-        bytes32 operation,
-        uint256 amount,
-        address poolAddress,
-        address assetAddress,
-        address marketAddress,
-        address poolBroker
+        bytes32 _operation,
+        uint256 _amount,
+        address _assetAddress,
+        address _marketAddress,
+        address _poolBroker
     ) internal {
         // From subgraph market id, how can we get the address of the contract to call functions on?
     }
@@ -171,7 +171,7 @@ contract Integrator {
         address brokerAddress = IChaserRegistry(registryAddress)
             .poolAddressToBroker(_poolAddress);
 
-        if (_protocolHash == hasher("aave")) {
+        if (_protocolHash == hasher("aave-v3")) {
             // Default to the AAVE pool contract
             if (chainId == 11155111) {
                 if (_marketAddress == address(0)) {
@@ -191,7 +191,7 @@ contract Integrator {
                 }
             }
             // IN DEVELOPMENT - This contract is preloaded with aave testnet equivalent asset
-            // require(ERC20(poolToAsset[_poolAddress]).balanceOf(address(this)) == amount)
+            // require(ERC20(poolToAsset[_poolAddress]).balanceOf(address(this)) == _amount)
 
             DataTypes.ReserveData memory Reserve = IAavePool(_marketAddress)
                 .getReserveData(_assetAddress);
@@ -201,7 +201,7 @@ contract Integrator {
             return ERC20(aTokenAddress).balanceOf(brokerAddress);
         }
 
-        if (_protocolHash == hasher("compound")) {
+        if (_protocolHash == hasher("compound-v3")) {
             if (chainId == 11155111) {
                 if (_marketAddress == address(0)) {
                     _marketAddress = address(
@@ -226,54 +226,52 @@ contract Integrator {
     }
 
     function routeExternalProtocolInteraction(
-        bytes32 protocolHash,
-        bytes32 operation,
-        uint256 amount,
-        address poolAddress,
-        address assetAddress,
-        address marketAddress
+        bytes32 _protocolHash,
+        bytes32 _operation,
+        uint256 _amount,
+        address _poolAddress,
+        address _assetAddress,
+        address _marketAddress
     ) public {
         address poolBroker = IChaserRegistry(registryAddress).getPoolBroker(
-            poolAddress,
-            assetAddress
+            _poolAddress,
+            _assetAddress
         );
 
-        if (protocolHash == hasher("aave")) {
+        if (_protocolHash == hasher("aave-v3")) {
             aaveConnection(
-                operation,
-                amount,
-                poolAddress,
-                assetAddress,
-                marketAddress,
+                _operation,
+                _amount,
+                _assetAddress,
+                _marketAddress,
                 poolBroker
             );
-        } else if (protocolHash == hasher("compound")) {
+        } else if (_protocolHash == hasher("compound-v3")) {
             compoundConnection(
-                operation,
-                amount,
-                poolAddress,
-                assetAddress,
-                marketAddress,
+                _operation,
+                _amount,
+                _assetAddress,
+                _marketAddress,
                 poolBroker
             );
-        } else if (protocolHash == hasher("spark")) {
+        } else if (_protocolHash == hasher("spark")) {
             sparkConnection(
-                operation,
-                amount,
-                poolAddress,
-                assetAddress,
-                marketAddress,
+                _operation,
+                _amount,
+                _assetAddress,
+                _marketAddress,
                 poolBroker
             );
-        } else if ((protocolHash == hasher("across"))) {
+        } else if ((_protocolHash == hasher("across"))) {
             acrossConnection(
-                operation,
-                amount,
-                poolAddress,
-                assetAddress,
-                marketAddress,
+                _operation,
+                _amount,
+                _assetAddress,
+                _marketAddress,
                 poolBroker
             );
+        } else {
+            emit ExecutionMessage("Invalid protocol provided to integrator.");
         }
     }
 }

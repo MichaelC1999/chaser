@@ -10,13 +10,15 @@ import {AncillaryData} from "./libraries/AncillaryData.sol";
 contract ArbitrationContract {
     IERC20 public umaCurrency; // umaCurrency is the asset used for UMA bond, not a pool's currency
     IOptimisticOracleV3 public oo;
-    uint64 public constant assertionLiveness = 30;
+    uint64 public constant assertionLiveness = 240;
     bytes32 public defaultIdentifier;
-    address public bridgingConduit;
     IChaserRegistry public registry;
 
     mapping(bytes32 => string) public assertionToRequestedMarketId;
     mapping(bytes32 => string) public assertionToRequestedProtocol;
+    mapping(bytes32 => uint256) public assertionToRequestedChainId;
+    mapping(bytes32 => address) public assertionToPoolAddress;
+    mapping(uint256 => string) public chainIdToName;
 
     bytes32 currentPositionAssertion;
 
@@ -47,18 +49,18 @@ contract ArbitrationContract {
         // address _optimisticOracleV3
         registry = IChaserRegistry(_registry);
 
-        if (chainId != 1337) {
-            ISpokePool spokePool = ISpokePool(
-                registry.chainIdToSpokePoolAddress(chainId)
-            );
+        ISpokePool spokePool = ISpokePool(
+            registry.chainIdToSpokePoolAddress(0)
+        );
 
-            address umaCurrencyAddress = spokePool.wrappedNativeToken();
-            umaCurrency = IERC20(umaCurrencyAddress);
-            oo = IOptimisticOracleV3(registry.chainIdToUmaAddress(chainId));
-            defaultIdentifier = oo.defaultIdentifier();
-        }
+        // address umaCurrencyAddress = spokePool.wrappedNativeToken();
+        // umaCurrency = IERC20(umaCurrencyAddress);
+        umaCurrency = IERC20(0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238);
+        oo = IOptimisticOracleV3(registry.chainIdToUmaAddress(chainId));
+        defaultIdentifier = oo.defaultIdentifier();
 
-        bridgingConduit = msg.sender;
+        chainIdToName[11155111] = "ethereum";
+        chainIdToName[84532] = "base";
     }
 
     // For a given assertionId, returns a boolean indicating whether the data is accessible and the data itself.
@@ -73,62 +75,77 @@ contract ArbitrationContract {
     //THIS FUNCTION queryMovePosition() IS THE FIRST STEP IN THE PROCESS TO PIVOT MARKETS. ANY USER CALLS THIS FUNCTION, WHICH OPENS AN ASSERTION
     //IN ORDER TO CALL THIS FUNCTION, USER MUST APPROVE TOKEN TO THIS ADDRESS FOR BOND
     function queryMovePosition(
-        string memory requestProtocolSlug,
+        address sender,
+        uint256 requestChainId,
+        string memory requestProtocol,
         string memory requestMarketId,
+        uint256 currentDepoitChainId,
+        string memory currentProtocol,
+        string memory currentMarketId,
         uint256 bond,
-        uint256 userAllowance,
-        string memory strategySource
+        uint256 strategyIndex
     ) public {
-        require(bond >= 1000000000, "Bond provided must be above 1000 USDC");
+        //IMPORTANT - BOND AMOUNT SHOULD BE A FUNCTION OF POOL TVL. A LOW BOND FOR A MULTI-MILLION POOL COULD BE SACRIFICED TO FRONTRUN, OR SPAMMED TO BLOCK DEPOSITS/WITH
+        // require(bond >= 1000000, "Bond provided must be above 1 USDC"); // IMPORTANT - INCREASE THIS AMOUNT
 
-        bool slugEnabled = registry.slugEnabled(requestProtocolSlug);
+        bool protocolEnabled = registry.protocolEnabled(requestProtocol);
         require(
-            slugEnabled == true,
+            protocolEnabled == true,
             "Protocol-Chain slug must be enabled to make proposal"
         );
 
         // Turn this into a function view call to PoolCalculations, cpassing in user and address(this) to see user allowance for arb contract
 
-        require(
-            bond <= userAllowance,
-            "User must approve bond amount for PoolControl to spend"
-        );
         //IMPORTANT - ASSERTION MUST ALSO INCLUDE THE CORRECT ASSET THAT CORRESPONDS TO THIS POOL. ie THE PROPOSED MARKET MUST BE FOR THE ASSET USED ON THIS POOL
 
         // add view call to pool to get currewntProtocolSlug, currentMarketId, strategy source
 
         // Assertion should use protocol-chain slugs and subgraph id for dispute UX
-        string memory currentDepositProtocolSlug = assertionToRequestedProtocol[
-            currentPositionAssertion
-        ];
-        string memory currentDepositMarketId = assertionToRequestedMarketId[
-            currentPositionAssertion
-        ];
+        // string memory currentDepositProtocolSlug = assertionToRequestedProtocol[
+        //     currentPositionAssertion
+        // ];
+        // string memory currentDepositMarketId = assertionToRequestedMarketId[
+        //     currentPositionAssertion
+        // ];
+
+        // By accessing and executing the startegy script with the following instructions, the script returned a value of true
+        // Call strategyCode() on pool at 0x... and save the string as a .js file locally
+        // In the 'mainExecution()' function call, insert an array with the following values
+        //  -requestProtocol, requestMarketId, currentDepositProtocolSlug, currentDepositMarketId
+        // Using Node.js (version 18 or above), execute the script, and view the return value
+
+        // By converting the bytes held in strategy contracts' strategyCode mapping with key ${index} to ASCII, placing this content into a node js environment (v > 18), and executing it with the arguments listed out below, the script returned true.
+        // Here are the arguments, to be placed in the array argument of mainExecution() within the script
+        // -requestProtocol, requestMarketId, currentDepositProtocolSlug, currentDepositMarketId
+
+        //The javascript code itself will use messari/subgraphs deployments.json to find the subgraph URI
+        //Regardless of what resources the user uses to execute/analyze strategy, the inputs remain the same. The inputs come from chaser contracts for standardization
 
         bytes memory data = abi.encode(
-            "The market on ",
-            requestProtocolSlug,
-            " for pool with an id of ",
+            "By accessing and executing the startegy script with the following instructions, the script returned a value of true. ",
+            "Call 'readStrategyCode()' on pool at ",
+            address(msg.sender),
+            " and save the string as a .js file locally. ",
+            "In the 'mainExecution()' function call, insert an array with the following values: ",
+            chainIdToName[requestChainId],
+            requestProtocol,
             requestMarketId,
-            " yields a better investment than the current market on ",
-            currentDepositProtocolSlug,
-            " with an id of ",
-            currentDepositMarketId,
-            ". This is according to the current strategy whose Javascript logic that can be read from ",
-            strategySource,
-            " as of block ",
-            block.number
+            chainIdToName[currentDepoitChainId],
+            currentProtocol,
+            currentMarketId
         ); // This message must be rewritten to be very exacting/measurable. Check for uint/address byte conversion breaking the value
         //Switch this message to use different strategy mechanism, not contract string based strategy
 
         // Submit UMA assertion proposing the move
-        bytes32 assertionId = assertDataForInternal(data, msg.sender, bond);
+        bytes32 assertionId = assertDataFor(data, sender, msg.sender, bond);
 
         // add state function to pool to add these to state
 
         //DOES THIS VIOLATE CEI?
         assertionToRequestedMarketId[assertionId] = requestMarketId;
-        assertionToRequestedProtocol[assertionId] = requestProtocolSlug;
+        assertionToRequestedProtocol[assertionId] = requestProtocol;
+        assertionToRequestedChainId[assertionId] = requestChainId;
+        assertionToPoolAddress[assertionId] = msg.sender;
     }
 
     ///  @dev assertDataFor Opens the UMA assertion that must be verified using the strategy script provided
@@ -136,12 +153,13 @@ contract ArbitrationContract {
     function assertDataFor(
         bytes memory data,
         address asserter,
+        address poolAddress,
         uint256 bond
-    ) public returns (bytes32 assertionId) {
+    ) internal returns (bytes32 assertionId) {
         // THIS IS FOR PROPOSING A POOL MOVE THEIR INVESTMENTS FOR A GIVEN STRATEGY
 
         // Confirm msg.sender is a pool in the registry
-        bool isPool = registry.poolEnabled(msg.sender);
+        bool isPool = registry.poolEnabled(poolAddress);
         require(
             isPool == true,
             "assertDataFor() may only be called by a valid pool."
@@ -189,90 +207,51 @@ contract ArbitrationContract {
         emit DataAsserted(dataId, data, asserter, assertionId);
     }
 
-    ///  @dev assertDataForInternal Opens the UMA assertion that must be verified using the strategy script provided
-    /// THIS FUNCTION GETS CALLED WHEN A USER ASSERTS THAT A CERTAIN CONDITION TO TRIGGER A PROTOCOL INTERNAL PROCESS HAS BEEN MET
-    /// THIS CONDITION IS MEASURABLE/VERIFIABLE BY SUBGRAPH DATA
-    function assertDataForInternal(
-        bytes memory data,
-        address asserter,
-        uint256 bond
-    ) public returns (bytes32 assertionId) {
-        // THIS IS FOR PROPOSING THE PROTOCOL TO EXECUTE SOME INTERNAL ACTIONS
-        // THE ASSERTION SAYS THAT A PREVIOUSLY SPECIFIED CONDITION HAS BEEN MET, TO BE VERIFIED BY UMA DISPUTERS EXECUTING STRATEGY LOGIC
-
-        // Confirm msg.sender is a pool in the registry
-        bool isPool = registry.poolEnabled(msg.sender);
-        require(
-            isPool == true,
-            "assertDataFor() may only be called by a valid pool."
-        );
-
-        bytes32 dataId = bytes32(abi.encode(asserter));
-
-        umaCurrency.transferFrom(asserter, address(this), bond);
-        umaCurrency.approve(address(oo), bond);
-
-        //SHOULD THE TEXT IN assertTruth FOLLOW TEMPLATE?
-        assertionId = oo.assertTruth(
-            abi.encodePacked(
-                "Data asserted: ",
-                data,
-                " for using the startegy logic located at: ",
-                AncillaryData.toUtf8Bytes(dataId),
-                " and asserter: 0x",
-                AncillaryData.toUtf8BytesAddress(asserter),
-                " at timestamp: ",
-                AncillaryData.toUtf8BytesUint(block.timestamp),
-                " in the DataAsserter contract at 0x",
-                AncillaryData.toUtf8BytesAddress(address(this)),
-                " is valid."
-            ),
-            asserter,
-            address(this),
-            address(0), // No sovereign security.
-            assertionLiveness,
-            umaCurrency,
-            bond,
-            defaultIdentifier,
-            bytes32(0) // No domain.
-        );
-        assertionsData[assertionId] = DataAssertion(
-            dataId,
-            data,
-            asserter,
-            false
-        );
-
-        emit DataAsserted(dataId, data, asserter, assertionId);
-    }
-
     // OptimisticOracleV3 resolve callback.
     function assertionResolvedCallback(
         bytes32 assertionId,
         bool assertedTruthfully
     ) public {
-        require(msg.sender == address(oo));
+        // require(msg.sender == address(oo));
 
         // If the assertion was true, then the data assertion is resolved.
-        if (assertedTruthfully) {
-            assertionsData[assertionId].resolved = true;
-            DataAssertion memory dataAssertion = assertionsData[assertionId];
+        if (assertedTruthfully == true) {
+            string memory requestMarketId = assertionToRequestedMarketId[
+                assertionId
+            ];
+            string memory requestProtocol = assertionToRequestedProtocol[
+                assertionId
+            ];
+
+            uint256 requestChainId = assertionToRequestedChainId[assertionId];
+
+            DataAssertion memory dataAssertion = DataAssertion(
+                assertionsData[assertionId].dataId,
+                assertionsData[assertionId].data,
+                assertionsData[assertionId].asserter,
+                true
+            );
+
             emit DataAssertionResolved(
                 dataAssertion.dataId,
                 dataAssertion.data,
                 dataAssertion.asserter,
                 assertionId
             );
+            IPoolControl poolControl = IPoolControl(
+                assertionToPoolAddress[assertionId]
+            );
+
+            poolControl.sendPositionChange(
+                requestMarketId,
+                requestProtocol,
+                requestChainId
+            );
             //Execute callback on PoolControl sendPositionChange()
 
-            IPoolControl poolControl = IPoolControl(dataAssertion.asserter);
-
-            //IMPORTANT - CHANGE TO LZ SEND
             // This gets executed open callback of the position pivot assertion resolving
-            // This send lz message to the Router to make the transition
 
             //Can only be called by Arbitration contract
-            currentPositionAssertion = assertionId;
             // require(
             //     msg.sender == arbitrationContract,
             //     "sendPositionChange() may only be called by the arbitration contract"
@@ -280,26 +259,6 @@ contract ArbitrationContract {
 
             //SInce withdraws use  LZ ordered messaging, can be made uninterrupted up until the exitPivot is executed
             //Block withdraws once exitPivot is executed, until the new target position is entered and sends message to pool
-
-            string memory requestMarketId = assertionToRequestedMarketId[
-                assertionId
-            ];
-            string memory requestProtocolSlug = assertionToRequestedProtocol[
-                assertionId
-            ];
-
-            requestMarketId = string(
-                abi.encodePacked(assertionId, abi.encode("0xTEST"))
-            ); // REMOVE - TESTING
-            requestProtocolSlug = string(
-                abi.encodePacked(assertionId, abi.encode("SLUG"))
-            ); //REMOVE - TESTING
-
-            bytes32 protocolHash = registry.slugToProtocolHash(
-                requestProtocolSlug
-            );
-
-            poolControl.sendPositionChange(requestMarketId, protocolHash);
         } else delete assertionsData[assertionId];
     }
 
