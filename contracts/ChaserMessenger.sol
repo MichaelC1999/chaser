@@ -40,11 +40,6 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
 
     event ExecutionMessage(string);
 
-    bytes32 private s_lastReceivedMessageId; // Store the last received messageId.
-    string private s_lastReceivedText; // Store the last received text.
-
-    bool public testFlag = false; // REMOVE - TESTING
-
     // Mapping to keep track of allowlisted destination chains.
     mapping(uint64 => bool) public allowlistedDestinationChains;
 
@@ -106,18 +101,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
     function allowlistDestinationChain(
         uint64 _destinationChainSelector,
         bool _allowed
-    ) public {
-        // bool callerPermitted = false;
-        // if (msg.sender == owner()) {
-        //     callerPermitted = true;
-        // }
-        // if (msg.sender == address(this)) {
-        //     callerPermitted = true;
-        // }
-        // require(
-        //     callerPermitted == true,
-        //     "Function only callable internally or by owner"
-        // );
+    ) internal {
         allowlistedDestinationChains[_destinationChainSelector] = _allowed;
     }
 
@@ -125,18 +109,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
     function allowlistSourceChain(
         uint64 _sourceChainSelector,
         bool _allowed
-    ) public {
-        bool callerPermitted = false;
-        if (msg.sender == owner()) {
-            callerPermitted = true;
-        }
-        if (msg.sender == address(this)) {
-            callerPermitted = true;
-        }
-        require(
-            callerPermitted == true,
-            "Function only callable internally or by owner"
-        );
+    ) internal {
         allowlistedSourceChains[_sourceChainSelector] = _allowed;
     }
 
@@ -162,10 +135,13 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         bytes memory _data
     )
         external
-        onlyOwner
-        onlyAllowlistedDestinationChain(_destinationChainSelector) // IMPORTANT - REMOVE THIS AND CHECK REQUIRE CHAIN SELECTOR
+        onlyAllowlistedDestinationChain(_destinationChainSelector)
         returns (bytes32)
     {
+        require(
+            msg.sender == address(registry),
+            "Only registry contract may execute CCIP messaging"
+        );
         require(_receiver != address(0), "RECEIVER");
         require(_poolAddress != address(0), "POOL");
         require(address(s_linkToken) != address(0), "FEETOKEN");
@@ -237,21 +213,21 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         return (_method, _poolAddress, _data);
     }
 
-    // function _ccipReceive(
-    //     Client.Any2EVMMessage memory any2EvmMessage
-    // )
-    //     internal
-    //     override
-    //     onlyAllowlisted(
-    //         any2EvmMessage.sourceChainSelector,
-    //         abi.decode(any2EvmMessage.sender, (address))
-    //     )
-    // { IMPORTANT - USE THE ABOVE COMMENTED OUT FUNCTION DEFINITION
-
     function _ccipReceive(
         Client.Any2EVMMessage memory any2EvmMessage
-    ) internal override {
-        s_lastReceivedMessageId = any2EvmMessage.messageId; // fetch the messageId
+    )
+        internal
+        override
+        onlyAllowlisted(
+            any2EvmMessage.sourceChainSelector,
+            abi.decode(any2EvmMessage.sender, (address))
+        )
+    {
+        // IMPORTANT - USE THE ABOVE COMMENTED OUT FUNCTION DEFINITION
+
+        // function _ccipReceive(
+        //     Client.Any2EVMMessage memory any2EvmMessage
+        // ) internal override {
 
         // // decode any2EvmMessage.data
         (bytes4 _method, address _poolAddress, bytes memory _data) = abi.decode(
@@ -280,7 +256,13 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         if (
             _method == bytes4(keccak256(abi.encode("AbMessagePositionBalance")))
         ) {
-            try bridgeFunctions.sendPositionBalance(_poolAddress, bytes32("")) {
+            try
+                bridgeFunctions.sendPositionBalance(
+                    _poolAddress,
+                    bytes32(""),
+                    0
+                )
+            {
                 emit ExecutionMessage("AbMessagePositionBalance success");
             } catch Error(string memory reason) {
                 emit ExecutionMessage(reason);
@@ -289,7 +271,6 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
 
         if (_method == bytes4(keccak256(abi.encode("AbMessagePositionData")))) {
             //Reads data to be sent back to pool
-            testFlag = true;
             try bridgeFunctions.sendPositionData(_poolAddress) {
                 emit ExecutionMessage("AbMessagePositionData success");
             } catch Error(string memory reason) {
@@ -299,11 +280,11 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
 
         if (_method == bytes4(keccak256(abi.encode("BaMessagePositionData")))) {
             //Receives data from the position on the current position chain. Sets this to mapping state
-            try IPoolControl(_poolAddress).receivePositionData(_data) {
-                emit ExecutionMessage("BaMessagePositionData success");
-            } catch Error(string memory reason) {
-                emit ExecutionMessage(reason);
-            }
+            // try IPoolControl(_poolAddress).receivePositionData(_data) {
+            //     emit ExecutionMessage("BaMessagePositionData success");
+            // } catch Error(string memory reason) {
+            //     emit ExecutionMessage(reason);
+            // }
         }
 
         if (
@@ -379,56 +360,5 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
                 // Set the feeToken to a feeTokenAddress, indicating specific asset will be used for fees
                 feeToken: _feeTokenAddress
             });
-    }
-
-    /// @notice Fetches the details of the last received message.
-    /// @return messageId The ID of the last received message.
-    /// @return text The last received text.
-    function getLastReceivedMessageDetails()
-        external
-        view
-        returns (bytes32 messageId, string memory text)
-    {
-        return (s_lastReceivedMessageId, s_lastReceivedText);
-    }
-
-    /// @notice Fallback function to allow the contract to receive Ether.
-    /// @dev This function has no function body, making it a default function for receiving Ether.
-    /// It is automatically called when Ether is sent to the contract without any data.
-    receive() external payable {}
-
-    /// @notice Allows the contract owner to withdraw the entire balance of Ether from the contract.
-    /// @dev This function reverts if there are no funds to withdraw or if the transfer fails.
-    /// It should only be callable by the owner of the contract.
-    /// @param _beneficiary The address to which the Ether should be sent.
-    function withdraw(address _beneficiary) public onlyOwner {
-        // Retrieve the balance of this contract
-        uint256 amount = address(this).balance;
-
-        // Revert if there is nothing to withdraw
-        if (amount == 0) revert NothingToWithdraw();
-
-        // Attempt to send the funds, capturing the success status and discarding any return data
-        (bool sent, ) = _beneficiary.call{value: amount}("");
-
-        // Revert if the send failed, with information about the attempted transfer
-        if (!sent) revert FailedToWithdrawEth(msg.sender, _beneficiary, amount);
-    }
-
-    /// @notice Allows the owner of the contract to withdraw all tokens of a specific ERC20 token.
-    /// @dev This function reverts with a 'NothingToWithdraw' error if there are no tokens to withdraw.
-    /// @param _beneficiary The address to which the tokens will be sent.
-    /// @param _token The contract address of the ERC20 token to be withdrawn.
-    function withdrawToken(
-        address _beneficiary,
-        address _token
-    ) public onlyOwner {
-        // Retrieve the balance of this contract
-        uint256 amount = IERC20(_token).balanceOf(address(this));
-
-        // Revert if there is nothing to withdraw
-        if (amount == 0) revert NothingToWithdraw();
-
-        IERC20(_token).transfer(_beneficiary, amount);
     }
 }

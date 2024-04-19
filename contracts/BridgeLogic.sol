@@ -8,10 +8,10 @@ import {IChaserMessenger} from "./interfaces/IChaserMessenger.sol";
 import {ISpokePool} from "./interfaces/ISpokePool.sol";
 import {IPoolControl} from "./interfaces/IPoolControl.sol";
 import {IIntegrator} from "./interfaces/IIntegrator.sol";
-import {BridgeReceiver} from "./BridgeReceiver.sol";
+import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract BridgeLogic {
+contract BridgeLogic is OwnerIsCreator {
     uint256 managerChainId;
 
     IChaserRegistry public registry;
@@ -49,7 +49,7 @@ contract BridgeLogic {
         address _messengerAddress,
         address _bridgeReceiverAddress,
         address _integratorAddress
-    ) external {
+    ) external onlyOwner {
         messenger = IChaserMessenger(_messengerAddress);
         bridgeReceiverAddress = _bridgeReceiverAddress;
         integratorAddress = _integratorAddress;
@@ -65,7 +65,11 @@ contract BridgeLogic {
         string memory _marketId,
         bytes32 _protocolHash
     ) external {
-        // IMPORTANT - DOES THIS ONLY GET INITIALIZED ON THE POOLS FIRST POSITION?
+        require(
+            msg.sender == bridgeReceiverAddress ||
+                registry.poolEnabled(msg.sender),
+            "Only callable by the BridgeReceiver or a valid pool"
+        );
         bytes32 currentNonceHash = keccak256(abi.encode(_poolAddress, 0));
         bridgeNonce[_poolAddress] = 0;
         nonceToPositionValue[currentNonceHash] = 0;
@@ -79,9 +83,11 @@ contract BridgeLogic {
             _marketId,
             _amount
         );
+
         bytes32 userPoolHash = keccak256(
             abi.encode(_userAddress, _poolAddress)
         );
+
         userDepositNonce[userPoolHash] += 1;
         userCumulativeDeposits[userPoolHash] += _amount;
         receiveDepositFromPool(_amount, _poolAddress);
@@ -97,6 +103,11 @@ contract BridgeLogic {
         string memory _targetMarketId,
         uint256 _poolNonce
     ) external {
+        require(
+            msg.sender == bridgeReceiverAddress,
+            "Only callable by the BridgeReceiver"
+        );
+
         poolToAsset[_poolAddress] = _tokenSent;
 
         bridgeNonce[_poolAddress] = _poolNonce;
@@ -130,6 +141,11 @@ contract BridgeLogic {
         bytes32 _depositId,
         uint256 _amount
     ) external {
+        require(
+            msg.sender == bridgeReceiverAddress ||
+                registry.poolEnabled(msg.sender),
+            "Only callable by the BridgeReceiver"
+        );
         bytes32 userPoolHash = keccak256(
             abi.encode(_userAddress, _poolAddress)
         );
@@ -137,7 +153,7 @@ contract BridgeLogic {
         userCumulativeDeposits[userPoolHash] += _amount;
 
         receiveDepositFromPool(_amount, _poolAddress);
-        sendPositionBalance(_poolAddress, _depositId, _amount);
+        _sendPositionBalance(_poolAddress, _depositId, _amount);
     }
 
     /**
@@ -155,17 +171,26 @@ contract BridgeLogic {
         return nonceToPositionValue[valHash];
     }
 
+    function sendPositionBalance(
+        address _poolAddress,
+        bytes32 _depositId,
+        uint256 _amount
+    ) external {
+        require(msg.sender == address(messenger), "Only callable by messenger");
+        _sendPositionBalance(_poolAddress, _depositId, _amount);
+    }
+
     /**
      * @notice Send the current position value of a pool back to the pool contract
      * @dev This is the "B=>A" segment of the "A=>B=>A" sequence for reading the current position value across chains
      * @param _poolAddress The address of the pool
      * @param _depositId If called as part of a deposit with the purpose of minting pool tokens, the deposit ID is passed here. It is optional, for falsey use bytes32 zero value
      */
-    function sendPositionBalance(
+    function _sendPositionBalance(
         address _poolAddress,
         bytes32 _depositId,
         uint256 _amount
-    ) public {
+    ) internal {
         bytes32 protocolHash = poolToCurrentProtocolHash[_poolAddress];
         address marketAddress = poolToCurrentPositionMarket[_poolAddress];
         uint256 positionAmount = IIntegrator(integratorAddress)
@@ -183,7 +208,6 @@ contract BridgeLogic {
         bytes memory data = abi.encode(positionAmount, _amount, _depositId);
 
         emit PositionBalanceSent(positionAmount, _poolAddress, _depositId);
-        emit LzMessageSent(method, data);
 
         if (managerChainId == registry.currentChainId()) {
             IPoolControl(_poolAddress).receivePositionBalance(data);
@@ -202,7 +226,7 @@ contract BridgeLogic {
         address _poolAddress,
         bytes32 _depositId,
         uint256 _depositAmount
-    ) public {
+    ) internal {
         address currentPositionMarket = poolToCurrentPositionMarket[
             _poolAddress
         ];
@@ -229,7 +253,6 @@ contract BridgeLogic {
             currentPositionMarket,
             _depositId
         );
-        emit LzMessageSent(method, data);
 
         if (managerChainId == registry.currentChainId()) {
             IPoolControl(_poolAddress).receivePositionInitialized(data);
@@ -241,9 +264,9 @@ contract BridgeLogic {
     /**
      * @notice Send position data of a pool back to the pool contract
      */
-    function sendPositionData(address _poolAddress) public {
+    function sendPositionData(address _poolAddress) external {
         require(
-            msg.sender == address(this) || msg.sender == address(messenger),
+            msg.sender == address(messenger),
             "SendPositionData invalid sender"
         );
 
@@ -359,6 +382,11 @@ contract BridgeLogic {
     }
 
     function executeExitPivot(address _poolAddress, bytes memory _data) public {
+        require(
+            msg.sender == address(messenger) ||
+                registry.poolEnabled(msg.sender),
+            "Only callable by the Messenger or a valid pool"
+        );
         // Withdraw from current position here, bringing funds back to this contract and updating state
         (
             bytes32 protocolHash,
@@ -418,6 +446,11 @@ contract BridgeLogic {
         address _poolAddress,
         bytes memory _data
     ) external {
+        require(
+            msg.sender == address(messenger) ||
+                registry.poolEnabled(msg.sender),
+            "Only callable by the Messenger or a valid pool"
+        );
         // - userWithdraw: bytes 20 userAddress, uint256 amountToWithdraw, uint256 userProportionRatio
         // Pulls out the appropriate amount of asset from position
         // Sends the withdrawn asset through Across back to pool to be sent to user
@@ -589,7 +622,7 @@ contract BridgeLogic {
     function receiveDepositFromPool(
         uint256 _amount,
         address _poolAddress
-    ) public {
+    ) internal {
         bytes32 operation = keccak256(abi.encode("deposit"));
 
         address marketAddress = poolToCurrentPositionMarket[_poolAddress];

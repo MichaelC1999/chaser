@@ -7,10 +7,10 @@ import {IComet} from "./interfaces/IComet.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IPoolBroker} from "./interfaces/IPoolBroker.sol";
 import {DataTypes} from "./libraries/AaveDataTypes.sol";
-
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract Integrator {
+contract Integrator is Initializable {
     // THIS CONTRACT HOLDS THE LP TOKENS, ROUTES THE DEPOSITS, FULFILLS WITHDRAWS FROM THESE EXTERNAL PROTOCOLS
     //THE CONNECTION FUNCTIONS ARE ONLY CALLED FROM BridgeLogic
     // DEPOSIT REQUESTS ALWAYS TRANSFER THE ERC20 TOKENS TO THIS CONTRACT, WHICH THEN APPROVES THE EXTERNAL PROTOCOL FOR TRANSFERING
@@ -20,9 +20,13 @@ contract Integrator {
     address public bridgeLogicAddress;
     address public registryAddress;
     uint256 chainId;
+
     event ExecutionMessage(string);
 
-    constructor(address _bridgeLogicAddress, address _registryAddress) {
+    function initialize(
+        address _bridgeLogicAddress,
+        address _registryAddress
+    ) public initializer {
         bridgeLogicAddress = _bridgeLogicAddress;
         registryAddress = _registryAddress;
         IChaserRegistry(registryAddress).addIntegrator(address(this));
@@ -232,11 +236,19 @@ contract Integrator {
         address _poolAddress,
         address _assetAddress,
         address _marketAddress
-    ) public {
-        address poolBroker = IChaserRegistry(registryAddress).getPoolBroker(
-            _poolAddress,
-            _assetAddress
+    ) external {
+        require(
+            msg.sender == bridgeLogicAddress,
+            "Only the bridgeLogic contract may call this function"
         );
+        address poolBroker = IChaserRegistry(registryAddress)
+            .poolAddressToBroker(_poolAddress);
+        if (poolBroker == address(0)) {
+            poolBroker = IChaserRegistry(registryAddress).deployPoolBroker(
+                _poolAddress,
+                _assetAddress
+            );
+        }
 
         if (_protocolHash == hasher("aave-v3")) {
             aaveConnection(

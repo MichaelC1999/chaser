@@ -13,8 +13,6 @@ interface IChaserMessenger {
 
     function bridgeFunctions() external view returns (address);
 
-    function s_linkToken() external view returns (address);
-
     function _buildCCIPMessage(
         address,
         bytes4,
@@ -56,21 +54,4 @@ interface IChaserMessenger {
         address,
         bytes memory
     ) external returns (bytes32);
-
-    function getLastReceivedMessageDetails()
-        external
-        view
-        returns (bytes32, string memory);
-
-    function withdraw(address) external;
-
-    function withdrawToken(address, address) external;
-
-    // Structs
-    struct DataAssertion {
-        bytes32 dataId;
-        bytes data;
-        address asserter;
-        bool resolved;
-    }
 }

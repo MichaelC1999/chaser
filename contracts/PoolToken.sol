@@ -12,10 +12,7 @@ contract PoolToken is ERC20 {
         address initialDepositor,
         uint256 initialSupply,
         string memory poolId
-    )
-        public
-        ERC20(string.concat("Chaser-", poolId), string.concat("PVT-", poolId))
-    {
+    ) ERC20(string.concat("Chaser-", poolId), string.concat("PVT-", poolId)) {
         poolAddress = address(msg.sender);
         // Take the rounded down base 10 log of total supplied tokens by user
         // Make the initial supply 10 ^ (18 + base10 log)

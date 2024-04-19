@@ -2,6 +2,7 @@
   "name": "chaser",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@openzeppelin/hardhat-upgrades": "^3.0.5",
     "hardhat": "^2.19.4",
     "hardhat-contract-sizer": "^2.10.0"
   },

@@ -10,24 +10,17 @@ import {IPoolControl} from "./interfaces/IPoolControl.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract BridgeReceiver {
-    IChaserRegistry public registry;
     IBridgeLogic public bridgeLogic;
+    address spokePoolAddress;
 
-    mapping(address => address) public poolToCurrentPositionMarket;
-    mapping(address => string) poolToCurrentMarketId;
-    mapping(address => bytes32) poolToCurrentProtocolHash;
-    mapping(address => uint256) positionEntranceAmount;
-    mapping(bytes32 => uint256) userDepositNonce;
-    mapping(bytes32 => uint256) userCumulativeDeposits;
-    mapping(bytes32 => uint256) nonceToPositionValue; // key is hash of bytes of pool address and nonce
     mapping(address => address) poolToAsset;
 
     event AcrossMessageSent(bytes);
-
     event ExecutionMessage(string);
 
-    constructor(address _bridgeLogicAddress) {
+    constructor(address _bridgeLogicAddress, address _spokePoolAddress) {
         bridgeLogic = IBridgeLogic(_bridgeLogicAddress);
+        spokePoolAddress = _spokePoolAddress;
     }
 
     function decodeMessageEvent(
@@ -46,7 +39,11 @@ contract BridgeReceiver {
         address relayer,
         bytes memory message
     ) external {
-        // IMPORTANT - SHOULD ONLY BE CALLABLE FROM THE SPOKEPOOL
+        //IMPORTANT - A USER COULD BRIDGE WITH CUSTOM MANIPULATIVE MESSAGE FROM OWN CONTRACT. THE USER STILL HAS TO SEND amount IN ASSET, BUT THIS COULD EXPLOIT SOMETHING
+        require(
+            msg.sender == spokePoolAddress,
+            "Only the Across V3 Spokepool can handle these messages"
+        );
         (bytes4 method, address poolAddress, bytes memory data) = abi.decode(
             message,
             (bytes4, address, bytes)

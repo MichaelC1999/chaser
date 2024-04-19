@@ -13,7 +13,7 @@ import { decodeAcrossDepositEvent, decodeCCIPSendMessageEvent } from '../utils';
 
 const PivotMechanism = ({ poolData, provider, setErrorMessage, txData, setTxData, step, demoMode, changeStep }) => {
     const [targetChain, setTargetChain] = useState('84532');
-    const [protocolName, setProtocolName] = useState("aave")
+    const [protocolName, setProtocolName] = useState("aave-v3")
     const [pivotInitialized, setPivotInitialized] = useState(false);
 
     useEffect(() => {
@@ -26,7 +26,7 @@ const PivotMechanism = ({ poolData, provider, setErrorMessage, txData, setTxData
     useEffect(() => {
         if (step === 3) {
             setTargetChain('11155111')
-            setProtocolName('aave')
+            setProtocolName('aave-v3')
         }
     }, [step])
 

@@ -8,8 +8,6 @@ contract PoolBroker {
     address public assetAddress;
     address public integratorAddress;
 
-    event Test(bytes);
-
     function addConfig(
         address _poolAddress,
         address _assetAddress,
@@ -45,7 +43,6 @@ contract PoolBroker {
             "The withdraw execution was unsuccessful on the external protocol."
         );
 
-        emit Test(returnData);
         // require(success == true, "Withdraw call must be successful");
         //transfer funds to integrator, finishes execution sequence
         uint256 assetAmountWithdrawn = IERC20(assetAddress).balanceOf(

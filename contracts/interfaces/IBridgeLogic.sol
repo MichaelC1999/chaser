@@ -2,58 +2,7 @@
 pragma solidity ^0.8.9;
 
 interface IBridgeLogic {
-    // Public state variables as view functions
-    function managerChainId() external view returns (uint256);
-
-    function deployConnections() external returns (address, address);
-
-    function registry() external view returns (address);
-
-    function router() external view returns (address);
-
-    function poolToCurrentPositionMarket(
-        address
-    ) external view returns (address);
-
-    function poolToCurrentMarketId(
-        address
-    ) external view returns (string memory);
-
-    function poolToCurrentProtocolHash(address) external view returns (bytes32);
-
-    function positionEntranceAmount(address) external view returns (uint256);
-
-    function poolToAsset(address) external view returns (address);
-
-    function userDepositNonce(bytes32) external view returns (uint256);
-
-    function userCumulativeDeposits(bytes32) external view returns (uint256);
-
-    function nonceToPositionValue(bytes32) external view returns (uint256);
-
-    function bridgeNonce(address) external view returns (uint256);
-
-    function testFlag() external view returns (bool);
-
-    function receiveHandler(bytes4, bytes memory) external;
-
-    function handleAcrossMessage(
-        address,
-        uint256,
-        bool,
-        address,
-        bytes memory
-    ) external;
-
-    function handleV3AcrossMessage(
-        address,
-        uint256,
-        address,
-        bytes memory
-    ) external;
-
-    function handleUserDeposit(address, address, bytes32, uint256) external;
-
+    function addConnections(address, address, address) external;
     function handlePositionInitializer(
         uint256,
         address,
@@ -64,7 +13,6 @@ interface IBridgeLogic {
         string memory,
         bytes32
     ) external;
-
     function handleEnterPivot(
         address,
         uint256,
@@ -74,47 +22,40 @@ interface IBridgeLogic {
         string memory,
         uint256
     ) external;
-
+    function handleUserDeposit(address, address, bytes32, uint256) external;
     function readBalanceAtNonce(
         address,
         uint256
     ) external view returns (uint256);
+    function sendPositionBalance(address, bytes32, uint256) external;
+    function executeExitPivot(address, bytes memory) external;
+    function userWithdrawSequence(address, bytes memory) external;
 
+    // Public state variable accessors
+    function managerChainId() external view returns (uint256);
+    function registry() external view returns (address);
+    function messenger() external view returns (address);
+    function bridgeReceiverAddress() external view returns (address);
+    function integratorAddress() external view returns (address);
+    function poolToCurrentPositionMarket(
+        address
+    ) external view returns (address);
+    function poolToCurrentMarketId(
+        address
+    ) external view returns (string memory);
+    function poolToCurrentProtocolHash(address) external view returns (bytes32);
+    function positionEntranceAmount(address) external view returns (uint256);
+    function poolToAsset(address) external view returns (address);
+    function userDepositNonce(bytes32) external view returns (uint256);
+    function userCumulativeDeposits(bytes32) external view returns (uint256);
+    function nonceToPositionValue(bytes32) external view returns (uint256);
+    function bridgeNonce(address) external view returns (uint256);
     function getPositionBalance(address) external view returns (uint256);
-
     function getUserMaxWithdraw(
         uint256,
         uint256,
         address,
         uint256
     ) external view returns (uint256);
-
-    function initializePoolPosition(
-        address,
-        address,
-        bytes32,
-        string memory,
-        uint256,
-        uint256
-    ) external;
-
-    function executeExitPivot(address, bytes memory) external;
-
-    function userWithdrawSequence(address, bytes memory) external;
-
-    function sendPositionBalance(address, bytes32) external;
-
     function sendPositionData(address) external;
-
-    function receiveDepositFromPool(
-        uint256,
-        bytes32,
-        address,
-        address
-    ) external;
-
-    function getMarketAddressFromId(
-        string memory,
-        bytes32
-    ) external view returns (address);
 }

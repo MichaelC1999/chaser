@@ -12,7 +12,7 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
     const instructionBoxDefault = 'Hover over an input for more instruction...'
     const [poolName, setPoolName] = useState('');
     const [assetAddress, setAssetAddress] = useState('0x4200000000000000000000000000000000000006');
-    const [strategyAddress, setStrategyAddress] = useState('0x0');
+    const [strategyIndex, setStrategyIndex] = useState('0');
     const [instructionBox, setInstructionBox] = useState(instructionBoxDefault)
     const [supportedNetworks, setSupportedNetworks] = useState([]);
     const [submitting, setSubmitting] = useState(false)
@@ -34,7 +34,7 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
         try {
             const poolTx = await (await manager.createNewPool(
                 assetAddress,
-                strategyAddress,
+                strategyIndex,
                 poolName,
                 {
                     gasLimit: 7000000
@@ -79,8 +79,8 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
                 <input type="text" value={assetAddress} />
             </label>
             <label key={3} onMouseEnter={() => setInstructionBox("This points to a strategy where the UMA OO can determine objectively if a proposed investment is better than the current position.\nFor the time being, this is disabled. While Chaser is in development, moving deposits between different protocols/chains is done manually.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
-                Strategy Address:
-                <input type="text" value={strategyAddress} />
+                Strategy:
+                <input type="text" value={strategyIndex} />
             </label>
             <label key={4} onMouseEnter={() => setInstructionBox("Network selection will allow the deploying user to select what chains they want enabled for deposits.\nCurrently the pool does not take in this input, but will be supported at a later date.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
                 Networks:

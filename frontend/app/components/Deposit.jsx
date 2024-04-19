@@ -19,7 +19,7 @@ import { decodeAcrossDepositEvent } from '../utils';
 const Deposit = ({ poolAddress, poolData, provider, setErrorMessage, txData, setTxData, changeStep, demoMode }) => {
     const [assetAmount, setAssetAmount] = useState(0.0001);
     const [chainId, setChainId] = useState(84532)
-    const [protocolName, setProtocolName] = useState("compound")
+    const [protocolName, setProtocolName] = useState("compound-v3")
     const [depoInitialized, setDepoInitialized] = useState(false);
     const [userAssetBalance, setUserAssetBalance] = useState(0)
 

@@ -2,50 +2,44 @@
 pragma solidity ^0.8.9;
 
 interface IChaserRegistry {
-    function managerChainId() external view returns (uint256);
-
-    function currentChainId() external view returns (uint256);
-
-    function poolEnabled(address) external returns (bool);
-
-    function addPoolEnabled(address) external;
-
-    function disablePool(address) external;
-
-    function getPoolBroker(address, address) external returns (address);
-
-    function addIntegrator(address) external;
-
-    function sendMessage(uint, bytes4, address, bytes memory) external;
-
-    function routerAddress() external view returns (address);
-
-    function investmentStrategyContract() external view returns (address);
-
-    function bridgeLogicAddress() external view returns (address);
-
+    function addInvestmentStrategyContract(address) external;
+    function addBridgeLogic(address, address, address) external;
     function localCcipConfigs()
         external
         view
-        returns (address, address, uint64);
-
-    function poolAddressToBroker(address) external view returns (address);
-
-    function chainIdToBridgeReceiver(uint256) external view returns (address);
-
-    function chainIdToSpokePoolAddress(uint256) external view returns (address);
-
-    function chainIdToUmaAddress(uint256) external view returns (address);
-
-    function chainIdToEndpointId(uint256) external view returns (uint32);
-
-    function acrossAddress() external view returns (address);
-
-    function arbitrationContract() external view returns (address);
-
+        returns (address, address, uint256);
+    function enableProtocol(string memory) external;
+    function disableProtocol(string memory) external;
     function protocolEnabled(string memory) external view returns (bool);
-
-    function hashToProtocol(bytes32) external view returns (string memory);
-
     function checkValidPool(address) external view returns (bool);
+    function enablePool(address) external;
+    function disablePool(address) external;
+    function addBridgeReceiver(uint256, address) external;
+    function addMessageReceiver(uint256, address) external;
+    function addIntegrator(address) external;
+    function addArbitrationContract(address) external;
+    function deployPoolBroker(address, address) external returns (address);
+    function sendMessage(uint256, bytes4, address, bytes memory) external;
+
+    // External/Public State Variable Accessors
+    function poolEnabled(address) external view returns (bool);
+    function chainIdToBridgeReceiver(uint256) external view returns (address);
+    function chainIdToMessageReceiver(uint256) external view returns (address);
+    function chainIdToSpokePoolAddress(uint256) external view returns (address);
+    function chainIdToRouter(uint256) external view returns (address);
+    function chainIdToLinkAddress(uint256) external view returns (address);
+    function chainIdToSelector(uint256) external view returns (uint64);
+    function chainIdToUmaAddress(uint256) external view returns (address);
+    function hashToProtocol(bytes32) external view returns (string memory);
+    function poolCountToPool(uint256) external view returns (address);
+    function poolAddressToBroker(address) external view returns (address);
+    function manager() external view returns (address);
+    function bridgeLogicAddress() external view returns (address);
+    function receiverAddress() external view returns (address);
+    function integratorAddress() external view returns (address);
+    function arbitrationContract() external view returns (address);
+    function investmentStrategyContract() external view returns (address);
+    function currentChainId() external view returns (uint256);
+    function managerChainId() external view returns (uint256);
+    function poolCount() external view returns (uint256);
 }

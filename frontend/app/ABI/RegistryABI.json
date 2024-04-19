@@ -203,7 +203,7 @@
                 "type": "address"
             }
         ],
-        "name": "addPoolEnabled",
+        "name": "enablePool",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"

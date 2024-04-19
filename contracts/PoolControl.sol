@@ -13,9 +13,8 @@ import {IPoolToken} from "./interfaces/IPoolToken.sol";
 import {IArbitrationContract} from "./interfaces/IArbitrationContract.sol";
 
 contract PoolControl {
-    //IMPORTANT - POOL SHOULD NOT BE UPGRADEABLE, COULD CAUSE ISSUES WITH CROSS CHAIN IDENTIFICATION OF POOL, WHEN PROXY POINTS TO ONE ADDRESS ON HOME CHAIN AFTER UPGRADE, AND OTHER ADDRESS ON DESTINATION CHAIN
+    //IMPORTANT - POOL SHOULD NOT BE UPGRADEABLE, COULD CAUSE ISSUES WITH CROSS CHAIN IDENTIFICATION OF POOL, AND POOLS HAVING DIFFERENT LOGIC FROM OTHERS
 
-    bytes32 poolId;
     address deployingUser;
     uint256 public localChain;
     address public poolToken;
@@ -31,16 +30,11 @@ contract PoolControl {
     IArbitrationContract public arbitrationContract;
     IERC20 public asset;
 
-    event AcrossMessageSent(bytes);
-    event LzMessageSent(bytes4, bytes);
-    event Numbers(uint256, uint256);
-    event CheckId(bytes32);
     event PivotCompleted(string, address, bytes32, uint256);
     event ExecutionMessage(string);
 
-    error WithdrawOrderFailure(string reason);
-
     mapping(address => bool) userHasPendingWithdraw;
+    mapping(address => bool) userHasPendingDeposit;
 
     // POSITION STATE
     //State contains position target, current position location and last position location (for failed bridge handling)
@@ -82,11 +76,10 @@ contract PoolControl {
     ) {
         localChain = _localChain;
         currentPositionChain = 0;
-        poolId = keccak256(abi.encode(address(this), _poolName));
         poolName = _poolName;
         deployingUser = _deployingUser;
-        asset = IERC20(_asset);
         strategyIndex = _strategyIndex;
+        asset = IERC20(_asset);
         registry = IChaserRegistry(_registry);
         poolCalculations = IPoolCalculations(_poolCalculations);
         localBridgeLogic = IBridgeLogic(registry.bridgeLogicAddress());
@@ -95,7 +88,19 @@ contract PoolControl {
         );
     }
 
-    function receivePositionInitialized(bytes memory _data) external {
+    modifier messageSource() {
+        address messageReceiver = registry.chainIdToMessageReceiver(localChain);
+        require(
+            msg.sender == messageReceiver ||
+                msg.sender == address(localBridgeLogic),
+            "This function may only be called by the messengerReceiver or bridgeLogic"
+        );
+        _;
+    }
+
+    function receivePositionInitialized(
+        bytes memory _data
+    ) external messageSource {
         (
             uint256 positionAmount,
             uint256 depositAmountReceived,
@@ -103,31 +108,32 @@ contract PoolControl {
             bytes32 depositId
         ) = abi.decode(_data, (uint256, uint256, address, bytes32));
         //Receives the current value of the entire position. Sets this to a contract wide state (or mapping with timestamp => uint balance, and save timestamp to contract wide state)
+        require(
+            poolCalculations.depositIdToDepositor(depositId) != address(0),
+            "depositId must point to recorded depositor"
+        );
+        require(
+            poolCalculations.depositIdToTokensMinted(depositId) == false,
+            "Deposit has already minted tokens"
+        );
 
-        if (depositId != bytes32("")) {
-            poolCalculations.updateDepositReceived(
-                depositId,
-                depositAmountReceived
+        userHasPendingDeposit[deployingUser] = false;
+        _pivotCompleted(marketAddress, 1, positionAmount);
+
+        poolCalculations.updateDepositReceived(
+            depositId,
+            depositAmountReceived
+        );
+        poolCalculations.depositIdMinted(depositId);
+
+        if (poolToken == address(0)) {
+            poolToken = address(
+                new PoolToken(deployingUser, positionAmount, poolName)
             );
-
-            pivotCompleted(marketAddress, 0, positionAmount);
-            require(
-                poolCalculations.depositIdToTokensMinted(depositId) == false,
-                "Deposit has already minted tokens"
-            );
-
-            poolCalculations.depositIdMinted(depositId);
-
-            poolNonce += 1;
-            if (poolToken == address(0)) {
-                poolToken = address(
-                    new PoolToken(deployingUser, positionAmount, poolName)
-                );
-            }
         }
     }
 
-    function receivePositionBalance(bytes memory _data) external {
+    function receivePositionBalance(bytes memory _data) external messageSource {
         // Decode the payload data
         (
             uint256 positionAmount,
@@ -135,24 +141,25 @@ contract PoolControl {
             bytes32 depositId
         ) = abi.decode(_data, (uint256, uint256, bytes32));
         //Receives the current value of the entire position. Sets this to a contract wide state (or mapping with timestamp => uint balance, and save timestamp to contract wide state)
-        poolCalculations.updateDepositReceived(
-            depositId,
-            depositAmountReceived
-        );
-
-        currentRecordPositionValue = positionAmount;
-        currentPositionValueTimestamp = block.timestamp;
-
-        poolNonce += 1;
-
         if (depositId != bytes32("")) {
+            address depositor = poolCalculations.updateDepositReceived(
+                depositId,
+                depositAmountReceived
+            );
+
+            userHasPendingDeposit[depositor] = false;
+
+            currentRecordPositionValue = positionAmount;
+            currentPositionValueTimestamp = block.timestamp;
+
+            poolNonce += 1;
+
             require(
                 poolCalculations.depositIdToTokensMinted(depositId) == false,
                 "Deposit has already minted tokens"
             );
 
             poolCalculations.depositIdMinted(depositId);
-
             mintUserPoolTokens(depositId, positionAmount);
         }
     }
@@ -252,14 +259,16 @@ contract PoolControl {
             poolNonce == 0,
             "The position may only be set before the first deposit has settled"
         );
-
-        bytes32 _targetPositionProtocolHash = keccak256(
-            abi.encode(_targetPositionProtocol)
+        require(
+            userHasPendingDeposit[msg.sender] == false,
+            "User cannot have deposit pending on this pool"
         );
 
         targetPositionMarketId = _targetPositionMarketId;
         targetPositionChain = _targetPositionChain;
-        targetPositionProtocolHash = _targetPositionProtocolHash;
+        targetPositionProtocolHash = keccak256(
+            abi.encode(_targetPositionProtocol)
+        );
 
         bytes32 depositId = poolCalculations.createDepositOrder(
             msg.sender,
@@ -288,6 +297,7 @@ contract PoolControl {
                 targetPositionProtocolHash
             );
         } else {
+            userHasPendingDeposit[msg.sender] = true;
             bytes4 method = bytes4(
                 keccak256(abi.encode("AbBridgePositionInitializer"))
             );
@@ -311,8 +321,17 @@ contract PoolControl {
     function userDeposit(uint256 _amount, uint256 _totalFee) external {
         require(
             pivotPending == false,
-            "If a pivot proposal has been approved, no cross-chain position entrances are allowed"
+            "If a pivot proposal has been approved, no position entrances are allowed"
         );
+        require(
+            poolNonce > 0,
+            "The deosits can only be made after the first deposit + position set has settled"
+        );
+        require(
+            userHasPendingDeposit[msg.sender] == false,
+            "User cannot have deposit pending on this pool"
+        );
+
         bytes32 depositId = poolCalculations.createDepositOrder(
             msg.sender,
             _amount
@@ -327,6 +346,7 @@ contract PoolControl {
                 _amount
             );
         } else {
+            userHasPendingDeposit[msg.sender] = true;
             bytes4 method = bytes4(
                 keccak256(abi.encode("AbBridgeDepositUser"))
             );
@@ -336,6 +356,7 @@ contract PoolControl {
                 address(this),
                 abi.encode(depositId, msg.sender)
             );
+
             enterFundsCrossChain(
                 depositId,
                 _amount,
@@ -398,8 +419,6 @@ contract PoolControl {
         // spokePoolPreparation makes approval for spokePool
         spokePoolPreparation(_sender, _amount);
 
-        emit AcrossMessageSent(_message);
-
         crossChainBridge(
             _sender,
             acrossSpokePool,
@@ -451,7 +470,7 @@ contract PoolControl {
         string memory _requestMarketId,
         uint256 _requestChainId,
         uint256 _bond
-    ) public {
+    ) external {
         string memory currentPositionProtocol = registry.hashToProtocol(
             currentPositionProtocolHash
         );
@@ -473,10 +492,15 @@ contract PoolControl {
         string memory _targetProtocol,
         uint256 _destinationChainId
     ) external {
-        bytes memory pivotMessage = createPivotExitMessage(
+        // IMPORTANT - THIS SHOULD REQUIRE MSG.SENDER TO BE THE ARBITRATION CONTRACT
+        address destinationBridgeReceiver = registry.chainIdToBridgeReceiver(
+            _destinationChainId
+        );
+        bytes memory pivotMessage = poolCalculations.createPivotExitMessage(
             keccak256(abi.encode(_targetProtocol)),
             _requestMarketId,
-            _destinationChainId
+            _destinationChainId,
+            destinationBridgeReceiver
         );
 
         targetPositionMarketId = _requestMarketId;
@@ -485,11 +509,9 @@ contract PoolControl {
 
         pivotPending = true;
 
-        emit Numbers(currentPositionChain, _destinationChainId);
-
-        // IF POSITION NEEDS TO PIVOT *FROM* THIS CHAIN (LOCAL/BRIDGE LOGIC)
-        // THIS IF STATEMENT DETERMINES WHETHER TO ACTION THE EXITPIVOT LOCALLY OR THROUGH CROSS CHAIN
         if (currentPositionChain == localChain) {
+            // IF POSITION NEEDS TO PIVOT *FROM* THIS CHAIN (LOCAL/BRIDGE LOGIC)
+            // THIS IF STATEMENT DETERMINES WHETHER TO ACTION THE EXITPIVOT LOCALLY OR THROUGH CROSS CHAIN
             localBridgeLogic.executeExitPivot(address(this), pivotMessage);
         } else {
             bytes4 method = bytes4(
@@ -508,7 +530,15 @@ contract PoolControl {
         address marketAddress,
         uint256 nonce,
         uint256 positionAmount
-    ) public {
+    ) external messageSource {
+        _pivotCompleted(marketAddress, nonce, positionAmount);
+    }
+
+    function _pivotCompleted(
+        address marketAddress,
+        uint256 nonce,
+        uint256 positionAmount
+    ) internal {
         lastPositionAddress = currentPositionAddress;
         lastPositionChain = currentPositionChain;
         lastPositionProtocolHash = currentPositionProtocolHash;
@@ -563,6 +593,13 @@ contract PoolControl {
         uint256 _positionValue,
         uint256 _inputAmount
     ) public {
+        address bridgeReceiver = registry.chainIdToBridgeReceiver(localChain);
+
+        require(
+            msg.sender == address(localBridgeLogic) ||
+                msg.sender == bridgeReceiver,
+            "Only bridgeLogic or bridgeReceiver may finalize a withdraw"
+        );
         (address depositor, uint256 poolTokensToBurn) = poolCalculations
             .getWithdrawOrderFulfillment(
                 _withdrawId,
@@ -615,29 +652,5 @@ contract PoolControl {
         );
         asset.transferFrom(_sender, address(this), _amount);
         asset.approve(acrossSpokePool, _amount);
-    }
-
-    function receivePositionData(bytes memory _data) external {
-        emit AcrossMessageSent(_data);
-    }
-
-    function createPivotExitMessage(
-        bytes32 _protocolHash,
-        string memory _requestMarketId,
-        uint256 _destinationChainId
-    ) internal view returns (bytes memory) {
-        address destinationBridgeReceiver = registry.chainIdToBridgeReceiver(
-            _destinationChainId
-        );
-
-        bytes memory data = abi.encode(
-            _protocolHash,
-            address(0), // IMPORTANT - REPLACE WITH MARKET ADDRESS VALIDATED IN ARBITRATION
-            _requestMarketId,
-            _destinationChainId,
-            destinationBridgeReceiver
-        );
-
-        return data;
     }
 }

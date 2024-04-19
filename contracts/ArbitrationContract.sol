@@ -45,6 +45,9 @@ contract ArbitrationContract {
         bytes32 indexed assertionId
     );
 
+    //IMPORTANT - dispute resolved callback?
+    //IMPORTANT - BLOCK MOVE PROPOSALS IF A POOL CURRENTLY HAS PROPOSAL PENDING
+
     constructor(address _registry, uint256 chainId) {
         // address _optimisticOracleV3
         registry = IChaserRegistry(_registry);
@@ -250,12 +253,6 @@ contract ArbitrationContract {
             //Execute callback on PoolControl sendPositionChange()
 
             // This gets executed open callback of the position pivot assertion resolving
-
-            //Can only be called by Arbitration contract
-            // require(
-            //     msg.sender == arbitrationContract,
-            //     "sendPositionChange() may only be called by the arbitration contract"
-            // ); IMPORTANT - UNCOMMENT
 
             //SInce withdraws use  LZ ordered messaging, can be made uninterrupted up until the exitPivot is executed
             //Block withdraws once exitPivot is executed, until the new target position is entered and sends message to pool

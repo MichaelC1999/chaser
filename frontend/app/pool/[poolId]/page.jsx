@@ -191,7 +191,7 @@ export default function Page() {
         if (poolData?.nonce?.toString() === "0" && !poolData?.protocol && prevStep === null) {
             stepToSet = 0
         }
-        if (poolData?.nonce?.toString() === "1" && protocolHashes[poolData?.protocol] === "compound" && !poolData?.isPivoting && !(prevStep > 0)) {
+        if (poolData?.nonce?.toString() === "1" && protocolHashes[poolData?.protocol] === "compound-v3" && !poolData?.isPivoting && !(prevStep > 0)) {
             stepToSet = 1
         }
         if (prevStep === 1) {
@@ -208,7 +208,7 @@ export default function Page() {
         if (poolData?.isPivoting && poolData?.nonce?.toString() === "1" && prevStep !== 6) {
             stepToSet = 6
         }
-        if (!poolData?.isPivoting && poolData?.nonce?.toString() === "2" && protocolHashes[poolData?.protocol] === "aave" && prevStep !== 7) {
+        if (!poolData?.isPivoting && poolData?.nonce?.toString() === "2" && protocolHashes[poolData?.protocol] === "aave-v3" && prevStep !== 7) {
             stepToSet = 7
         }
 

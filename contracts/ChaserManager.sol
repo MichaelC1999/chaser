@@ -42,7 +42,7 @@ contract ChaserManager is OwnerIsCreator {
         address poolAsset,
         uint256 strategyIndex,
         string memory poolName
-    ) public {
+    ) external {
         address initialDepositor = msg.sender;
 
         PoolControl pool = new PoolControl(
@@ -55,7 +55,7 @@ contract ChaserManager is OwnerIsCreator {
             poolCalculationsAddress
         );
         address poolAddress = address(pool);
-        registry.addPoolEnabled(poolAddress);
+        registry.enablePool(poolAddress);
         emit PoolCreated(poolAddress);
     }
 }

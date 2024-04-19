@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
-import {BridgeReceiver} from "./BridgeReceiver.sol";
-import {BridgeLogic} from "./BridgeLogic.sol";
 import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
 import {IChaserMessenger} from "./interfaces/IChaserMessenger.sol";
 import {PoolBroker} from "./PoolBroker.sol";
 
 import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.sol";
-
 import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
-contract Registry is OwnerIsCreator {
+contract Registry is OwnerIsCreator, Initializable {
     //Contains supported protocols/chains
     // Functions for making sure that a proposal assertion is actually supported
 
@@ -19,11 +17,53 @@ contract Registry is OwnerIsCreator {
     event Marker(string);
     event MessageMethod(bytes4);
 
-    constructor(
+    mapping(address => bool) public poolEnabled;
+
+    mapping(uint256 => address) public chainIdToBridgeReceiver; //This uses CrossDeploy to create inter-chain registry of connection addresses
+
+    mapping(uint256 => address) public chainIdToMessageReceiver;
+
+    mapping(uint256 => address) public chainIdToSpokePoolAddress;
+
+    mapping(uint256 => address) public chainIdToRouter;
+
+    mapping(uint256 => address) public chainIdToLinkAddress;
+
+    mapping(uint256 => uint64) public chainIdToSelector; // Chain Id to the LayerZero endpoint Id
+
+    mapping(uint256 => address) public chainIdToUmaAddress;
+
+    mapping(bytes32 => bool) private hashedProtocolToEnabled;
+
+    mapping(bytes32 => string) public hashToProtocol;
+
+    mapping(uint256 => address) public poolCountToPool;
+
+    mapping(address => address) public poolAddressToBroker;
+
+    address public manager;
+
+    address public bridgeLogicAddress;
+
+    address public receiverAddress;
+
+    address public integratorAddress;
+
+    address public arbitrationContract; // The address of the arbitrationContract on the pool chain
+
+    address public investmentStrategyContract;
+
+    uint256 public currentChainId;
+
+    uint256 public managerChainId;
+
+    uint256 public poolCount;
+
+    function initialize(
         uint256 _currentChainId,
         uint256 _managerChainId,
         address _managerAddress
-    ) {
+    ) public initializer {
         //_currentChainId is the chain that this registry is currently deployed on
         //_managerChainId is the chain that has the manager contract and all of the pools
         if (_currentChainId == _managerChainId) {
@@ -126,53 +166,12 @@ contract Registry is OwnerIsCreator {
         chainIdToLinkAddress[84532] = address(
             0xE4aB69C077896252FAFBD49EFD26B5D171A32410
         );
+        poolCount = 0;
     }
-
-    mapping(address => bool) public poolEnabled;
-
-    mapping(uint256 => address) public chainIdToBridgeReceiver; //This uses CrossDeploy to create inter-chain registry of connection addresses
-
-    mapping(uint256 => address) public chainIdToMessageReceiver;
-
-    mapping(uint256 => address) public chainIdToSpokePoolAddress;
-
-    mapping(uint256 => address) public chainIdToRouter;
-
-    mapping(uint256 => address) public chainIdToLinkAddress;
-
-    mapping(uint256 => uint64) public chainIdToSelector; // Chain Id to the LayerZero endpoint Id
-
-    mapping(uint256 => address) public chainIdToUmaAddress;
-
-    mapping(bytes32 => bool) private hashedProtocolToEnabled;
-
-    mapping(bytes32 => string) public hashToProtocol;
-
-    mapping(uint256 => address) public poolCountToPool;
-
-    mapping(address => address) public poolAddressToBroker;
-
-    address public manager;
-
-    address public bridgeLogicAddress;
-
-    address public receiverAddress;
-
-    address public integratorAddress;
-
-    address public arbitrationContract; // The address of the arbitrationContract on the pool chain
-
-    address public investmentStrategyContract;
-
-    uint256 public currentChainId;
-
-    uint256 public managerChainId;
-
-    uint256 public poolCount = 0;
 
     function addInvestmentStrategyContract(
         address _investmentStrategyContract
-    ) external {
+    ) external onlyOwner {
         investmentStrategyContract = _investmentStrategyContract;
     }
 
@@ -181,19 +180,14 @@ contract Registry is OwnerIsCreator {
         address _messengerAddress,
         address _bridgeReceiverAddress
     ) external onlyOwner {
-        // require(
-        //     msg.sender == manager,
-        //     "Only Manager may call deployBridgeReceiver"
-        // );
-
         bridgeLogicAddress = _bridgeLogicAddress;
 
         receiverAddress = _bridgeReceiverAddress;
 
         require(_messengerAddress != address(0), "Invalid messenger");
 
-        addMessageReceiver(currentChainId, _messengerAddress);
-        addBridgeReceiver(currentChainId, receiverAddress);
+        _addMessageReceiver(currentChainId, _messengerAddress);
+        _addBridgeReceiver(currentChainId, receiverAddress);
     }
 
     function localCcipConfigs()
@@ -208,17 +202,13 @@ contract Registry is OwnerIsCreator {
         return (chainlinkRouter, linkAddress, selector);
     }
 
-    function enableProtocol(string memory _protocol) external {
-        //IMPORTANT - NEEDS ACCESS CONTROL
-
+    function enableProtocol(string memory _protocol) external onlyOwner {
         bytes32 protocolHash = keccak256(abi.encode(_protocol));
         hashedProtocolToEnabled[protocolHash] = true;
         hashToProtocol[protocolHash] = _protocol;
     }
 
-    function disableProtocol(string memory _protocol) external {
-        //IMPORTANT - NEEDS ACCESS CONTROL
-
+    function disableProtocol(string memory _protocol) external onlyOwner {
         bytes32 protocolHash = keccak256(abi.encode(_protocol));
         hashedProtocolToEnabled[protocolHash] = false;
     }
@@ -231,43 +221,103 @@ contract Registry is OwnerIsCreator {
     }
 
     function checkValidPool(address _poolAddress) external view returns (bool) {
-        // If chain is not the manager chain, assume the pool is valid
         if (managerChainId == currentChainId) {
             return poolEnabled[_poolAddress];
         }
         return true;
     }
 
-    function addPoolEnabled(address _poolAddress) external {
-        //IMPORTANT - NEEDS ACCESS CONTROL
+    function enablePool(address _poolAddress) external {
+        require(
+            msg.sender == manager,
+            "Only the manager contract may enable pools"
+        );
+
         poolCountToPool[poolCount] = _poolAddress;
         poolCount += 1;
         poolEnabled[_poolAddress] = true;
     }
 
-    function disablePool(address _poolAddress) public {
-        //IMPORTANT - NEEDS ACCESS CONTROL
+    function disablePool(address _poolAddress) external {
+        require(
+            msg.sender == manager,
+            "Only the manager contract may enable pools"
+        );
         poolEnabled[_poolAddress] = false;
     }
 
-    function addBridgeReceiver(uint _chainId, address _receiver) public {
-        //IMPORTANT - NEEDS ACCESS CONTROL
+    function addBridgeReceiver(
+        uint _chainId,
+        address _receiver
+    ) external onlyOwner {
+        _addBridgeReceiver(_chainId, _receiver);
+    }
 
+    function _addBridgeReceiver(uint _chainId, address _receiver) internal {
+        require(
+            chainIdToBridgeReceiver[_chainId] == address(0),
+            "Cannot change a receiver address that has already been set"
+        );
         chainIdToBridgeReceiver[_chainId] = _receiver;
     }
 
-    function addMessageReceiver(uint _chainId, address _receiver) public {
-        //IMPORTANT - NEEDS ACCESS CONTROL
+    function addMessageReceiver(
+        uint _chainId,
+        address _receiver
+    ) external onlyOwner {
+        _addMessageReceiver(_chainId, _receiver);
+    }
 
+    function _addMessageReceiver(uint _chainId, address _receiver) internal {
+        require(
+            chainIdToMessageReceiver[_chainId] == address(0),
+            "Cannot change a receiver address that has already been set"
+        );
         chainIdToMessageReceiver[_chainId] = _receiver;
         address messengerAddress = chainIdToMessageReceiver[currentChainId]; // Could this be failing on polygon? currentChainId invalid or points to invalid messenger for polygon
         IChaserMessenger(messengerAddress).allowlistSender(_receiver, true);
     }
 
     function addIntegrator(address _integratorAddress) external {
-        //IMPORTANT - NEEDS ACCESS CONTROL
-
+        require(
+            msg.sender == _integratorAddress,
+            "You cannot add the integrator"
+        );
+        require(
+            integratorAddress == address(0),
+            "Cannot change the integrator address once its been set"
+        );
         integratorAddress = _integratorAddress;
+    }
+
+    function addArbitrationContract(
+        address _arbitrationContract
+    ) external onlyOwner {
+        require(
+            arbitrationContract == address(0),
+            "Cannot change the arbitration address once its been set"
+        );
+        arbitrationContract = _arbitrationContract;
+    }
+
+    function deployPoolBroker(
+        address _poolAddress,
+        address _assetAddress
+    ) external returns (address) {
+        require(
+            poolAddressToBroker[_poolAddress] == address(0),
+            "Pool already has a broker on this chain"
+        );
+        require(
+            msg.sender == integratorAddress,
+            "Only the integrator may deploy a broker"
+        );
+
+        PoolBroker poolBroker = new PoolBroker();
+        poolBroker.addConfig(_poolAddress, _assetAddress, integratorAddress);
+        poolAddressToBroker[_poolAddress] = address(poolBroker);
+
+        return poolAddressToBroker[_poolAddress];
     }
 
     function sendMessage(
@@ -278,15 +328,20 @@ contract Registry is OwnerIsCreator {
     ) external {
         //Pool/BridgeLogic calls this function to send message, letting the registry verify that the Pool/Logic contract is legitimate
         // IMPORTANT - PERFORM ACCESS CONTROL HERE
-        address poolAddress = msg.sender;
-        if (msg.sender == bridgeLogicAddress) {
-            poolAddress = _poolAddress;
-        } else {
-            require(
-                poolEnabled[poolAddress] == true,
-                "SendMessage may only be actioned by a valid pool"
-            );
-        }
+        // address poolAddress = msg.sender;
+        // if (msg.sender == bridgeLogicAddress) {
+        //     poolAddress = _poolAddress;
+        // } else {
+        //     require(
+        //         poolEnabled[_poolAddress] == true,
+        //         "SendMessage may only be actioned by a valid pool"
+        //     );
+        // }
+
+        require(
+            poolEnabled[msg.sender] || msg.sender == bridgeLogicAddress,
+            "sendMessage function call only be actioned by a valid pool or the bridgeLogic contract"
+        );
 
         uint64 currentChainSelector = chainIdToSelector[currentChainId];
         uint64 destinationChainSelector = chainIdToSelector[_chainId];
@@ -299,7 +354,7 @@ contract Registry is OwnerIsCreator {
             // TESTING - CAN REMOVE
             //FOR CHAINS UNSUPPORTED BY CCIP, TEMPORARILY JUST GENERATE THE MESSAGE OBJECT FOR USER TO MANUALLY PASS
 
-            require(poolAddress != address(0), "POOL");
+            require(_poolAddress != address(0), "POOL");
 
             emit CCIPMessageSent(messageId, data);
             emit Marker("Above Log is CCIP Message, below is method sent");
@@ -323,32 +378,8 @@ contract Registry is OwnerIsCreator {
             destinationChainSelector,
             messageReceiver,
             _method,
-            poolAddress,
+            _poolAddress,
             _data
         );
-    }
-
-    function getPoolBroker(
-        address _poolAddress,
-        address _assetAddress
-    ) public returns (address) {
-        address instance;
-        // poolBroker lookup function
-        //If _poolAddress does not have its equivalent on this chain, deploy a broker
-        if (poolAddressToBroker[_poolAddress] == address(0)) {
-            PoolBroker poolBroker = new PoolBroker();
-            poolBroker.addConfig(
-                _poolAddress,
-                _assetAddress,
-                integratorAddress
-            );
-            poolAddressToBroker[_poolAddress] = address(poolBroker);
-        }
-
-        return poolAddressToBroker[_poolAddress];
-    }
-
-    function addArbitrationContract(address _arbitrationContract) external {
-        arbitrationContract = _arbitrationContract;
     }
 }

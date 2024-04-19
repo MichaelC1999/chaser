@@ -2,103 +2,27 @@
 pragma solidity ^0.8.9;
 
 interface IPoolControl {
-    // Public state variables as view functions
-    function localChain() external view returns (uint256);
-
-    function poolId() external view returns (bytes32);
-
-    function deployingUser() external view returns (address);
-
-    function poolNonce() external view returns (uint256);
-
-    function poolName() external view returns (string memory);
-
-    function strategySource() external view returns (string memory);
-
-    function router() external view returns (address);
-
-    function localBridgeReceiver() external view returns (address);
-
-    function manager() external view returns (address);
-
-    function registry() external view returns (address);
-
-    function poolToken() external view returns (address);
-
-    function asset() external view returns (address);
-
-    function targetPositionMarketId() external view returns (string memory);
-
-    function targetPositionChain() external view returns (uint256);
-
-    function targetPositionProtocolHash() external view returns (bytes32);
-
-    function currentPositionAddress() external view returns (address);
-
-    function currentPositionMarketId() external view returns (string memory);
-
-    function currentPositionChain() external view returns (uint256);
-
-    function currentPositionProtocolHash() external view returns (bytes32);
-
-    function currentRecordPositionValue() external view returns (uint256);
-
-    function lastPositionAddress() external view returns (address);
-
-    function lastPositionChain() external view returns (uint256);
-
-    function lastPositionProtocolHash() external view returns (bytes32);
-
-    function currentPositionAssertion() external view returns (bytes32);
-
-    function pivotPending() external view returns (bool);
-
-    // External/Public functions
-    function initializeContractConnections(address) external;
-
-    function receiveHandler(bytes4, bytes memory) external;
-
-    function handleAcrossMessage(
-        address,
-        uint256,
-        bool,
-        address,
-        bytes memory
-    ) external;
-
-    function handleV3AcrossMessage(
-        address,
-        uint256,
-        address,
-        bytes memory
-    ) external;
-
+    function receivePositionInitialized(bytes memory) external;
+    function receivePositionBalance(bytes memory) external;
     function userWithdrawOrder(uint256) external;
-
-    function pivotPosition() external;
-
     function readPositionBalance() external;
-
     function getPositionData() external;
-
-    function receivePositionData(bytes memory) external;
-
     function userDepositAndSetPosition(
         uint256,
-        int64,
+        uint256,
         string memory,
         uint256,
         string memory
     ) external;
-
-    function userDeposit(uint256, int64) external;
-
+    function userDeposit(uint256, uint256) external;
+    function queryMovePosition(
+        string memory,
+        string memory,
+        uint256,
+        uint256
+    ) external;
     function sendPositionChange(string memory, string memory, uint256) external;
-
-    function queryMovePosition(string memory, string memory, uint256) external;
-
     function pivotCompleted(address, uint256, uint256) external;
-
     function finalizeWithdrawOrder(
         bytes32,
         uint256,
@@ -106,8 +30,33 @@ interface IPoolControl {
         uint256,
         uint256
     ) external;
+    function readStrategyCode() external view returns (string memory);
 
-    function receivePositionBalance(bytes memory) external;
-
-    function receivePositionInitialized(bytes memory) external;
+    // External/Public State Variable Accessors
+    function localChain() external view returns (uint256);
+    function poolToken() external view returns (address);
+    function poolNonce() external view returns (uint256);
+    function poolName() external view returns (string memory);
+    function strategyIndex() external view returns (uint256);
+    function pivotPending() external view returns (bool);
+    function localBridgeLogic() external view returns (address);
+    function manager() external view returns (address);
+    function registry() external view returns (address);
+    function poolCalculations() external view returns (address);
+    function arbitrationContract() external view returns (address);
+    function asset() external view returns (address);
+    function targetPositionMarketId() external view returns (string memory);
+    function targetPositionChain() external view returns (uint256);
+    function targetPositionProtocolHash() external view returns (bytes32);
+    function currentPositionAddress() external view returns (address);
+    function currentPositionMarketId() external view returns (string memory);
+    function currentPositionChain() external view returns (uint256);
+    function currentPositionProtocolHash() external view returns (bytes32);
+    function currentRecordPositionValue() external view returns (uint256);
+    function currentPositionValueTimestamp() external view returns (uint256);
+    function lastPositionAddress() external view returns (address);
+    function lastPositionChain() external view returns (uint256);
+    function lastPositionProtocolHash() external view returns (bytes32);
+    function userHasPendingWithdraw(address) external view returns (bool);
+    function userHasPendingDeposit(address) external view returns (bool);
 }
