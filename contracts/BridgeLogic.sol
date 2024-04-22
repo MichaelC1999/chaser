@@ -109,7 +109,6 @@ contract BridgeLogic is OwnerIsCreator {
         );
 
         poolToAsset[_poolAddress] = _tokenSent;
-
         bridgeNonce[_poolAddress] = _poolNonce;
         // nonceToPositionValue[currentNonceHash] = _amount;
         enterPosition(
@@ -274,13 +273,7 @@ contract BridgeLogic is OwnerIsCreator {
 
         bytes4 method = bytes4(keccak256(abi.encode("BaMessagePositionData")));
 
-        try registry.sendMessage(managerChainId, method, _poolAddress, data) {
-            emit ExecutionMessage("sendMessage success");
-        } catch Error(string memory reason) {
-            emit ExecutionMessage(
-                string(abi.encodePacked("BridgeLogic: ", reason))
-            );
-        }
+        registry.sendMessage(managerChainId, method, _poolAddress, data);
     }
 
     /**
@@ -290,13 +283,7 @@ contract BridgeLogic is OwnerIsCreator {
         bytes memory data;
 
         bytes4 method = bytes4(keccak256(abi.encode("sendRegistryAddress")));
-        try registry.sendMessage(managerChainId, method, _poolAddress, data) {
-            emit ExecutionMessage("sendMessage success");
-        } catch Error(string memory reason) {
-            emit ExecutionMessage(
-                string(abi.encodePacked("BridgeLogic: ", reason))
-            );
-        }
+        registry.sendMessage(managerChainId, method, _poolAddress, data);
     }
 
     function sendPivotCompleted(
@@ -311,13 +298,7 @@ contract BridgeLogic is OwnerIsCreator {
             _amount
         );
 
-        try registry.sendMessage(managerChainId, method, _poolAddress, data) {
-            emit ExecutionMessage("sendMessage success");
-        } catch Error(string memory reason) {
-            emit ExecutionMessage(
-                string(abi.encodePacked("BridgeLogic: ", reason))
-            );
-        }
+        registry.sendMessage(managerChainId, method, _poolAddress, data);
     }
 
     function enterPosition(
@@ -359,29 +340,20 @@ contract BridgeLogic is OwnerIsCreator {
             )
         );
 
-        address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
-
-        ERC20(poolToAsset[_poolAddress]).approve(acrossSpokePool, _amount);
-
         emit AcrossMessageSent(message);
-
-        ISpokePool(acrossSpokePool).depositV3(
-            address(this),
-            _destinationBridgeReceiver,
-            poolToAsset[_poolAddress],
-            address(0),
+        crossChainBridge(
             _amount,
-            _amount - (_amount / 250),
+            _destinationBridgeReceiver,
+            _poolAddress,
             _destinationChainId,
-            address(0),
-            uint32(block.timestamp),
-            uint32(block.timestamp + 30000),
-            0,
             message
         );
     }
 
-    function executeExitPivot(address _poolAddress, bytes memory _data) public {
+    function executeExitPivot(
+        address _poolAddress,
+        bytes memory _data
+    ) external {
         require(
             msg.sender == address(messenger) ||
                 registry.poolEnabled(msg.sender),
@@ -397,7 +369,6 @@ contract BridgeLogic is OwnerIsCreator {
         ) = abi.decode(_data, (bytes32, address, string, uint256, address));
 
         uint256 amount = getPositionBalance(_poolAddress);
-
         uint256 currentChainId = registry.currentChainId();
 
         integratorWithdraw(_poolAddress, amount);
@@ -440,6 +411,70 @@ contract BridgeLogic is OwnerIsCreator {
                 amount
             );
         }
+    }
+
+    function returnToPool(
+        bytes4 _originalMethod,
+        address _poolAddress,
+        bytes32 _depositId,
+        uint256 _amount
+    ) external {
+        require(
+            msg.sender == bridgeReceiverAddress,
+            "Only callable by the BridgeReceiver"
+        );
+        // takes a failed BridgeReceiver function call, and sends it through across back to the pool
+        bytes4 method = bytes4(keccak256(abi.encode("BaReturnToPool")));
+
+        bytes memory message = abi.encode(
+            method,
+            _poolAddress,
+            abi.encode(_originalMethod, _depositId, _amount)
+        );
+        address destinationBridgeReceiver = registry.chainIdToBridgeReceiver(
+            managerChainId
+        );
+
+        if (registry.currentChainId() == managerChainId) {
+            //IMPORTANT - CONNECT DIRECTLY TO FUNCTIONS
+            // FOR DEPOS/POSITIONINIT, THIS CASE WOULD BE AN AUTOMATIC REVERT ON THE SINGLE FUNCTION CALL, FUNDS NEVER BRIDGE IN THIS CASE
+            //DIRECTLY CALL THE PIVOTRESCUE LOGIC ON THE POOL
+        } else {
+            crossChainBridge(
+                _amount,
+                destinationBridgeReceiver,
+                _poolAddress,
+                managerChainId,
+                message
+            );
+        }
+    }
+
+    function crossChainBridge(
+        uint256 _amount,
+        address _destinationBridgeReceiver,
+        address _poolAddress,
+        uint256 _destinationChainId,
+        bytes memory _message
+    ) internal {
+        address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
+        require(acrossSpokePool != address(0), "Spokepool zero address");
+
+        ERC20(poolToAsset[_poolAddress]).approve(acrossSpokePool, _amount);
+        ISpokePool(acrossSpokePool).depositV3(
+            address(this),
+            _destinationBridgeReceiver,
+            poolToAsset[_poolAddress],
+            address(0),
+            _amount,
+            _amount - (_amount / 250),
+            _destinationChainId,
+            address(0),
+            uint32(block.timestamp),
+            uint32(block.timestamp + 30000),
+            0,
+            _message
+        );
     }
 
     function userWithdrawSequence(
@@ -535,8 +570,9 @@ contract BridgeLogic is OwnerIsCreator {
         address _poolAddress,
         bytes32 _withdrawId
     ) internal {
-        address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
-        require(acrossSpokePool != address(0), "Spokepool zero address");
+        address destinationBridgeReceiver = registry.chainIdToBridgeReceiver(
+            managerChainId
+        );
 
         bytes4 method = bytes4(
             keccak256(abi.encode("BaBridgeWithdrawOrderUser"))
@@ -569,31 +605,13 @@ contract BridgeLogic is OwnerIsCreator {
                 _amount
             );
         } else {
-            emit AcrossMessageSent(message);
-            ERC20(poolToAsset[_poolAddress]).approve(acrossSpokePool, _amount);
-            try
-                ISpokePool(acrossSpokePool).depositV3(
-                    address(this),
-                    _poolAddress,
-                    poolToAsset[_poolAddress],
-                    address(0),
-                    _amount,
-                    _amount - (_amount / 250),
-                    managerChainId,
-                    address(0),
-                    uint32(block.timestamp),
-                    uint32(block.timestamp + 30000),
-                    0,
-                    message
-                )
-            {
-                emit ExecutionMessage("Successful Spokepool Deposit");
-            } catch Error(string memory reason) {
-                // IMPORTANT - Fund rescue logic
-                emit ExecutionMessage(
-                    string(abi.encode("Failed Spokepool Deposit: ", reason))
-                );
-            }
+            crossChainBridge(
+                _amount,
+                destinationBridgeReceiver,
+                _poolAddress,
+                managerChainId,
+                message
+            );
         }
     }
 
@@ -655,14 +673,18 @@ contract BridgeLogic is OwnerIsCreator {
         address _poolAddress,
         uint256 _amount
     ) internal {
-        IIntegrator(integratorAddress).routeExternalProtocolInteraction(
-            poolToCurrentProtocolHash[_poolAddress],
-            keccak256(abi.encode("withdraw")),
-            _amount,
-            _poolAddress,
-            poolToAsset[_poolAddress],
-            poolToCurrentPositionMarket[_poolAddress]
-        );
+        if (
+            poolToCurrentProtocolHash[_poolAddress] != keccak256(abi.encode(""))
+        ) {
+            IIntegrator(integratorAddress).routeExternalProtocolInteraction(
+                poolToCurrentProtocolHash[_poolAddress],
+                keccak256(abi.encode("withdraw")),
+                _amount,
+                _poolAddress,
+                poolToAsset[_poolAddress],
+                poolToCurrentPositionMarket[_poolAddress]
+            );
+        }
     }
 
     /**
@@ -705,7 +727,7 @@ contract BridgeLogic is OwnerIsCreator {
             poolToAsset[_poolAddress] == address(0) ||
             poolToCurrentProtocolHash[_poolAddress] == keccak256(abi.encode(""))
         ) {
-            return 0;
+            return ERC20(poolToAsset[_poolAddress]).balanceOf(address(this));
         }
         return
             IIntegrator(integratorAddress).getCurrentPosition(

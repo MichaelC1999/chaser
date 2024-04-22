@@ -22,6 +22,7 @@ interface IBridgeLogic {
         string memory,
         uint256
     ) external;
+    function returnToPool(bytes4, address, bytes32, uint256) external;
     function handleUserDeposit(address, address, bytes32, uint256) external;
     function readBalanceAtNonce(
         address,

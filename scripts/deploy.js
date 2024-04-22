@@ -103,7 +103,7 @@ const baseDeployments = async () => {
   )).wait();
 
   console.log(deployments.base)
-
+  console.log("FINISHED BASE DEPLOYMENTS 1")
 }
 
 const sepoliaDeployments = async () => {
@@ -165,9 +165,9 @@ const sepoliaDeployments = async () => {
   const aaveAmount = "10000000000000000"
   console.log("AAVE Token Transfer: ", (await (await aaveTestToken.transfer(deployments.sepolia["integratorAddress"], aaveAmount)).wait()).hash)
 
-
   const compTestToken = await hre.ethers.getContractAt("ERC20", "0x2D5ee574e710219a521449679A4A7f2B43f046ad");
   const compAmount = "10000000000000000"
+
   console.log("COMPOUND Token Transfer: ", (await (await compTestToken.transfer(deployments.sepolia["integratorAddress"], compAmount)).wait()).hash)
 
 
@@ -182,13 +182,14 @@ const sepoliaDeployments = async () => {
   console.log('MESSENGER: ', await bridgeLogicContract.messenger(), await registryContract.chainIdToMessageReceiver(84532), 'RECEIVER: ', await bridgeLogicContract.bridgeReceiverAddress())
 
   console.log(deployments.sepolia)
+  console.log("FINISHED SEPOLIA DEPLOYMENTS 1")
 }
 
 const baseSecondConfig = async () => {
   const registryContract = await hre.ethers.getContractAt("Registry", deployments.base["registryAddress"]);
   await (await registryContract.addBridgeReceiver(11155111, deployments.sepolia["receiverAddress"])).wait()
   await (await registryContract.addMessageReceiver(11155111, deployments.sepolia["messengerAddress"])).wait()
-  console.log(await registryContract.chainIdToBridgeReceiver(11155111))
+  console.log("FINISHED BASE DEPLOYMENTS 2")
 
 }
 
@@ -236,7 +237,7 @@ const basePositionSetDeposit = async () => {
     amount,
     totalFeeCalc(amount),
     "0x0242242424242",
-    84532,
+    11155111,
     "aave-v3",
     { gasLimit: 8000000 }
   )
@@ -524,8 +525,8 @@ async function mainExecution() {
     // await baseWithdraw()
     // await poolStatRead()
     // await baseCallPivot()
-    // await poolStatRead()
-    await upgradeContract()
+    await poolStatRead()
+    // await upgradeContract()
 
     // await sepoliaSimulateCCIPReceive("0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001003705af6d000000000000000000000000000000000000000000000000000000000000000000000000000000009bdc76b596051e1e86eadb2e2af2a491e32bfa48000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000803f4c40f2d9e47df3a43c5c97200a65dd80990bf9d69827733cf5f393681c90dc000000000000000000000000000000000000000000000000000886c98b760000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000004a03cea247fc197")
     // --------------------------------------------------------------------------------------------

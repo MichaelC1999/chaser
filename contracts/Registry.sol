@@ -7,9 +7,8 @@ import {PoolBroker} from "./PoolBroker.sol";
 
 import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.sol";
 import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
-import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
-contract Registry is OwnerIsCreator, Initializable {
+contract Registry is OwnerIsCreator {
     //Contains supported protocols/chains
     // Functions for making sure that a proposal assertion is actually supported
 
@@ -59,11 +58,11 @@ contract Registry is OwnerIsCreator, Initializable {
 
     uint256 public poolCount;
 
-    function initialize(
+    constructor(
         uint256 _currentChainId,
         uint256 _managerChainId,
         address _managerAddress
-    ) public initializer {
+    ) {
         //_currentChainId is the chain that this registry is currently deployed on
         //_managerChainId is the chain that has the manager contract and all of the pools
         if (_currentChainId == _managerChainId) {

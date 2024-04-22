@@ -223,24 +223,16 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             abi.decode(any2EvmMessage.sender, (address))
         )
     {
-        // IMPORTANT - USE THE ABOVE COMMENTED OUT FUNCTION DEFINITION
-
-        // function _ccipReceive(
-        //     Client.Any2EVMMessage memory any2EvmMessage
-        // ) internal override {
-
-        // // decode any2EvmMessage.data
         (bytes4 _method, address _poolAddress, bytes memory _data) = abi.decode(
             any2EvmMessage.data,
             (bytes4, address, bytes)
         );
 
-        // //Get the method, go through if/else conditional to call the function on the external BridgeLogic or PoolControl
-
         if (_method == bytes4(keccak256(abi.encode("AbPivotMovePosition")))) {
             try bridgeFunctions.executeExitPivot(_poolAddress, _data) {
                 emit ExecutionMessage("AbPivotMovePosition success");
             } catch Error(string memory reason) {
+                // IMPORTANT - SEND FAILURE MESSAGE TO RESET PIVOT INITIATION/POSITION TARGETS
                 emit ExecutionMessage(reason);
             }
         }
@@ -249,6 +241,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             try bridgeFunctions.userWithdrawSequence(_poolAddress, _data) {
                 emit ExecutionMessage("AbWithdrawOrderUser success");
             } catch Error(string memory reason) {
+                // IMPORTANT - SEND FAILURE MESSAGE TO RESET WITHDRAW INITIATION
                 emit ExecutionMessage(reason);
             }
         }
@@ -293,6 +286,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             try IPoolControl(_poolAddress).receivePositionBalance(_data) {
                 emit ExecutionMessage("BaMessagePositionBalance success");
             } catch Error(string memory reason) {
+                // IMPORTANT - LOCAL FAILURE LOGIC FOR FAILED CALLBACK ON DEPOSIT, UPDATE LOCAL STATE FOR B CHAIN DEPO SUCCESS
                 emit ExecutionMessage(reason);
             }
         }
@@ -300,6 +294,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             try IPoolControl(_poolAddress).receivePositionInitialized(_data) {
                 emit ExecutionMessage("BaPositionInitialized success");
             } catch Error(string memory reason) {
+                // IMPORTANT - LOCAL FAILURE LOGIC FOR FAILED CALLBACK ON DEPOSIT/POSITION SET, UPDATE LOCAL STATE FOR B CHAIN DEPO SUCCESS, POSITION STATE
                 emit ExecutionMessage(reason);
             }
         }
@@ -318,6 +313,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             {
                 emit ExecutionMessage("BaPivotMovePosition success");
             } catch Error(string memory reason) {
+                // IMPORTANT - LOCAL FAILURE LOGIC FOR FAILED PIVOT CALLBACK, NEEDS FUNCTION TO UPDATE STATE FOR SUCCESS ON B NETWORK
                 emit ExecutionMessage(reason);
             }
         }

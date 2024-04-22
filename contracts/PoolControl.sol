@@ -270,6 +270,8 @@ contract PoolControl {
             abi.encode(_targetPositionProtocol)
         );
 
+        pivotPending = true;
+
         bytes32 depositId = poolCalculations.createDepositOrder(
             msg.sender,
             _amount
@@ -441,28 +443,20 @@ contract PoolControl {
         uint256 _receivingChain,
         bytes memory _message
     ) internal {
-        try
-            ISpokePool(_acrossSpokePool).depositV3(
-                _sender,
-                _bridgeReceiver,
-                address(asset),
-                address(0),
-                _amount,
-                _amount - _feeTotal, // IMPORTANT - SEEK ORACLE SOLUTION TO BRING API FEE CALC ON CHAIN
-                _receivingChain,
-                address(0),
-                uint32(block.timestamp),
-                uint32(block.timestamp + 30000),
-                0,
-                _message
-            )
-        {
-            emit ExecutionMessage("Successful Spokepool Deposit");
-        } catch Error(string memory reason) {
-            emit ExecutionMessage(
-                string(abi.encode("Failed Spokepool Deposit: ", reason))
-            );
-        }
+        ISpokePool(_acrossSpokePool).depositV3(
+            _sender,
+            _bridgeReceiver,
+            address(asset),
+            address(0),
+            _amount,
+            _amount - _feeTotal, // IMPORTANT - SEEK ORACLE SOLUTION TO BRING API FEE CALC ON CHAIN
+            _receivingChain,
+            address(0),
+            uint32(block.timestamp),
+            uint32(block.timestamp + 30000),
+            0,
+            _message
+        );
     }
 
     function queryMovePosition(
@@ -512,6 +506,11 @@ contract PoolControl {
         if (currentPositionChain == localChain) {
             // IF POSITION NEEDS TO PIVOT *FROM* THIS CHAIN (LOCAL/BRIDGE LOGIC)
             // THIS IF STATEMENT DETERMINES WHETHER TO ACTION THE EXITPIVOT LOCALLY OR THROUGH CROSS CHAIN
+            if (currentPositionProtocolHash == keccak256(abi.encode(""))) {
+                uint256 amount = asset.balanceOf(address(this));
+                asset.transfer(address(localBridgeLogic), amount);
+            }
+
             localBridgeLogic.executeExitPivot(address(this), pivotMessage);
         } else {
             bytes4 method = bytes4(
@@ -614,19 +613,8 @@ contract PoolControl {
         poolNonce += 1;
         userHasPendingWithdraw[depositor] = false;
 
-        try IPoolToken(poolToken).burn(depositor, poolTokensToBurn) {
-            emit ExecutionMessage("Burn Success");
-        } catch Error(string memory reason) {
-            emit ExecutionMessage(string(abi.encode("BURN FAILURE: ", reason)));
-        }
-
-        try asset.transfer(depositor, _amount) {} catch Error(
-            string memory reason
-        ) {
-            emit ExecutionMessage(
-                string(abi.encode("Transfer Failure: ", reason))
-            );
-        }
+        IPoolToken(poolToken).burn(depositor, poolTokensToBurn);
+        asset.transfer(depositor, _amount);
     }
 
     function readStrategyCode() external view returns (string memory) {

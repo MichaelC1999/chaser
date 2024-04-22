@@ -58,91 +58,19 @@ contract BridgeReceiver {
         if (
             method == bytes4(keccak256(abi.encode("BbPivotBridgeMovePosition")))
         ) {
-            (
-                bytes32 protocolHash,
-                address targetMarketAddress,
-                string memory targetMarketId,
-                uint256 poolNonce
-            ) = abi.decode(data, (bytes32, address, string, uint256));
-
-            ERC20(tokenSent).transfer(address(bridgeLogic), amount);
-
-            try
-                bridgeLogic.handleEnterPivot(
-                    tokenSent,
-                    amount,
-                    poolAddress,
-                    protocolHash,
-                    targetMarketAddress,
-                    targetMarketId,
-                    poolNonce
-                )
-            {
-                emit ExecutionMessage("BbPivotBridgeMovePosition success");
-            } catch Error(string memory reason) {
-                emit ExecutionMessage(reason);
-            }
+            enterPivot(method, tokenSent, amount, poolAddress, data);
         }
         if (method == bytes4(keccak256(abi.encode("AbBridgeDepositUser")))) {
-            (bytes32 depositId, address userAddress) = abi.decode(
-                data,
-                (bytes32, address)
-            );
-
-            try ERC20(tokenSent).transfer(address(bridgeLogic), amount) {
-                emit ExecutionMessage("transfer success");
-            } catch Error(string memory reason) {
-                emit ExecutionMessage(reason);
-            }
-
-            try
-                bridgeLogic.handleUserDeposit(
-                    poolAddress,
-                    userAddress,
-                    depositId,
-                    amount
-                )
-            {
-                emit ExecutionMessage("AbBridgeDepositUser success");
-            } catch Error(string memory reason) {
-                emit ExecutionMessage(reason);
-            }
+            userDeposit(method, tokenSent, amount, poolAddress, data);
         }
         if (
             method ==
             bytes4(keccak256(abi.encode("AbBridgePositionInitializer")))
         ) {
-            (
-                bytes32 depositId,
-                address userAddress,
-                address marketAddress,
-                string memory marketId,
-                bytes32 protocolHash
-            ) = abi.decode(data, (bytes32, address, address, string, bytes32));
-            try ERC20(tokenSent).transfer(address(bridgeLogic), amount) {
-                emit ExecutionMessage("transfer success");
-            } catch Error(string memory reason) {
-                emit ExecutionMessage(reason);
-            }
-            try
-                bridgeLogic.handlePositionInitializer(
-                    amount,
-                    poolAddress,
-                    tokenSent,
-                    depositId,
-                    userAddress,
-                    marketAddress,
-                    marketId,
-                    protocolHash
-                )
-            {
-                emit ExecutionMessage("AbBridgePositionInitializer success");
-            } catch Error(string memory reason) {
-                emit ExecutionMessage(reason);
-            }
+            positionInitializer(method, tokenSent, amount, poolAddress, data);
         }
-        if (method == bytes4(keccak256(abi.encode("poolReturn")))) {
-            // Receive the entire pool's funds if there are no currently viable markets or if the pool is disabled
+        if (method == bytes4(keccak256(abi.encode("BaReturnToPool")))) {
+            poolReturn(method, tokenSent, amount, poolAddress, data);
         }
         if (
             method == bytes4(keccak256(abi.encode("BaBridgeWithdrawOrderUser")))
@@ -154,11 +82,7 @@ contract BridgeReceiver {
                 uint256 inputAmount
             ) = abi.decode(data, (bytes32, uint256, uint256, uint256));
 
-            try ERC20(tokenSent).transfer(poolAddress, amount) {
-                emit ExecutionMessage("transfer success");
-            } catch Error(string memory reason) {
-                emit ExecutionMessage(reason);
-            }
+            ERC20(tokenSent).transfer(poolAddress, amount);
 
             try
                 IPoolControl(poolAddress).finalizeWithdrawOrder(
@@ -171,8 +95,183 @@ contract BridgeReceiver {
             {
                 emit ExecutionMessage("BaBridgeWithdrawOrderUser success");
             } catch Error(string memory reason) {
+                // IMPORTANT - RESCUE WITHDRAW CALLBACK LOGIC
                 emit ExecutionMessage(reason);
             }
+        }
+    }
+
+    function positionInitializer(
+        bytes4 _method,
+        address _tokenSent,
+        uint256 _amount,
+        address _poolAddress,
+        bytes memory _data
+    ) internal {
+        (
+            bytes32 depositId,
+            address userAddress,
+            address marketAddress,
+            string memory marketId,
+            bytes32 protocolHash
+        ) = abi.decode(_data, (bytes32, address, address, string, bytes32));
+
+        ERC20(_tokenSent).transfer(address(bridgeLogic), _amount);
+
+        try
+            bridgeLogic.handlePositionInitializer(
+                _amount,
+                _poolAddress,
+                _tokenSent,
+                depositId,
+                userAddress,
+                marketAddress,
+                marketId,
+                protocolHash
+            )
+        {
+            emit ExecutionMessage("AbBridgePositionInitializer success");
+        } catch Error(string memory reason) {
+            bridgeLogic.returnToPool(_method, _poolAddress, depositId, _amount);
+            emit ExecutionMessage(reason);
+        }
+    }
+
+    function userDeposit(
+        bytes4 _method,
+        address _tokenSent,
+        uint256 _amount,
+        address _poolAddress,
+        bytes memory _data
+    ) internal {
+        (bytes32 depositId, address userAddress) = abi.decode(
+            _data,
+            (bytes32, address)
+        );
+
+        ERC20(_tokenSent).transfer(address(bridgeLogic), _amount);
+
+        try
+            bridgeLogic.handleUserDeposit(
+                _poolAddress,
+                userAddress,
+                depositId,
+                _amount
+            )
+        {
+            emit ExecutionMessage("AbBridgeDepositUser success");
+        } catch Error(string memory reason) {
+            bridgeLogic.returnToPool(_method, _poolAddress, depositId, _amount);
+            emit ExecutionMessage(reason);
+        }
+    }
+
+    function enterPivot(
+        bytes4 _method,
+        address _tokenSent,
+        uint256 _amount,
+        address _poolAddress,
+        bytes memory _data
+    ) internal {
+        (
+            bytes32 protocolHash,
+            address targetMarketAddress,
+            string memory targetMarketId,
+            uint256 poolNonce
+        ) = abi.decode(_data, (bytes32, address, string, uint256));
+
+        ERC20(_tokenSent).transfer(address(bridgeLogic), _amount);
+
+        try
+            bridgeLogic.handleEnterPivot(
+                _tokenSent,
+                _amount,
+                _poolAddress,
+                protocolHash,
+                targetMarketAddress,
+                targetMarketId,
+                poolNonce
+            )
+        {
+            emit ExecutionMessage("BbPivotBridgeMovePosition success");
+        } catch Error(string memory reason) {
+            bridgeLogic.returnToPool(
+                _method,
+                _poolAddress,
+                bytes32(""),
+                _amount
+            );
+            emit ExecutionMessage(reason);
+        }
+    }
+
+    // This function handles the second half of failed bridging execution, returning funds to user and reseting positional state
+    function poolReturn(
+        bytes4 _method,
+        address _tokenSent,
+        uint256 _amount,
+        address _poolAddress,
+        bytes memory _data
+    ) internal {
+        //IMPORTANT - HERE NEED TO SEPARATE LOGIC FOR FAILED/REFUNDED BRIDGING ACTIONS (depoSet,depo,pivot)
+        //IMPORTANT - MUST CALL FUNCTIONS ON *POOL*, THIS FUNCTION IS ONLY POSSIBLE ON POOL CHAIN
+        (bytes4 originalMethod, bytes32 depositId, uint256 amount) = abi.decode(
+            _data,
+            (bytes4, bytes32, uint256)
+        );
+
+        if (
+            originalMethod ==
+            bytes4(keccak256(abi.encode("AbBridgePositionInitializer")))
+        ) {
+            // userHasPendingDeposit[msg.sender] = false;
+            // targetPositionMarketId = "";
+            // targetPositionChain = 0;
+            // targetPositionProtocolHash = bytes32("");
+            // poolNonce = 0;
+            // pivotPending = false;
+            // address originalSender = poolCalc.depositIdToDepositor(depositId);
+            // // undo poolCalc.createDepositOrder
+            // depositIdToDepositor[depositId] = address(0);
+            // depositIdToDepositAmount[depositId] = 0;
+            // //Return funds
+            // ERC20(_tokenSent).transfer(originalSender, _amount);
+        }
+
+        if (
+            originalMethod ==
+            bytes4(keccak256(abi.encode("AbBridgeDepositUser")))
+        ) {
+            // address originalSender = poolCalc.depositIdToDepositor(depositId);
+            // // undo poolCalc.createDepositOrder
+            // depositIdToDepositor[depositId] = address(0);
+            // depositIdToDepositAmount[depositId] = 0;
+            // //Return funds
+            // ERC20(_tokenSent).transfer(originalSender, _amount);
+        }
+
+        if (
+            originalMethod ==
+            bytes4(keccak256(abi.encode("BbPivotBridgeMovePosition")))
+        ) {
+            //IMPORTANT - MAYBE NEED NONCE FROM EXITPIVOT? TO MATCH POOL NONCE
+            // lastPositionAddress = currentPositionAddress;
+            // lastPositionChain = currentPositionChain;
+            // lastPositionProtocolHash = currentPositionProtocolHash;
+            // currentPositionAddress = _poolAddress;
+            // currentPositionMarketId = "";
+            // currentPositionChain = localChainId;
+            // currentPositionProtocolHash = keccak256(abi.encode(""));
+            // currentRecordPositionValue = _amount;
+            // currentPositionValueTimestamp = block.timestamp;
+            // targetPositionMarketId = "";
+            // targetPositionChain = 0;
+            // targetPositionProtocolHash = bytes32("");
+            // poolNonce = nonce;
+            // pivotPending = false;
+            // //reset position state
+            // //transfer funds to pool
+            // ERC20(_tokenSent).transfer(_poolAddress, _amount);
         }
     }
 }
