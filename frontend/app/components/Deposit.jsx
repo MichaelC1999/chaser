@@ -18,7 +18,7 @@ import { decodeAcrossDepositEvent } from '../utils';
 
 const Deposit = ({ poolAddress, poolData, provider, setErrorMessage, txData, setTxData, changeStep, demoMode }) => {
     const [assetAmount, setAssetAmount] = useState(0.0001);
-    const [chainId, setChainId] = useState(84532)
+    const [chainId, setChainId] = useState(11155111)
     const [protocolName, setProtocolName] = useState("compound-v3")
     const [depoInitialized, setDepoInitialized] = useState(false);
     const [userAssetBalance, setUserAssetBalance] = useState(0)
@@ -65,7 +65,7 @@ const Deposit = ({ poolAddress, poolData, provider, setErrorMessage, txData, set
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, signer)
 
         try {
-            const asset = new ethers.Contract(contractAddresses["base"].WETH || "0x0", WethABI, signer)
+            const asset = new ethers.Contract(contractAddresses["sepolia"].WETH || "0x0", WethABI, signer)
             const formattedAmount = parseEther(assetAmount + "")
             if (formatEther(userAssetBalance) <= assetAmount) {
                 const amountToWrap = Number(formattedAmount) - Number(userAssetBalance)
@@ -79,14 +79,14 @@ const Deposit = ({ poolAddress, poolData, provider, setErrorMessage, txData, set
             const tx = await (await pool.userDepositAndSetPosition(
                 formattedAmount,
                 totalFeeCalc(Number(formattedAmount)),
+                protocolName,
                 "0x0242242424242",
                 chainId,
-                protocolName,
                 { gasLimit: 8000000 }
             )).wait()
             const eventData = await decodeAcrossDepositEvent(tx.logs)
             let txAcrossMessage = ''
-            if (networks[chainId] !== 'base') {
+            if (networks[chainId] !== 'sepolia') {
                 txAcrossMessage = `Chaser is processing your pool configuration and deposit. Using Across V3, your funds and input data are being bridged to Chaser contracts on the ${networks[chainId]} network. The Across depositID is ${eventData?.depositId}. Look for a 'FilledV3Relay' event on the ${networks[poolData?.currentChain]} SpokePool with this depositID. Once processed on ${networks[chainId]}, Chaser will send data through CCIP back to the contract you just interacted with. This should all finalize within the next 30 minutes.`
             } else {
                 txAcrossMessage = `Chaser has successfully processed your deposit and position setting.`
@@ -112,7 +112,7 @@ const Deposit = ({ poolAddress, poolData, provider, setErrorMessage, txData, set
         }
 
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, signer)
-        const asset = new ethers.Contract(contractAddresses["base"].WETH || "0x0", WethABI, signer)
+        const asset = new ethers.Contract(contractAddresses["sepolia"].WETH || "0x0", WethABI, signer)
         const formattedAmount = parseEther(assetAmount + "")
         try {
             if (formatEther(userAssetBalance) <= assetAmount) {
@@ -129,7 +129,7 @@ const Deposit = ({ poolAddress, poolData, provider, setErrorMessage, txData, set
             )).wait()
             const eventData = await decodeAcrossDepositEvent(tx.logs)
             let txAcrossMessage = ''
-            if (networks[poolData?.currentChain] !== 'base') {
+            if (networks[poolData?.currentChain] !== 'sepolia') {
                 txAcrossMessage = `Using Across V3, your funds and input data are being bridged to Chaser contracts on the ${networks[chainId]} network. The Across depositID is ${eventData?.depositId}. Look for a 'FilledV3Relay' event on the ${networks[poolData?.currentChain]} SpokePool with this depositID. Once processed on ${networks[chainId]}, Chaser will send data through CCIP back to the contract you just interacted with. This should all finalize within the next 30 minutes.`
             }
             setTxData({ hash: tx.hash, URI: ["https://sepolia.basescan.org/tx/" + tx.hash], poolAddress, message: `Chaser is processing your pool configuration and deposit. ${txAcrossMessage}` })

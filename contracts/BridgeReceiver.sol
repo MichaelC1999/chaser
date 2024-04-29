@@ -6,8 +6,7 @@ import {IAavePool} from "./interfaces/IAavePool.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
 import {IPoolControl} from "./interfaces/IPoolControl.sol";
-
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract BridgeReceiver {
     IBridgeLogic public bridgeLogic;
@@ -39,15 +38,19 @@ contract BridgeReceiver {
         address relayer,
         bytes memory message
     ) external {
-        //IMPORTANT - A USER COULD BRIDGE WITH CUSTOM MANIPULATIVE MESSAGE FROM OWN CONTRACT. THE USER STILL HAS TO SEND amount IN ASSET, BUT THIS COULD EXPLOIT SOMETHING
-        require(
-            msg.sender == spokePoolAddress,
-            "Only the Across V3 Spokepool can handle these messages"
-        );
+        // IMPORTANT - !!! A USER COULD BRIDGE WITH CUSTOM MANIPULATIVE MESSAGE FROM OWN CONTRACT. THE USER STILL HAS TO SEND amount IN ASSET, BUT THIS COULD EXPLOIT SOMETHING
+        // require(
+        //     msg.sender == spokePoolAddress,
+        //     "Only the Across V3 Spokepool can handle these messages"
+        // ); // IMPORTANT - UNCOMMENT IN PRODUCTION
         (bytes4 method, address poolAddress, bytes memory data) = abi.decode(
             message,
             (bytes4, address, bytes)
         );
+
+        if (poolToAsset[poolAddress] == address(0)) {
+            poolToAsset[poolAddress] = tokenSent;
+        }
 
         if (
             tokenSent != poolToAsset[poolAddress] &&
@@ -70,35 +73,39 @@ contract BridgeReceiver {
             positionInitializer(method, tokenSent, amount, poolAddress, data);
         }
         if (method == bytes4(keccak256(abi.encode("BaReturnToPool")))) {
-            poolReturn(method, tokenSent, amount, poolAddress, data);
+            poolReturn(tokenSent, amount, poolAddress, data);
         }
         if (
             method == bytes4(keccak256(abi.encode("BaBridgeWithdrawOrderUser")))
         ) {
-            (
-                bytes32 withdrawId,
-                uint256 totalAvailableForUser,
-                uint256 positionValue,
-                uint256 inputAmount
-            ) = abi.decode(data, (bytes32, uint256, uint256, uint256));
-
-            ERC20(tokenSent).transfer(poolAddress, amount);
-
-            try
-                IPoolControl(poolAddress).finalizeWithdrawOrder(
-                    withdrawId,
-                    amount,
-                    totalAvailableForUser,
-                    positionValue,
-                    inputAmount
-                )
-            {
-                emit ExecutionMessage("BaBridgeWithdrawOrderUser success");
-            } catch Error(string memory reason) {
-                // IMPORTANT - RESCUE WITHDRAW CALLBACK LOGIC
-                emit ExecutionMessage(reason);
-            }
+            finalizeWithdraw(method, tokenSent, amount, poolAddress, data);
         }
+    }
+
+    function finalizeWithdraw(
+        bytes4 _method,
+        address _tokenSent,
+        uint256 _amount,
+        address _poolAddress,
+        bytes memory _data
+    ) internal {
+        (
+            bytes32 withdrawId,
+            uint256 totalAvailableForUser,
+            uint256 positionValue,
+            uint256 inputAmount
+        ) = abi.decode(_data, (bytes32, uint256, uint256, uint256));
+
+        bool success = IERC20(_tokenSent).transfer(_poolAddress, _amount);
+        require(success, "Token transfer failure");
+
+        IPoolControl(_poolAddress).finalizeWithdrawOrder(
+            withdrawId,
+            _amount,
+            totalAvailableForUser,
+            positionValue,
+            inputAmount
+        );
     }
 
     function positionInitializer(
@@ -116,7 +123,11 @@ contract BridgeReceiver {
             bytes32 protocolHash
         ) = abi.decode(_data, (bytes32, address, address, string, bytes32));
 
-        ERC20(_tokenSent).transfer(address(bridgeLogic), _amount);
+        bool success = IERC20(_tokenSent).transfer(
+            address(bridgeLogic),
+            _amount
+        );
+        require(success, "Token transfer failure");
 
         try
             bridgeLogic.handlePositionInitializer(
@@ -132,7 +143,13 @@ contract BridgeReceiver {
         {
             emit ExecutionMessage("AbBridgePositionInitializer success");
         } catch Error(string memory reason) {
-            bridgeLogic.returnToPool(_method, _poolAddress, depositId, _amount);
+            bridgeLogic.returnToPool(
+                _method,
+                _poolAddress,
+                depositId,
+                _amount,
+                0
+            );
             emit ExecutionMessage(reason);
         }
     }
@@ -144,24 +161,34 @@ contract BridgeReceiver {
         address _poolAddress,
         bytes memory _data
     ) internal {
-        (bytes32 depositId, address userAddress) = abi.decode(
+        (bytes32 depositId, uint256 withdrawNonce) = abi.decode(
             _data,
-            (bytes32, address)
+            (bytes32, uint256)
         );
 
-        ERC20(_tokenSent).transfer(address(bridgeLogic), _amount);
+        bool success = IERC20(_tokenSent).transfer(
+            address(bridgeLogic),
+            _amount
+        );
+        require(success, "Token transfer failure");
 
         try
             bridgeLogic.handleUserDeposit(
                 _poolAddress,
-                userAddress,
                 depositId,
+                withdrawNonce,
                 _amount
             )
         {
             emit ExecutionMessage("AbBridgeDepositUser success");
         } catch Error(string memory reason) {
-            bridgeLogic.returnToPool(_method, _poolAddress, depositId, _amount);
+            bridgeLogic.returnToPool(
+                _method,
+                _poolAddress,
+                depositId,
+                _amount,
+                0
+            );
             emit ExecutionMessage(reason);
         }
     }
@@ -180,7 +207,11 @@ contract BridgeReceiver {
             uint256 poolNonce
         ) = abi.decode(_data, (bytes32, address, string, uint256));
 
-        ERC20(_tokenSent).transfer(address(bridgeLogic), _amount);
+        bool success = IERC20(_tokenSent).transfer(
+            address(bridgeLogic),
+            _amount
+        );
+        require(success, "Token transfer failure");
 
         try
             bridgeLogic.handleEnterPivot(
@@ -199,7 +230,8 @@ contract BridgeReceiver {
                 _method,
                 _poolAddress,
                 bytes32(""),
-                _amount
+                _amount,
+                poolNonce
             );
             emit ExecutionMessage(reason);
         }
@@ -207,15 +239,12 @@ contract BridgeReceiver {
 
     // This function handles the second half of failed bridging execution, returning funds to user and reseting positional state
     function poolReturn(
-        bytes4 _method,
         address _tokenSent,
         uint256 _amount,
         address _poolAddress,
         bytes memory _data
     ) internal {
-        //IMPORTANT - HERE NEED TO SEPARATE LOGIC FOR FAILED/REFUNDED BRIDGING ACTIONS (depoSet,depo,pivot)
-        //IMPORTANT - MUST CALL FUNCTIONS ON *POOL*, THIS FUNCTION IS ONLY POSSIBLE ON POOL CHAIN
-        (bytes4 originalMethod, bytes32 depositId, uint256 amount) = abi.decode(
+        (bytes4 originalMethod, bytes32 txId, uint256 poolNonce) = abi.decode(
             _data,
             (bytes4, bytes32, uint256)
         );
@@ -224,54 +253,31 @@ contract BridgeReceiver {
             originalMethod ==
             bytes4(keccak256(abi.encode("AbBridgePositionInitializer")))
         ) {
-            // userHasPendingDeposit[msg.sender] = false;
-            // targetPositionMarketId = "";
-            // targetPositionChain = 0;
-            // targetPositionProtocolHash = bytes32("");
-            // poolNonce = 0;
-            // pivotPending = false;
-            // address originalSender = poolCalc.depositIdToDepositor(depositId);
-            // // undo poolCalc.createDepositOrder
-            // depositIdToDepositor[depositId] = address(0);
-            // depositIdToDepositAmount[depositId] = 0;
-            // //Return funds
-            // ERC20(_tokenSent).transfer(originalSender, _amount);
+            IERC20(_tokenSent).approve(_poolAddress, _amount);
+            IPoolControl(_poolAddress).handleUndoPositionInitializer(
+                txId,
+                _amount
+            );
         }
 
         if (
             originalMethod ==
             bytes4(keccak256(abi.encode("AbBridgeDepositUser")))
         ) {
-            // address originalSender = poolCalc.depositIdToDepositor(depositId);
-            // // undo poolCalc.createDepositOrder
-            // depositIdToDepositor[depositId] = address(0);
-            // depositIdToDepositAmount[depositId] = 0;
-            // //Return funds
-            // ERC20(_tokenSent).transfer(originalSender, _amount);
+            IERC20(_tokenSent).approve(_poolAddress, _amount);
+            IPoolControl(_poolAddress).handleUndoDeposit(txId, _amount);
         }
 
         if (
             originalMethod ==
             bytes4(keccak256(abi.encode("BbPivotBridgeMovePosition")))
         ) {
-            //IMPORTANT - MAYBE NEED NONCE FROM EXITPIVOT? TO MATCH POOL NONCE
-            // lastPositionAddress = currentPositionAddress;
-            // lastPositionChain = currentPositionChain;
-            // lastPositionProtocolHash = currentPositionProtocolHash;
-            // currentPositionAddress = _poolAddress;
-            // currentPositionMarketId = "";
-            // currentPositionChain = localChainId;
-            // currentPositionProtocolHash = keccak256(abi.encode(""));
-            // currentRecordPositionValue = _amount;
-            // currentPositionValueTimestamp = block.timestamp;
-            // targetPositionMarketId = "";
-            // targetPositionChain = 0;
-            // targetPositionProtocolHash = bytes32("");
-            // poolNonce = nonce;
-            // pivotPending = false;
-            // //reset position state
-            // //transfer funds to pool
-            // ERC20(_tokenSent).transfer(_poolAddress, _amount);
+            bool success = IERC20(_tokenSent).transfer(
+                address(bridgeLogic),
+                _amount
+            );
+            require(success, "Token transfer failure");
+            IPoolControl(_poolAddress).handleUndoPivot(poolNonce, _amount);
         }
     }
 }

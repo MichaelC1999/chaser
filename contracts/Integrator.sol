@@ -7,8 +7,8 @@ import {IComet} from "./interfaces/IComet.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IPoolBroker} from "./interfaces/IPoolBroker.sol";
 import {DataTypes} from "./libraries/AaveDataTypes.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract Integrator is Initializable {
     // THIS CONTRACT HOLDS THE LP TOKENS, ROUTES THE DEPOSITS, FULFILLS WITHDRAWS FROM THESE EXTERNAL PROTOCOLS
@@ -60,7 +60,7 @@ contract Integrator is Initializable {
         if (_operation == hasher("deposit")) {
             emit ExecutionMessage("In deposit");
 
-            ERC20(_assetAddress).approve(_marketAddress, _amount);
+            IERC20(_assetAddress).approve(_marketAddress, _amount);
 
             IAavePool(_marketAddress).supply(
                 _assetAddress,
@@ -84,12 +84,12 @@ contract Integrator is Initializable {
                 encodedFunction
             );
 
-            ERC20(trueAsset).transfer(bridgeLogicAddress, _amount);
+            bool success = IERC20(trueAsset).transfer(
+                bridgeLogicAddress,
+                _amount
+            );
+            require(success, "Token transfer failure");
         }
-
-        // From subgraph market id, how can we get the address of the contract to call functions on?
-        //-Instantiate market with address of pool id
-        //- on this contract call POOL() to get address of the pool to supply/withdraw
     }
 
     function compoundConnection(
@@ -99,7 +99,6 @@ contract Integrator is Initializable {
         address _marketAddress,
         address _poolBroker
     ) internal {
-        // From subgraph market id, how can we get the address of the contract to call functions on?
         address trueAsset = _assetAddress;
         if (chainId == 11155111) {
             if (_marketAddress == address(0)) {
@@ -120,7 +119,7 @@ contract Integrator is Initializable {
         if (_operation == hasher("deposit")) {
             emit ExecutionMessage("In deposit");
 
-            ERC20(_assetAddress).approve(_marketAddress, _amount);
+            IERC20(_assetAddress).approve(_marketAddress, _amount);
 
             IComet(_marketAddress).supplyTo(
                 _poolBroker,
@@ -142,7 +141,11 @@ contract Integrator is Initializable {
                 encodedFunction
             );
 
-            ERC20(trueAsset).transfer(bridgeLogicAddress, _amount);
+            bool success = IERC20(trueAsset).transfer(
+                bridgeLogicAddress,
+                _amount
+            );
+            require(success, "Token transfer failure");
         }
     }
 
@@ -195,14 +198,14 @@ contract Integrator is Initializable {
                 }
             }
             // IN DEVELOPMENT - This contract is preloaded with aave testnet equivalent asset
-            // require(ERC20(poolToAsset[_poolAddress]).balanceOf(address(this)) == _amount)
+            // require(IERC20(poolToAsset[_poolAddress]).balanceOf(address(this)) == _amount)
 
             DataTypes.ReserveData memory Reserve = IAavePool(_marketAddress)
                 .getReserveData(_assetAddress);
             address aTokenAddress = Reserve.aTokenAddress;
 
             //-measure integrator's balance of aTokens before depo
-            return ERC20(aTokenAddress).balanceOf(brokerAddress);
+            return IERC20(aTokenAddress).balanceOf(brokerAddress);
         }
 
         if (_protocolHash == hasher("compound-v3")) {

@@ -29,7 +29,7 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
             setSubmitting(false)
             return
         }
-        const manager = new ethers.Contract(contractAddresses["base"].managerAddress || "0x0", ManagerABI, signer)
+        const manager = new ethers.Contract(contractAddresses["sepolia"].managerAddress || "0x0", ManagerABI, signer)
         //Maybe here a loading spinner popup? Then once Tx success or fail then do tx popup?
         try {
             const poolTx = await (await manager.createNewPool(

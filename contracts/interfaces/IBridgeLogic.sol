@@ -22,12 +22,9 @@ interface IBridgeLogic {
         string memory,
         uint256
     ) external;
-    function returnToPool(bytes4, address, bytes32, uint256) external;
-    function handleUserDeposit(address, address, bytes32, uint256) external;
-    function readBalanceAtNonce(
-        address,
-        uint256
-    ) external view returns (uint256);
+    function returnToPool(bytes4, address, bytes32, uint256, uint256) external;
+    function handleUserDeposit(address, bytes32, uint256, uint256) external;
+
     function sendPositionBalance(address, bytes32, uint256) external;
     function executeExitPivot(address, bytes memory) external;
     function userWithdrawSequence(address, bytes memory) external;
@@ -58,5 +55,4 @@ interface IBridgeLogic {
         address,
         uint256
     ) external view returns (uint256);
-    function sendPositionData(address) external;
 }

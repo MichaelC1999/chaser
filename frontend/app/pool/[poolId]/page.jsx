@@ -60,7 +60,7 @@ export default function Page() {
         const getPoolData = async (address) => {
             const returnObject = {}
             const pool = new ethers.Contract(address || "0x0", PoolABI, provider);
-            const poolCalc = new ethers.Contract(contractAddresses["base"].poolCalculationsAddress || "0x0", PoolCalculationsABI, provider);
+            const poolCalc = new ethers.Contract(contractAddresses["sepolia"].poolCalculationsAddress || "0x0", PoolCalculationsABI, provider);
 
             try {
                 returnObject.poolTokenAddress = await pool.poolToken()
@@ -83,8 +83,8 @@ export default function Page() {
 
             try {
 
-                returnObject.recordPositionValue = formatEther(await pool.currentRecordPositionValue())
-                returnObject.recordTimestamp = await pool.currentPositionValueTimestamp()
+                returnObject.recordPositionValue = formatEther(await poolCalc.currentRecordPositionValue(address))
+                returnObject.recordTimestamp = await poolCalc.currentPositionValueTimestamp(address)
             } catch (err) {
 
             }
@@ -92,7 +92,7 @@ export default function Page() {
             try {
 
                 returnObject.name = await pool.poolName()
-                returnObject.nonce = await pool.poolNonce()
+                returnObject.nonce = await poolCalc.poolNonce(address)
             } catch (err) {
 
             }
@@ -101,12 +101,12 @@ export default function Page() {
 
                 returnObject.userRatio = await poolCalc.getScaledRatio(returnObject.poolTokenAddress, windowOverride?.ethereum?.selectedAddress)
                 returnObject.currentChain = await pool.currentPositionChain()
-                returnObject.protocol = await pool.currentPositionProtocolHash()
+                returnObject.protocol = await poolCalc.currentPositionProtocolHash(address)
             } catch (err) {
                 console.log(err)
             }
             try {
-                returnObject.isPivoting = await pool.pivotPending()
+                returnObject.isPivoting = await poolCalc.poolToPivotPending(address)
 
             } catch (err) {
             }
@@ -119,11 +119,11 @@ export default function Page() {
             if (!chainId) {
                 return {}
             }
-            let chain = baseSepolia
-            let chainName = 'base'
-            if (chainId.toString() === "11155111") {
-                chain = sepolia
-                chainName = 'sepolia'
+            let chain = sepolia
+            let chainName = 'sepolia'
+            if (chainId.toString() === "84532") {
+                chain = baseSepolia
+                chainName = 'base'
             }
             const publicClient = createPublicClient({
                 chain,

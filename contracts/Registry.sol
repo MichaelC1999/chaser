@@ -9,12 +9,8 @@ import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.s
 import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
 
 contract Registry is OwnerIsCreator {
-    //Contains supported protocols/chains
-    // Functions for making sure that a proposal assertion is actually supported
-
     event CCIPMessageSent(bytes32 indexed, bytes);
     event Marker(string);
-    event MessageMethod(bytes4);
 
     mapping(address => bool) public poolEnabled;
 
@@ -52,9 +48,9 @@ contract Registry is OwnerIsCreator {
 
     address public investmentStrategyContract;
 
-    uint256 public currentChainId;
+    uint256 public immutable currentChainId;
 
-    uint256 public managerChainId;
+    uint256 public immutable managerChainId;
 
     uint256 public poolCount;
 
@@ -101,21 +97,8 @@ contract Registry is OwnerIsCreator {
         // chainIdToUmaAddress[137] = address(
         //     0x5953f2538F613E05bAED8A5AeFa8e6622467AD3D
         // );
-        chainIdToUmaAddress[11155111] = address(
-            0xFd9e2642a170aDD10F53Ee14a93FcF2F31924944
-        );
 
         // TESTNET ADDRESSES
-        chainIdToSpokePoolAddress[1337] = address(
-            0x063fFa6C9748e3f0b9bA8ee3bbbCEe98d92651f7
-        );
-
-        chainIdToSpokePoolAddress[5] = address(
-            0x063fFa6C9748e3f0b9bA8ee3bbbCEe98d92651f7
-        ); // Can bridge 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6 to 421613
-        chainIdToSpokePoolAddress[80001] = address(
-            0x4589Fbf26C6a456f075b5628178AF68abE03C5fF
-        );
 
         chainIdToSpokePoolAddress[84532] = address(
             0x82B564983aE7274c86695917BBf8C99ECb6F0F8F
@@ -132,11 +115,12 @@ contract Registry is OwnerIsCreator {
             currentChainId
         ];
 
-        chainIdToUmaAddress[5] = address(
-            0x9923D42eF695B5dd9911D05Ac944d4cAca3c4EAB
-        );
         chainIdToUmaAddress[80001] = address(
             0x263351499f82C107e540B01F0Ca959843e22464a
+        );
+
+        chainIdToUmaAddress[11155111] = address(
+            0xFd9e2642a170aDD10F53Ee14a93FcF2F31924944
         );
 
         chainIdToSelector[84532] = 10344971235874465080;
@@ -165,7 +149,6 @@ contract Registry is OwnerIsCreator {
         chainIdToLinkAddress[84532] = address(
             0xE4aB69C077896252FAFBD49EFD26B5D171A32410
         );
-        poolCount = 0;
     }
 
     function addInvestmentStrategyContract(
@@ -180,13 +163,12 @@ contract Registry is OwnerIsCreator {
         address _bridgeReceiverAddress
     ) external onlyOwner {
         bridgeLogicAddress = _bridgeLogicAddress;
-
         receiverAddress = _bridgeReceiverAddress;
 
         require(_messengerAddress != address(0), "Invalid messenger");
 
-        _addMessageReceiver(currentChainId, _messengerAddress);
         _addBridgeReceiver(currentChainId, receiverAddress);
+        _addMessageReceiver(currentChainId, _messengerAddress);
     }
 
     function localCcipConfigs()
@@ -325,18 +307,6 @@ contract Registry is OwnerIsCreator {
         address _poolAddress,
         bytes memory _data
     ) external {
-        //Pool/BridgeLogic calls this function to send message, letting the registry verify that the Pool/Logic contract is legitimate
-        // IMPORTANT - PERFORM ACCESS CONTROL HERE
-        // address poolAddress = msg.sender;
-        // if (msg.sender == bridgeLogicAddress) {
-        //     poolAddress = _poolAddress;
-        // } else {
-        //     require(
-        //         poolEnabled[_poolAddress] == true,
-        //         "SendMessage may only be actioned by a valid pool"
-        //     );
-        // }
-
         require(
             poolEnabled[msg.sender] || msg.sender == bridgeLogicAddress,
             "sendMessage function call only be actioned by a valid pool or the bridgeLogic contract"
@@ -365,7 +335,6 @@ contract Registry is OwnerIsCreator {
                     messageId,
                     data
                 );
-            emit MessageMethod(decmethod);
             return;
         }
 

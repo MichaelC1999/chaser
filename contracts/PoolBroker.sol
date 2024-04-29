@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/utils/math/Math.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract PoolBroker {
     address public poolAddress;
@@ -39,15 +39,17 @@ contract PoolBroker {
         );
 
         require(
-            success == true,
+            success,
             "The withdraw execution was unsuccessful on the external protocol."
         );
 
-        // require(success == true, "Withdraw call must be successful");
-        //transfer funds to integrator, finishes execution sequence
         uint256 assetAmountWithdrawn = IERC20(assetAddress).balanceOf(
             address(this)
         );
-        IERC20(assetAddress).transfer(integratorAddress, assetAmountWithdrawn);
+        bool intSuccess = IERC20(assetAddress).transfer(
+            integratorAddress,
+            assetAmountWithdrawn
+        );
+        require(intSuccess, "Token transfer failure");
     }
 }

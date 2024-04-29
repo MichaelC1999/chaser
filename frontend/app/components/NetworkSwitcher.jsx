@@ -26,11 +26,11 @@ export function NetworkSwitcher() {
             // Prompt user to switch to Sepolia
             await windowOverride?.ethereum?.request({
                 method: 'wallet_addEthereumChain',
-                params: [{ chainId: '0x14a34', rpcUrls: ["https://sepolia.base.org"], chainName: "Base Sepolia", nativeCurrency: { symbol: "ETH", decimals: 18, name: "Ether" } }],
+                params: [{ chainId: '0xaa36a7', rpcUrls: ["https://sepolia.base.org"], chainName: "Sepolia", nativeCurrency: { symbol: "ETH", decimals: 18, name: "Ether" } }],
             });
             await windowOverride?.ethereum?.request({
                 method: 'wallet_switchEthereumChain',
-                params: [{ chainId: '0x14a34' }],
+                params: [{ chainId: '0xaa36a7' }],
             });
         } catch (switchError) {
 
@@ -41,7 +41,7 @@ export function NetworkSwitcher() {
     }
 
     if (isEthereumAvailable) {
-        if (chainId == "0x14a34" || fromHex(newChain, 'number') == 0) {
+        if (chainId == "0xaa36a7" || fromHex(newChain, 'number') == 0) {
             return null;
         }
     } else {
@@ -52,7 +52,7 @@ export function NetworkSwitcher() {
         <div className="popup-container">
             <div className="popup">
                 <div className="popup-title">Network Switcher</div>
-                <div className="popup-message">Chaser is interfaced on Base Sepolia (Chain ID 84532)</div>
+                <div className="popup-message">Chaser is interfaced on Sepolia (Chain ID 11155111)</div>
                 <div className="popup-message">
                     You are currently connected to Chain ID {fromHex(newChain, 'number') || "N/A"}
                 </div>

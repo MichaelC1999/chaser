@@ -6,15 +6,18 @@ interface IPoolControl {
     function receivePositionBalance(bytes memory) external;
     function userWithdrawOrder(uint256) external;
     function readPositionBalance() external;
-    function getPositionData() external;
     function userDepositAndSetPosition(
         uint256,
         uint256,
         string memory,
-        uint256,
-        string memory
+        string memory,
+        uint256
     ) external;
     function userDeposit(uint256, uint256) external;
+    function handleUndoPositionInitializer(bytes32, uint256) external;
+    function handleUndoDeposit(bytes32, uint256) external;
+    function handleUndoPivot(uint256, uint256) external;
+    function handleClearPivotTarget() external;
     function queryMovePosition(
         string memory,
         string memory,

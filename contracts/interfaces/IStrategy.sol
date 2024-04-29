@@ -1,4 +1,4 @@
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.18;
 
 interface IStrategy {
     function updateStrategy(

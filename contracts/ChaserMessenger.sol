@@ -4,7 +4,7 @@ pragma solidity ^0.8.22;
 import {IRouterClient} from "@chainlink/contracts-ccip/src/v0.8/ccip/interfaces/IRouterClient.sol";
 import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.sol";
 import {CCIPReceiver} from "@chainlink/contracts-ccip/src/v0.8/ccip/applications/CCIPReceiver.sol";
-import {IERC20} from "@chainlink/contracts-ccip/src/v0.8/vendor/openzeppelin-solidity/v4.8.0/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
 import {IPoolControl} from "./interfaces/IPoolControl.sol";
@@ -50,9 +50,9 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
     mapping(address => bool) public allowlistedSenders;
 
     IChaserRegistry public registry;
-    IBridgeLogic bridgeFunctions;
+    IBridgeLogic public bridgeFunctions;
 
-    IERC20 private s_linkToken;
+    IERC20 private linkToken;
 
     /// @notice Constructor initializes the contract with the router address.
     /// @param _router The address of the router contract.
@@ -65,7 +65,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         uint64 _sourceChainSelector
     ) CCIPReceiver(_router) {
         if (_link != address(0)) {
-            s_linkToken = IERC20(_link);
+            linkToken = IERC20(_link);
         }
         registry = IChaserRegistry(_registry);
         bridgeFunctions = IBridgeLogic(_bridgeLogicAddress);
@@ -144,13 +144,13 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         );
         require(_receiver != address(0), "RECEIVER");
         require(_poolAddress != address(0), "POOL");
-        require(address(s_linkToken) != address(0), "FEETOKEN");
+        require(address(linkToken) != address(0), "FEETOKEN");
         Client.EVM2AnyMessage memory evm2AnyMessage = _buildCCIPMessage(
             _receiver,
             _method,
             _poolAddress,
             _data,
-            address(s_linkToken)
+            address(linkToken)
         );
 
         // Initialize a router client instance to interact with cross-chain router
@@ -160,12 +160,12 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         uint256 fees = router.getFee(_destinationChainSelector, evm2AnyMessage);
 
         require(
-            fees <= s_linkToken.balanceOf(address(this)),
+            fees <= linkToken.balanceOf(address(this)),
             "Fees exceed Messenger LINK balance"
         );
 
         // approve the Router to transfer LINK tokens on contract's behalf. It will spend the fees in LINK
-        s_linkToken.approve(address(router), fees);
+        linkToken.approve(address(router), fees);
 
         // // Send the CCIP message through the router and store the returned CCIP message ID
         bytes32 messageId = router.ccipSend(
@@ -179,7 +179,7 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             _destinationChainSelector,
             _receiver,
             evm2AnyMessage.data,
-            address(s_linkToken),
+            address(linkToken),
             fees
         );
 
@@ -229,93 +229,37 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         );
 
         if (_method == bytes4(keccak256(abi.encode("AbPivotMovePosition")))) {
-            try bridgeFunctions.executeExitPivot(_poolAddress, _data) {
-                emit ExecutionMessage("AbPivotMovePosition success");
-            } catch Error(string memory reason) {
-                // IMPORTANT - SEND FAILURE MESSAGE TO RESET PIVOT INITIATION/POSITION TARGETS
-                emit ExecutionMessage(reason);
-            }
+            bridgeFunctions.executeExitPivot(_poolAddress, _data);
+            emit ExecutionMessage("AbPivotMovePosition success");
         }
 
         if (_method == bytes4(keccak256(abi.encode("AbWithdrawOrderUser")))) {
-            try bridgeFunctions.userWithdrawSequence(_poolAddress, _data) {
-                emit ExecutionMessage("AbWithdrawOrderUser success");
-            } catch Error(string memory reason) {
-                // IMPORTANT - SEND FAILURE MESSAGE TO RESET WITHDRAW INITIATION
-                emit ExecutionMessage(reason);
-            }
-        }
-
-        if (
-            _method == bytes4(keccak256(abi.encode("AbMessagePositionBalance")))
-        ) {
-            try
-                bridgeFunctions.sendPositionBalance(
-                    _poolAddress,
-                    bytes32(""),
-                    0
-                )
-            {
-                emit ExecutionMessage("AbMessagePositionBalance success");
-            } catch Error(string memory reason) {
-                emit ExecutionMessage(reason);
-            }
-        }
-
-        if (_method == bytes4(keccak256(abi.encode("AbMessagePositionData")))) {
-            //Reads data to be sent back to pool
-            try bridgeFunctions.sendPositionData(_poolAddress) {
-                emit ExecutionMessage("AbMessagePositionData success");
-            } catch Error(string memory reason) {
-                emit ExecutionMessage(reason);
-            }
-        }
-
-        if (_method == bytes4(keccak256(abi.encode("BaMessagePositionData")))) {
-            //Receives data from the position on the current position chain. Sets this to mapping state
-            // try IPoolControl(_poolAddress).receivePositionData(_data) {
-            //     emit ExecutionMessage("BaMessagePositionData success");
-            // } catch Error(string memory reason) {
-            //     emit ExecutionMessage(reason);
-            // }
+            bridgeFunctions.userWithdrawSequence(_poolAddress, _data);
+            emit ExecutionMessage("AbWithdrawOrderUser success");
         }
 
         if (
             _method == bytes4(keccak256(abi.encode("BaMessagePositionBalance")))
         ) {
-            try IPoolControl(_poolAddress).receivePositionBalance(_data) {
-                emit ExecutionMessage("BaMessagePositionBalance success");
-            } catch Error(string memory reason) {
-                // IMPORTANT - LOCAL FAILURE LOGIC FOR FAILED CALLBACK ON DEPOSIT, UPDATE LOCAL STATE FOR B CHAIN DEPO SUCCESS
-                emit ExecutionMessage(reason);
-            }
-        }
-        if (_method == bytes4(keccak256(abi.encode("BaPositionInitialized")))) {
-            try IPoolControl(_poolAddress).receivePositionInitialized(_data) {
-                emit ExecutionMessage("BaPositionInitialized success");
-            } catch Error(string memory reason) {
-                // IMPORTANT - LOCAL FAILURE LOGIC FOR FAILED CALLBACK ON DEPOSIT/POSITION SET, UPDATE LOCAL STATE FOR B CHAIN DEPO SUCCESS, POSITION STATE
-                emit ExecutionMessage(reason);
-            }
+            IPoolControl(_poolAddress).receivePositionBalance(_data);
+            emit ExecutionMessage("BaMessagePositionBalance success");
         }
 
-        if (_method == bytes4(keccak256(abi.encode("sendRegistryAddress")))) {}
+        if (_method == bytes4(keccak256(abi.encode("BaPositionInitialized")))) {
+            IPoolControl(_poolAddress).receivePositionInitialized(_data);
+            emit ExecutionMessage("BaPositionInitialized success");
+        }
+
         if (_method == bytes4(keccak256(abi.encode("BaPivotMovePosition")))) {
             (address marketAddress, uint256 nonce, uint256 positionAmount) = abi
                 .decode(_data, (address, uint256, uint256));
 
-            try
-                IPoolControl(_poolAddress).pivotCompleted(
-                    marketAddress,
-                    nonce,
-                    positionAmount
-                )
-            {
-                emit ExecutionMessage("BaPivotMovePosition success");
-            } catch Error(string memory reason) {
-                // IMPORTANT - LOCAL FAILURE LOGIC FOR FAILED PIVOT CALLBACK, NEEDS FUNCTION TO UPDATE STATE FOR SUCCESS ON B NETWORK
-                emit ExecutionMessage(reason);
-            }
+            IPoolControl(_poolAddress).pivotCompleted(
+                marketAddress,
+                nonce,
+                positionAmount
+            );
+            emit ExecutionMessage("BaPivotMovePosition success");
         }
 
         emit MessageReceived(

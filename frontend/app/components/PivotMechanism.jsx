@@ -12,7 +12,7 @@ import { decodeAcrossDepositEvent, decodeCCIPSendMessageEvent } from '../utils';
 
 
 const PivotMechanism = ({ poolData, provider, setErrorMessage, txData, setTxData, step, demoMode, changeStep }) => {
-    const [targetChain, setTargetChain] = useState('84532');
+    const [targetChain, setTargetChain] = useState('11155111');
     const [protocolName, setProtocolName] = useState("aave-v3")
     const [pivotInitialized, setPivotInitialized] = useState(false);
 
@@ -44,7 +44,7 @@ const PivotMechanism = ({ poolData, provider, setErrorMessage, txData, setTxData
         }
 
         const pool = new ethers.Contract(poolData.address || "0x0", PoolABI, signer)
-        const asset = new ethers.Contract(contractAddresses["base"].WETH || "0x0", PoolTokenABI, signer)
+        const asset = new ethers.Contract(contractAddresses["sepolia"].WETH || "0x0", PoolTokenABI, signer)
         try {
 
 
@@ -57,20 +57,20 @@ const PivotMechanism = ({ poolData, provider, setErrorMessage, txData, setTxData
             )).wait()
 
             let eventData = {}
-            if (networks[poolData?.currentChain] !== 'base') {
+            if (networks[poolData?.currentChain] !== 'sepolia') {
                 eventData = await decodeCCIPSendMessageEvent(tx.logs)
-            } else if (networks[targetChain] !== 'base') {
+            } else if (networks[targetChain] !== 'sepolia') {
                 eventData = await decodeAcrossDepositEvent(tx.logs)
 
             }
             let otherChainInteraction = ''
-            if ((poolData?.currentChain === 'base' || !poolData?.currentChain) && networks[targetChain] === 'base') {
+            if ((poolData?.currentChain === 'sepolia' || !poolData?.currentChain) && networks[targetChain] === 'sepolia') {
                 eventData = { message: `The Pivot from ${protocolHashes[poolData?.protocol]} ${networks[poolData?.currentChain]} to ${protocolName} ${networks[targetChain]} was successful and has finalized.` }
             } else {
                 otherChainInteraction = "This entire process could take up to 30 minutes."
                 let message = `The Pivot from ${protocolHashes[poolData?.protocol]} ${networks[poolData?.currentChain]} to ${protocolName} ${networks[targetChain]} has been initiated`;
 
-                if (networks[poolData?.currentChain] !== 'base' || !poolData?.currentChain) {
+                if (networks[poolData?.currentChain] !== 'sepolia' || !poolData?.currentChain) {
                     message += " with a CCIP message to Chaser contracts on " + networks[poolData?.currentChain];
                     if (eventData.messageId) {
                         message += ' with a messageId of ' + eventData.messageId;
@@ -85,8 +85,8 @@ const PivotMechanism = ({ poolData, provider, setErrorMessage, txData, setTxData
                     message += '. ';
                 }
 
-                if (networks[targetChain] !== 'base') {
-                    message += "To finalize, a CCIP callback message will be sent back to Base. ";
+                if (networks[targetChain] !== 'sepolia') {
+                    message += "To finalize, a CCIP callback message will be sent back to sepolia. ";
                 }
 
                 message += otherChainInteraction;

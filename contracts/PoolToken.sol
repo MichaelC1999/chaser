@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract PoolToken is ERC20 {
-    address public poolAddress;
+    address public immutable poolAddress;
 
     constructor(
         address initialDepositor,

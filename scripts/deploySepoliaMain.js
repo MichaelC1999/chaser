@@ -249,9 +249,9 @@ const basePositionSetDeposit = async () => {
     const tx = await pool.userDepositAndSetPosition(
         amount,
         totalFeeCalc(amount),
+        "aave-v3",
         "0x0242242424242",
         11155111,
-        "aave-v3",
         { gasLimit: 8000000 }
     )
 

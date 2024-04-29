@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
-import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
-
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PoolControl} from "./PoolControl.sol";
 import {Registry} from "./Registry.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
 interface IChaserManager {
     function createNewPool(
@@ -15,7 +15,7 @@ interface IChaserManager {
     ) external;
 }
 
-contract ChaserManager is OwnerIsCreator {
+contract ChaserManager is OwnableUpgradeable {
     IChaserRegistry public registry;
 
     uint256 currentChainId;
@@ -24,7 +24,8 @@ contract ChaserManager is OwnerIsCreator {
 
     event PoolCreated(address indexed poolAddress);
 
-    constructor(uint256 _chainId) {
+    function initialize(uint256 _chainId) public initializer {
+        __Ownable_init();
         currentChainId = _chainId;
     }
 

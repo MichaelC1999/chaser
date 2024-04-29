@@ -1,3 +1,11 @@
+//STRATEGY SCRIPT REQUIREMENTS:
+// - MUST MAKE QUERIES AGAINST A SUBGRAPH (pref Messari), DeFi Llama, etc
+// - MUST TAKE IN ARGUMENTS FOR THE CURRENT MARKET WHERE ASSETS ARE CURRENTLY HELD, AND FOR REQUESTED MARKET TO SWITCH TO
+// - MUST INCLUDE A CONFIRMATION OF THE ASSET (MAYBE A HARDCODED MAPPING OF THE ASSET ON EACH SUPPORTED CHAIN)
+// - MUST INCLUDE A CONFIRMATION OF THE PROTOCOL (HARDCODED MAPPING OF PROTOCOLS ALLOWED FOR THIS STRATEGY)
+// - MUST INCLUDE A CONFIRMATION OF THE CHAIN (HARDCODED LIST OF CHAINS WHERE THE STRATEGY MAY PIVOT TO)
+//   (All of the above confirmations are specific to the strategy/pool. Chaser makes its own validation for supported protocols, networks, assets etc)
+
 const strategyCalculation = async (args) => {
     const requestChain = args[0]
     const requestProtocol = args[1]

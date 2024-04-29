@@ -56,7 +56,7 @@ const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, txData, se
 
             const URIs = ["https://sepolia.basescan.org/tx/" + tx.hash]
             let txCCIPMessage = ''
-            if (networks[poolData?.currentChain] !== 'base') {
+            if (networks[poolData?.currentChain] !== 'sepolia') {
                 const ccipData = await decodeCCIPSendMessageEvent(tx.logs)
                 txCCIPMessage = `CCIP is sending a message to Chaser contracts on ${networks[poolData?.currentChain]} network. The CCIP message ID is ${ccipData?.messageId}. This CCIP message will trigger functions on ${networks[poolData?.currentChain]} which will send your funds through the Across bridge back to your wallet on Base Sepolia. This whole process can take up to 30 minutes.`
                 URIs.push("https://ccip.chain.link/msg/" + ccipData?.messageId)

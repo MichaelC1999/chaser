@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Loader from './Loader.jsx'; // Assuming Loader component is available
 import { ethers } from 'ethers';
 import PoolABI from '../ABI/PoolABI.json'; // Adjust the path as needed
+import PoolCalculationsABI from '../ABI/PoolCalculationsABI.json'; // Adjust the path as needed
+
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { createPublicClient, getContract, http, formatEther } from 'viem';
 import { sepolia, baseSepolia } from 'viem/chains';
@@ -27,18 +29,21 @@ const PoolRow = ({ poolNumber, provider, registry, setErrorMessage }) => {
         const getPoolData = async (address) => {
             const pool = new ethers.Contract(address || "0x0", PoolABI, provider);
 
+            const calc = new ethers.Contract(await pool.poolCalculations() || "0x0", PoolCalculationsABI, provider)
+
             const name = await pool.poolName()
             const currentChain = await pool.currentPositionChain()
-            const currentProtocolHash = await pool.currentPositionProtocolHash()
+            const currentProtocolHash = await calc.currentPositionProtocolHash(address)
             return { address, name, currentChain, currentProtocolHash }
         }
 
         const getBridgedPoolData = async (address, hash, chainId) => {
-            let chain = baseSepolia
-            let chainName = 'base'
-            if (chainId.toString() === "11155111") {
-                chain = sepolia
-                chainName = 'sepolia'
+            let chain = sepolia
+
+            let chainName = 'sepolia'
+            if (chainId.toString() === "84532") {
+                chain = baseSepolia
+                chainName = 'base'
             }
             const publicClient = createPublicClient({
                 chain,
