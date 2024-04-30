@@ -251,12 +251,13 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         }
 
         if (_method == bytes4(keccak256(abi.encode("BaPivotMovePosition")))) {
-            (address marketAddress, uint256 nonce, uint256 positionAmount) = abi
-                .decode(_data, (address, uint256, uint256));
+            (address marketAddress, uint256 positionAmount) = abi.decode(
+                _data,
+                (address, uint256)
+            );
 
             IPoolControl(_poolAddress).pivotCompleted(
                 marketAddress,
-                nonce,
                 positionAmount
             );
             emit ExecutionMessage("BaPivotMovePosition success");

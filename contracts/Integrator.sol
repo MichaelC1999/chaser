@@ -42,19 +42,7 @@ contract Integrator is Initializable {
     ) internal {
         address trueAsset = _assetAddress;
         if (chainId == 11155111) {
-            if (_marketAddress == address(0)) {
-                _marketAddress = address(
-                    0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951
-                );
-            }
             _assetAddress = address(0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357);
-        }
-        if (chainId == 84532) {
-            if (_marketAddress == address(0)) {
-                _marketAddress = address(
-                    0x07eA79F68B2B3df564D0A34F8e19D9B1e339814b
-                );
-            }
         }
 
         if (_operation == hasher("deposit")) {
@@ -101,19 +89,7 @@ contract Integrator is Initializable {
     ) internal {
         address trueAsset = _assetAddress;
         if (chainId == 11155111) {
-            if (_marketAddress == address(0)) {
-                _marketAddress = address(
-                    0x2943ac1216979aD8dB76D9147F64E61adc126e96
-                );
-            }
             _assetAddress = address(0x2D5ee574e710219a521449679A4A7f2B43f046ad);
-        }
-        if (chainId == 84532) {
-            if (_marketAddress == address(0)) {
-                _marketAddress = address(
-                    0x61490650AbaA31393464C3f34E8B29cd1C44118E
-                );
-            }
         }
 
         if (_operation == hasher("deposit")) {
@@ -181,22 +157,11 @@ contract Integrator is Initializable {
         if (_protocolHash == hasher("aave-v3")) {
             // Default to the AAVE pool contract
             if (chainId == 11155111) {
-                if (_marketAddress == address(0)) {
-                    _marketAddress = address(
-                        0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951
-                    );
-                }
                 _assetAddress = address(
                     0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357
                 );
             }
-            if (chainId == 84532) {
-                if (_marketAddress == address(0)) {
-                    _marketAddress = address(
-                        0x07eA79F68B2B3df564D0A34F8e19D9B1e339814b
-                    );
-                }
-            }
+
             // IN DEVELOPMENT - This contract is preloaded with aave testnet equivalent asset
             // require(IERC20(poolToAsset[_poolAddress]).balanceOf(address(this)) == _amount)
 
@@ -209,21 +174,6 @@ contract Integrator is Initializable {
         }
 
         if (_protocolHash == hasher("compound-v3")) {
-            if (chainId == 11155111) {
-                if (_marketAddress == address(0)) {
-                    _marketAddress = address(
-                        0x2943ac1216979aD8dB76D9147F64E61adc126e96
-                    );
-                }
-            }
-            if (chainId == 84532) {
-                if (_marketAddress == address(0)) {
-                    _marketAddress = address(
-                        0x61490650AbaA31393464C3f34E8B29cd1C44118E
-                    );
-                }
-            }
-
             return IComet(_marketAddress).balanceOf(brokerAddress);
         }
     }

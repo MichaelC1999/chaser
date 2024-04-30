@@ -10,7 +10,6 @@ interface IBridgeLogic {
         bytes32,
         address,
         address,
-        string memory,
         bytes32
     ) external;
     function handleEnterPivot(
@@ -19,7 +18,6 @@ interface IBridgeLogic {
         address,
         bytes32,
         address,
-        string memory,
         uint256
     ) external;
     function returnToPool(bytes4, address, bytes32, uint256, uint256) external;
@@ -38,16 +36,12 @@ interface IBridgeLogic {
     function poolToCurrentPositionMarket(
         address
     ) external view returns (address);
-    function poolToCurrentMarketId(
-        address
-    ) external view returns (string memory);
     function poolToCurrentProtocolHash(address) external view returns (bytes32);
     function positionEntranceAmount(address) external view returns (uint256);
     function poolToAsset(address) external view returns (address);
     function userDepositNonce(bytes32) external view returns (uint256);
     function userCumulativeDeposits(bytes32) external view returns (uint256);
     function nonceToPositionValue(bytes32) external view returns (uint256);
-    function bridgeNonce(address) external view returns (uint256);
     function getPositionBalance(address) external view returns (uint256);
     function getUserMaxWithdraw(
         uint256,

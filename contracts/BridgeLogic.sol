@@ -10,6 +10,7 @@ import {IPoolControl} from "./interfaces/IPoolControl.sol";
 import {IIntegrator} from "./interfaces/IIntegrator.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IAToken} from "./interfaces/IAToken.sol";
 
 contract BridgeLogic is OwnableUpgradeable {
     uint256 managerChainId;
@@ -22,12 +23,10 @@ contract BridgeLogic is OwnableUpgradeable {
     address public integratorAddress;
 
     mapping(address => address) public poolToCurrentPositionMarket;
-    mapping(address => string) public poolToCurrentMarketId;
     mapping(address => bytes32) public poolToCurrentProtocolHash;
     mapping(address => address) public poolToAsset;
     mapping(bytes32 => uint256) public userDepositNonce;
     mapping(bytes32 => uint256) public userCumulativeDeposits;
-    mapping(address => uint256) public bridgeNonce; // pool address to the current nonce of all withdraws/deposits reflected in the position balance
     mapping(address => uint256) public poolAddressToDepositNonce;
     mapping(address => uint256) public poolAddressToWithdrawNonce;
     mapping(address => mapping(uint256 => uint256))
@@ -67,7 +66,6 @@ contract BridgeLogic is OwnableUpgradeable {
         bytes32 _depositId,
         address _userAddress,
         address _marketAddress,
-        string memory _marketId,
         bytes32 _protocolHash
     ) external {
         require(
@@ -76,16 +74,10 @@ contract BridgeLogic is OwnableUpgradeable {
             "Only callable by the BridgeReceiver or a valid pool"
         );
         bytes32 currentNonceHash = keccak256(abi.encode(_poolAddress, 0));
-        bridgeNonce[_poolAddress] = 0;
         poolToCurrentPositionMarket[_poolAddress] = _marketAddress;
         poolToAsset[_poolAddress] = _tokenSent;
 
-        updatePositionState(
-            _poolAddress,
-            _protocolHash,
-            _marketAddress,
-            _marketId
-        );
+        updatePositionState(_poolAddress, _protocolHash, _marketAddress);
 
         bytes32 userPoolHash = keccak256(
             abi.encode(_userAddress, _poolAddress)
@@ -104,7 +96,6 @@ contract BridgeLogic is OwnableUpgradeable {
         address _poolAddress,
         bytes32 _protocolHash,
         address _marketAddress,
-        string memory _targetMarketId,
         uint256 _poolNonce
     ) external {
         require(
@@ -113,23 +104,13 @@ contract BridgeLogic is OwnableUpgradeable {
         );
 
         poolToAsset[_poolAddress] = _tokenSent;
-        bridgeNonce[_poolAddress] = _poolNonce;
 
-        updatePositionState(
-            _poolAddress,
-            _protocolHash,
-            _marketAddress,
-            _targetMarketId
-        );
+        updatePositionState(_poolAddress, _protocolHash, _marketAddress);
 
         receiveDepositFromPool(_amount, _poolAddress);
         if (managerChainId == localChainId) {
             // If the Pool is on this same chain, directly call the proper functions on this chain no CCIP
-            IPoolControl(_poolAddress).pivotCompleted(
-                _marketAddress,
-                bridgeNonce[_poolAddress],
-                _amount
-            );
+            IPoolControl(_poolAddress).pivotCompleted(_marketAddress, _amount);
         } else {
             // If the Pool is on a different chain, use CCIP to notify the pool
             sendPivotCompleted(_poolAddress, _amount);
@@ -250,11 +231,7 @@ contract BridgeLogic is OwnableUpgradeable {
     ) internal {
         bytes4 method = bytes4(keccak256(abi.encode("BaPivotMovePosition")));
         address marketAddress = poolToCurrentPositionMarket[_poolAddress];
-        bytes memory data = abi.encode(
-            marketAddress,
-            bridgeNonce[_poolAddress],
-            _amount
-        );
+        bytes memory data = abi.encode(marketAddress, _amount);
 
         registry.sendMessage(managerChainId, method, _poolAddress, data);
     }
@@ -262,10 +239,11 @@ contract BridgeLogic is OwnableUpgradeable {
     function updatePositionState(
         address _poolAddress,
         bytes32 _protocolHash,
-        address _marketAddress,
-        string memory _targetMarketId
+        address _marketAddress
     ) internal {
-        poolToCurrentMarketId[_poolAddress] = _targetMarketId;
+        if (_protocolHash == keccak256(abi.encode("aave-v3"))) {
+            _marketAddress = IAToken(_marketAddress).POOL();
+        }
         poolToCurrentPositionMarket[_poolAddress] = _marketAddress;
         poolToCurrentProtocolHash[_poolAddress] = _protocolHash;
     }
@@ -274,7 +252,6 @@ contract BridgeLogic is OwnableUpgradeable {
         address _poolAddress,
         bytes32 _protocolHash,
         address _targetMarketAddress,
-        string memory _targetMarketId,
         uint256 _destinationChainId,
         address _destinationBridgeReceiver,
         uint256 _amount
@@ -286,15 +263,10 @@ contract BridgeLogic is OwnableUpgradeable {
         bytes memory message = abi.encode(
             method,
             _poolAddress,
-            abi.encode(
-                _protocolHash,
-                _targetMarketAddress,
-                _targetMarketId,
-                bridgeNonce[_poolAddress]
-            )
+            abi.encode(_protocolHash, _targetMarketAddress)
         );
 
-        updatePositionState(_poolAddress, bytes32(""), address(0), "");
+        updatePositionState(_poolAddress, bytes32(""), address(0));
 
         crossChainBridge(
             _amount,
@@ -318,10 +290,9 @@ contract BridgeLogic is OwnableUpgradeable {
         (
             bytes32 targetProtocolHash,
             address targetMarketAddress,
-            string memory targetMarketId,
             uint256 destinationChainId,
             address destinationBridgeReceiver
-        ) = abi.decode(_data, (bytes32, address, string, uint256, address));
+        ) = abi.decode(_data, (bytes32, address, uint256, address));
 
         uint256 amount = getPositionBalance(_poolAddress);
         integratorWithdraw(_poolAddress, amount);
@@ -331,8 +302,7 @@ contract BridgeLogic is OwnableUpgradeable {
             updatePositionState(
                 _poolAddress,
                 targetProtocolHash,
-                targetMarketAddress,
-                targetMarketId
+                targetMarketAddress
             );
             localPivot(_poolAddress, amount);
         } else {
@@ -340,7 +310,6 @@ contract BridgeLogic is OwnableUpgradeable {
                 _poolAddress,
                 targetProtocolHash,
                 targetMarketAddress,
-                targetMarketId,
                 destinationChainId,
                 destinationBridgeReceiver,
                 amount
@@ -354,11 +323,7 @@ contract BridgeLogic is OwnableUpgradeable {
         if (managerChainId == localChainId) {
             // If the Pool is on this same chain, directly call the proper functions on this chain no CCIP
             address marketAddress = poolToCurrentPositionMarket[_poolAddress];
-            IPoolControl(_poolAddress).pivotCompleted(
-                marketAddress,
-                bridgeNonce[_poolAddress],
-                _amount
-            );
+            IPoolControl(_poolAddress).pivotCompleted(marketAddress, _amount);
         } else {
             // If the Manager is on a different chain, use CCIP to notify the pool
             sendPivotCompleted(_poolAddress, _amount);
@@ -387,7 +352,7 @@ contract BridgeLogic is OwnableUpgradeable {
         address destinationBridgeReceiver = registry.chainIdToBridgeReceiver(
             managerChainId
         );
-        updatePositionState(_poolAddress, bytes32(""), address(0), "");
+        updatePositionState(_poolAddress, bytes32(""), address(0));
         if (localChainId == managerChainId) {
             if (
                 _originalMethod ==
@@ -677,14 +642,6 @@ contract BridgeLogic is OwnableUpgradeable {
                 poolToNonceToCumulativeWithdraw[_poolAddress][oldNonce] +
                 _txAmount;
         }
-    }
-
-    function getMarketAddressFromId(
-        string memory marketId,
-        bytes32 protocolHash
-    ) internal view returns (address) {
-        // IMPORTANT - CHANGE TO READ FROM INTEGRATIONS CONTRACT
-        return address(bytes20(keccak256(abi.encode(marketId, protocolHash))));
     }
 
     /**

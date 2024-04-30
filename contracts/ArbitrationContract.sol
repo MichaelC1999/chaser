@@ -15,10 +15,11 @@ contract ArbitrationContract {
     bytes32 public defaultIdentifier;
     IChaserRegistry public registry;
 
-    mapping(bytes32 => string) public assertionToRequestedMarketId;
+    mapping(bytes32 => bytes) public assertionToRequestedMarketId;
     mapping(bytes32 => string) public assertionToRequestedProtocol;
     mapping(bytes32 => uint256) public assertionToRequestedChainId;
     mapping(bytes32 => address) public assertionToPoolAddress;
+    mapping(bytes32 => uint256) public assertionToBlockTime;
     mapping(address => bool) public poolHasAssertionOpen;
     mapping(uint256 => string) public chainIdToName;
 
@@ -45,6 +46,38 @@ contract ArbitrationContract {
         bytes32 indexed assertionId
     );
 
+    function inAssertionBlockWindow(
+        bytes32 assertionId
+    ) external view returns (bool) {
+        return (assertionToBlockTime[assertionId] < block.timestamp);
+    }
+
+    // WHO MAY PROPOSE A PIVOT?
+    // -Someone with a stake in the pool
+    //-Pools may have very few users who are monitoring vrious yeilds
+    //-Gives incentive for correct proposals
+    // -Any user that is willing to put up the bond
+    //-Needs a high bond value to prevent spam blocking  bridge proposals
+    //-Needs a high reward to incentivize users to put up the bond and watch for pivots
+    //-Hard to convince users to put up high bond right after launch
+    // -Chaser bot that is responsible with putting up funds to make proposals
+    //Central actor bringing execution on chain
+    //Prevents spam from blocking withdraws on pools at crucial moments
+    //May be good to start with
+    // DO SUCCESSFUL PROPOSALS GET REWARDED?
+    // WHAT HAPPENS IF THEIR IS A DISPUTE?
+    //-How long does this take to resolve?
+    //-Should a proposal cancel if there is a dispute? What happens for proposer if the assertion was valid but had been disputed unsuccessfully?
+    // WHAT ARE THE ASSERTION PARAMETERS?
+    // -7200 liveness
+    // -1000 bond
+    // -Variable bond amount depending on TVL, for greater asserter willingness on low TVL pools
+    // -Variable bond so that larger pools do not need to worry about outsiders constantly freezing deposits/withdraws for a small bond amount
+    // SHOULD DEPOS/WITHDRAWS BE BLOCKED UPON ASSERTION OR PIVOT EXECUTION?
+    // -If the assertion bond is high, could be blocked upon assertion
+    // -Could leave depos/withdraws open until assertion is settled. If there are pending transactions while assertion settles, the depos/withs are blocked and a bool on pool is set to true
+    // -This true bool value allows anyone to call sendPositionChange on pool, which checks if there are still pending transactions before executing the pivot
+
     constructor(address _registry, uint256 _chainId) {
         // address _optimisticOracleV3
         registry = IChaserRegistry(_registry);
@@ -69,33 +102,38 @@ contract ArbitrationContract {
         address sender,
         uint256 requestChainId,
         string memory requestProtocol,
-        string memory requestMarketId,
+        bytes memory requestMarketId,
         uint256 currentDepositChainId,
         string memory currentPositionProtocol,
-        string memory currentPositionMarketId,
+        bytes memory currentPositionMarketId,
         uint256 bond,
         uint256 strategyIndex
-    ) external {
+    ) external returns (bytes32) {
         require(
             registry.poolEnabled(msg.sender),
             "queryMovePosition() may only be called by a valid pool."
+        );
+        require(
+            !poolHasAssertionOpen[msg.sender],
+            "Assertion is already open on pool"
         );
         //IMPORTANT - WHO SHOULD BE ALLOWED TO OPEN A POSITION MOVE? ANYONE WITH A STAKE IN THE POOL?
 
         //IMPORTANT - BOND AMOUNT SHOULD BE A FUNCTION OF POOL TVL. A LOW BOND FOR A MULTI-MILLION POOL COULD BE SACRIFICED TO FRONTRUN, OR SPAMMED TO BLOCK DEPOSITS/WITH
         // require(bond >= 1000000, "Bond provided must be above 1 USDC"); // IMPORTANT - INCREASE THIS AMOUNT
 
-        //IMPORTANT - BLOCK MOVE PROPOSALS IF A POOL CURRENTLY HAS PROPOSAL PENDING
-        //Check poolCalc.pivotPending
-        //Check poolHasAssertionOpen
-
         bool protocolEnabled = registry.protocolEnabled(requestProtocol);
         require(
             protocolEnabled,
-            "Protocol-Chain slug must be enabled to make proposal"
+            "Protocol slug must be enabled to make proposal"
         );
-
-        //IMPORTANT - need to verify that the request protocol/chain are each supported on the chaser protocol
+        address bridgeReceiver = registry.chainIdToBridgeReceiver(
+            requestChainId
+        );
+        require(
+            bridgeReceiver != address(0),
+            "Chain must have a bridge receiver to request a pivot"
+        );
 
         bytes memory data = abi.encode(
             "By accessing and executing the startegy script with the following instructions, the script returned a value of true. ",
@@ -117,7 +155,12 @@ contract ArbitrationContract {
         assertionToRequestedProtocol[assertionId] = requestProtocol;
         assertionToRequestedChainId[assertionId] = requestChainId;
         assertionToPoolAddress[assertionId] = msg.sender;
+        assertionToBlockTime[assertionId] =
+            block.timestamp +
+            ((assertionLiveness * 3) / 5);
         poolHasAssertionOpen[msg.sender] = true;
+
+        return assertionId;
     }
 
     ///  @dev assertDataFor Opens the UMA assertion that must be verified using the strategy script provided
@@ -180,7 +223,7 @@ contract ArbitrationContract {
         IPoolControl poolControl = IPoolControl(poolAddress);
         // If the assertion was true, then the data assertion is resolved.
         if (assertedTruthfully) {
-            string memory requestMarketId = assertionToRequestedMarketId[
+            bytes memory requestMarketId = assertionToRequestedMarketId[
                 assertionId
             ];
             string memory requestProtocol = assertionToRequestedProtocol[
@@ -217,8 +260,8 @@ contract ArbitrationContract {
             delete assertionToRequestedProtocol[assertionId];
             delete assertionToRequestedChainId[assertionId];
             delete assertionToPoolAddress[assertionId];
+            delete assertionToBlockTime[assertionId];
             delete poolHasAssertionOpen[poolAddress];
-
             poolControl.handleClearPivotTarget();
         }
     }

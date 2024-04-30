@@ -10,7 +10,7 @@ interface IPoolControl {
         uint256,
         uint256,
         string memory,
-        string memory,
+        bytes memory,
         uint256
     ) external;
     function userDeposit(uint256, uint256) external;
@@ -18,14 +18,9 @@ interface IPoolControl {
     function handleUndoDeposit(bytes32, uint256) external;
     function handleUndoPivot(uint256, uint256) external;
     function handleClearPivotTarget() external;
-    function queryMovePosition(
-        string memory,
-        string memory,
-        uint256,
-        uint256
-    ) external;
-    function sendPositionChange(string memory, string memory, uint256) external;
-    function pivotCompleted(address, uint256, uint256) external;
+    function queryMovePosition(string memory, bytes memory, uint256) external;
+    function sendPositionChange(bytes memory, string memory, uint256) external;
+    function pivotCompleted(address, uint256) external;
     function finalizeWithdrawOrder(
         bytes32,
         uint256,
@@ -38,7 +33,6 @@ interface IPoolControl {
     // External/Public State Variable Accessors
     function localChain() external view returns (uint256);
     function poolToken() external view returns (address);
-    function poolNonce() external view returns (uint256);
     function poolName() external view returns (string memory);
     function strategyIndex() external view returns (uint256);
     function pivotPending() external view returns (bool);
@@ -48,11 +42,11 @@ interface IPoolControl {
     function poolCalculations() external view returns (address);
     function arbitrationContract() external view returns (address);
     function asset() external view returns (address);
-    function targetPositionMarketId() external view returns (string memory);
+    function targetPositionMarketId() external view returns (bytes memory);
     function targetPositionChain() external view returns (uint256);
     function targetPositionProtocolHash() external view returns (bytes32);
     function currentPositionAddress() external view returns (address);
-    function currentPositionMarketId() external view returns (string memory);
+    function currentPositionMarketId() external view returns (bytes memory);
     function currentPositionChain() external view returns (uint256);
     function currentPositionProtocolHash() external view returns (bytes32);
     function currentRecordPositionValue() external view returns (uint256);

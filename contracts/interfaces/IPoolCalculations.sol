@@ -14,10 +14,21 @@ interface IPoolCalculations {
 
     function withdrawIdToDepositAmount(bytes32) external view returns (uint256);
 
+    function poolDepositNonce(address) external view returns (uint256);
+
+    function poolWithdrawNonce(address) external view returns (uint256);
+
+    function poolToPendingDeposits(address) external view returns (uint256);
+
+    function poolToPendingWithdraws(address) external view returns (uint256);
+
+    function poolToPivotPending(address) external view returns (bool);
+
     function createWithdrawOrder(
         uint256,
         address,
-        address
+        address,
+        bytes32
     ) external returns (bytes memory);
 
     function fulfillWithdrawOrder(
@@ -39,7 +50,8 @@ interface IPoolCalculations {
     function createDepositOrder(
         address,
         address,
-        uint256
+        uint256,
+        bytes32
     ) external returns (bytes32, uint256);
 
     function updateDepositReceived(
@@ -49,23 +61,26 @@ interface IPoolCalculations {
     ) external returns (address);
 
     function depositIdMinted(bytes32) external;
-
-    function openSetPosition(string memory, string memory, uint256) external;
+    function openSetPosition(
+        bytes memory,
+        string memory,
+        uint256
+    ) external returns (address);
 
     function getReceivingChain() external view returns (uint256);
     function getCurrentPositionData(
         address
-    ) external view returns (string memory, string memory);
+    ) external view returns (string memory, bytes memory, bool);
     function targetPositionChain(address) external view returns (uint256);
-
+    function getPivotBond(address) external view returns (uint256);
+    function createInitialSetPositionMessage(
+        bytes32,
+        address
+    ) external view returns (bytes memory);
     function createPivotExitMessage(
         address
     ) external view returns (bytes memory);
-    function pivotCompleted(
-        address,
-        uint256,
-        uint256
-    ) external returns (uint256);
+    function pivotCompleted(address, uint256) external returns (uint256);
     function calculatePoolTokensToMint(
         bytes32,
         uint256

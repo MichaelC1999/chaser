@@ -14,7 +14,7 @@ contract Registry is OwnerIsCreator {
 
     mapping(address => bool) public poolEnabled;
 
-    mapping(uint256 => address) public chainIdToBridgeReceiver; //This uses CrossDeploy to create inter-chain registry of connection addresses
+    mapping(uint256 => address) public chainIdToBridgeReceiver;
 
     mapping(uint256 => address) public chainIdToMessageReceiver;
 

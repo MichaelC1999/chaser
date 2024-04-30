@@ -119,9 +119,8 @@ contract BridgeReceiver {
             bytes32 depositId,
             address userAddress,
             address marketAddress,
-            string memory marketId,
             bytes32 protocolHash
-        ) = abi.decode(_data, (bytes32, address, address, string, bytes32));
+        ) = abi.decode(_data, (bytes32, address, address, bytes32));
 
         bool success = IERC20(_tokenSent).transfer(
             address(bridgeLogic),
@@ -137,7 +136,6 @@ contract BridgeReceiver {
                 depositId,
                 userAddress,
                 marketAddress,
-                marketId,
                 protocolHash
             )
         {
@@ -203,9 +201,8 @@ contract BridgeReceiver {
         (
             bytes32 protocolHash,
             address targetMarketAddress,
-            string memory targetMarketId,
             uint256 poolNonce
-        ) = abi.decode(_data, (bytes32, address, string, uint256));
+        ) = abi.decode(_data, (bytes32, address, uint256));
 
         bool success = IERC20(_tokenSent).transfer(
             address(bridgeLogic),
@@ -220,7 +217,6 @@ contract BridgeReceiver {
                 _poolAddress,
                 protocolHash,
                 targetMarketAddress,
-                targetMarketId,
                 poolNonce
             )
         {

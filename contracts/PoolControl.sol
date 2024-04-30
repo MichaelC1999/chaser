@@ -20,6 +20,8 @@ contract PoolControl {
     address public poolToken;
     string public poolName;
     uint256 public strategyIndex; // Index in mapping pointing to the strategy code on InvestmentStrategy contract
+    bytes32 public openAssertion = bytes32("");
+    uint256 public currentPositionChain;
 
     address public localBridgeReceiver;
     IBridgeLogic public localBridgeLogic;
@@ -30,7 +32,6 @@ contract PoolControl {
     IERC20 public asset;
 
     event ExecutionMessage(string);
-    uint256 public currentPositionChain;
 
     /**
      * @notice Initial pool configurations and address caching
@@ -100,7 +101,7 @@ contract PoolControl {
             positionAmount,
             depositAmountReceived
         );
-        _pivotCompleted(marketAddress, 1, positionAmount);
+        _pivotCompleted(marketAddress, positionAmount);
 
         if (poolToken == address(0)) {
             poolToken = address(
@@ -142,7 +143,8 @@ contract PoolControl {
         bytes memory data = poolCalculations.createWithdrawOrder(
             _amount,
             poolToken,
-            msg.sender
+            msg.sender,
+            openAssertion
         );
 
         bytes4 method = bytes4(keccak256(abi.encode("AbWithdrawOrderUser")));
@@ -173,7 +175,7 @@ contract PoolControl {
         uint256 _amount,
         uint256 _totalFee,
         string memory _targetPositionProtocol,
-        string memory _targetPositionMarketId,
+        bytes memory _targetPositionMarketId,
         uint256 _targetPositionChain
     ) external {
         // This is for the initial deposit and position set up after pool creation
@@ -182,29 +184,27 @@ contract PoolControl {
             "Only deploying user can set position and deposit"
         );
         require(
-            poolCalculations.poolNonce(address(this)) == 0,
+            poolCalculations.poolDepositNonce(address(this)) == 0,
             "The position may only be set before the first deposit has settled"
         );
 
         (bytes32 depositId, ) = poolCalculations.createDepositOrder(
             msg.sender,
             poolToken,
-            _amount
+            _amount,
+            openAssertion
         );
 
-        poolCalculations.openSetPosition(
+        address targetMarketAddress = poolCalculations.openSetPosition(
             _targetPositionMarketId,
             _targetPositionProtocol,
             _targetPositionChain
         );
 
         // Encode the data including position details
-        bytes memory data = abi.encode(
+        bytes memory data = poolCalculations.createInitialSetPositionMessage(
             depositId,
-            msg.sender,
-            address(0), // IMPORTANT - THIS ADDRESS MUST BE VALIDATED AND PROVIDED FROM UMA ORACLE, POINTS TO CONTRACT TO INVEST INTO
-            _targetPositionMarketId,
-            keccak256(abi.encode(_targetPositionProtocol))
+            msg.sender
         );
 
         if (_targetPositionChain == localChain) {
@@ -221,8 +221,7 @@ contract PoolControl {
                 address(asset),
                 depositId,
                 msg.sender,
-                address(0),
-                _targetPositionMarketId,
+                targetMarketAddress,
                 keccak256(abi.encode(_targetPositionProtocol))
             );
         } else {
@@ -248,12 +247,12 @@ contract PoolControl {
      */
     function userDeposit(uint256 _amount, uint256 _totalFee) external {
         require(
-            poolCalculations.poolNonce(address(this)) > 0,
+            poolCalculations.poolDepositNonce(address(this)) > 0,
             "The deosits can only be made after the first deposit + position set has settled"
         );
 
         (bytes32 depositId, uint256 withdrawNonce) = poolCalculations
-            .createDepositOrder(msg.sender, poolToken, _amount);
+            .createDepositOrder(msg.sender, poolToken, _amount, openAssertion);
 
         if (currentPositionChain == localChain) {
             bool success = asset.transferFrom(
@@ -360,16 +359,20 @@ contract PoolControl {
 
     function queryMovePosition(
         string memory _requestProtocol,
-        string memory _requestMarketId,
-        uint256 _requestChainId,
-        uint256 _bond
+        bytes memory _requestMarketId,
+        uint256 _requestChainId
     ) external {
         (
             string memory currentPositionProtocol,
-            string memory currentPositionMarketId
+            bytes memory currentPositionMarketId,
+            bool pivotPending
         ) = poolCalculations.getCurrentPositionData(address(this));
-
-        arbitrationContract.queryMovePosition(
+        uint256 bond = poolCalculations.getPivotBond(address(asset));
+        require(
+            !pivotPending,
+            "Cannot propose new move while pivot is pending"
+        );
+        openAssertion = arbitrationContract.queryMovePosition(
             msg.sender,
             _requestChainId,
             _requestProtocol,
@@ -377,17 +380,28 @@ contract PoolControl {
             currentPositionChain,
             currentPositionProtocol,
             currentPositionMarketId,
-            _bond,
+            bond,
             strategyIndex
         );
     }
 
     function sendPositionChange(
-        string memory _targetPositionMarketId,
+        bytes memory _targetPositionMarketId,
         string memory _targetPositionProtocol,
         uint256 _targetPositionChain
     ) external {
         // IMPORTANT - THIS SHOULD REQUIRE MSG.SENDER TO BE THE ARBITRATION CONTRACT
+        openAssertion = bytes32("");
+        uint256 currentPendingDeposits = poolCalculations.poolToPendingDeposits(
+            address(this)
+        );
+        uint256 currentPendingWithdraws = poolCalculations
+            .poolToPendingWithdraws(address(this));
+
+        require(
+            currentPendingDeposits == 0 && currentPendingWithdraws == 0,
+            "Transactions still pending on this pool, try to resolve the pivot again soon"
+        );
 
         poolCalculations.openSetPosition(
             _targetPositionMarketId,
@@ -431,20 +445,17 @@ contract PoolControl {
 
     function pivotCompleted(
         address marketAddress,
-        uint256 nonce,
         uint256 positionAmount
     ) external messageSource {
-        _pivotCompleted(marketAddress, nonce, positionAmount);
+        _pivotCompleted(marketAddress, positionAmount);
     }
 
     function _pivotCompleted(
         address marketAddress,
-        uint256 nonce,
         uint256 positionAmount
     ) internal {
         currentPositionChain = poolCalculations.pivotCompleted(
             marketAddress,
-            nonce,
             positionAmount
         );
     }
@@ -495,6 +506,25 @@ contract PoolControl {
         IPoolToken(poolToken).mint(depositor, poolTokensToMint);
     }
 
+    /**
+     * @notice Transfer deposit funds from user to pool, make approval for funds to the spokepool for moving the funds to the destination chain
+     * @param _sender The address of the user who is making the deposit
+     * @param _amount The amount of assets to deposit
+     */
+    function spokePoolPreparation(address _sender, uint256 _amount) internal {
+        address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
+        require(acrossSpokePool != address(0), "SPOKE ADDR");
+        uint256 senderAssetBalance = asset.balanceOf(_sender);
+        require(
+            senderAssetBalance >= _amount,
+            "Sender has insufficient asset balance"
+        );
+        bool success = asset.transferFrom(_sender, address(this), _amount);
+        require(success, "Token transfer failure");
+
+        asset.approve(acrossSpokePool, _amount);
+    }
+
     function finalizeWithdrawOrder(
         bytes32 _withdrawId,
         uint256 _amount,
@@ -522,24 +552,5 @@ contract PoolControl {
             strategyIndex
         );
         return string(strategyBytes);
-    }
-
-    /**
-     * @notice Transfer deposit funds from user to pool, make approval for funds to the spokepool for moving the funds to the destination chain
-     * @param _sender The address of the user who is making the deposit
-     * @param _amount The amount of assets to deposit
-     */
-    function spokePoolPreparation(address _sender, uint256 _amount) internal {
-        address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
-        require(acrossSpokePool != address(0), "SPOKE ADDR");
-        uint256 senderAssetBalance = asset.balanceOf(_sender);
-        require(
-            senderAssetBalance >= _amount,
-            "Sender has insufficient asset balance"
-        );
-        bool success = asset.transferFrom(_sender, address(this), _amount);
-        require(success, "Token transfer failure");
-
-        asset.approve(acrossSpokePool, _amount);
     }
 }

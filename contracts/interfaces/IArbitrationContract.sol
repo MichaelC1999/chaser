@@ -2,19 +2,19 @@
 pragma solidity ^0.8.9;
 
 interface IArbitrationContract {
-    function getData(bytes32) external view returns (bool, bytes memory);
+    function inAssertionBlockWindow(bytes32) external view returns (bool);
 
     function queryMovePosition(
         address,
         uint256,
         string memory,
-        string memory,
+        bytes memory,
         uint256,
         string memory,
-        string memory,
+        bytes memory,
         uint256,
         uint256
-    ) external;
+    ) external returns (bytes32);
 
     function assertDataFor(
         bytes memory,

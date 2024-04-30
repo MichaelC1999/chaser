@@ -229,22 +229,19 @@ const sepoliaPositionSetDeposit = async () => {
   const pool = await hre.ethers.getContractAt("PoolControl", deployments.sepolia["poolAddress"])
 
   const WETH = await hre.ethers.getContractAt("ERC20", deployments.sepolia["WETH"]);
-
   const amount = "1500000000000000"
-
   await WETH.approve(deployments.sepolia["poolAddress"], amount)
-
 
   const tx = await pool.userDepositAndSetPosition(
     amount,
     totalFeeCalc(amount),
     "aave-v3",
-    "0x0242242424242",
-    84532,
+    deployments.sepolia["aaveMarketId"],
+    11155111,
     { gasLimit: 8000000 }
   )
 
-  console.log(`Pool 0x...${deployments.base["poolAddress"].slice(34)} position set and initial deposit tx hash: `, (await tx.wait()).hash)
+  console.log(`Pool 0x...${deployments.sepolia["poolAddress"].slice(34)} position set and initial deposit tx hash: `, (await tx.wait()).hash)
 }
 
 const sepoliaSimulateCCIPReceive = async (messageDataCCIP) => {
@@ -333,7 +330,8 @@ const poolStatRead = async () => {
     await calcContract.targetPositionProtocolHash(deployments.sepolia["poolAddress"]),
     await calcContract.targetPositionProtocol(deployments.sepolia["poolAddress"]),
     "CURRENTS: ",
-    await calcContract.poolNonce(deployments.sepolia["poolAddress"]),
+    await calcContract.poolDepositNonce(deployments.sepolia["poolAddress"]),
+    await calcContract.poolWithdrawNonce(deployments.sepolia["poolAddress"]),
     await pool.currentPositionChain(),
     await calcContract.currentPositionAddress(deployments.sepolia["poolAddress"]),
     await calcContract.currentPositionMarketId(deployments.sepolia["poolAddress"]),
@@ -373,6 +371,7 @@ const sepoliaDeposit = async () => {
   const pool = await hre.ethers.getContractAt("PoolControl", deployments.sepolia["poolAddress"])
 
   const amount = "750000000000000"
+  // const arbContract = await hre.ethers.getContractAt("ArbitrationContract", deployments.sepolia["arbitrationContract"]);
 
   const WETH = await hre.ethers.getContractAt("ERC20", deployments.sepolia["WETH"]);
   await (await WETH.approve(deployments.sepolia["poolAddress"], amount)).wait()
@@ -383,6 +382,28 @@ const sepoliaDeposit = async () => {
   )
 
   console.log("Non position set Deposit: ", (await tx.wait()).hash)
+}
+
+const sendTokens = async () => {
+  const linkToken = await hre.ethers.getContractAt("ERC20", deployments.sepolia["linkToken"]);
+  const amount = "200000000000000000"
+  console.log("Token Transfer: ", (await (await linkToken.transfer(deployments.sepolia["messengerAddress"], amount)).wait()).hash)
+
+  // const aaveTestToken = await hre.ethers.getContractAt("ERC20", "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357");
+  // const aaveAmount = "10000000000000000"
+  // console.log("AAVE Token Transfer: ", (await (await aaveTestToken.transfer(deployments.sepolia["integratorAddress"], aaveAmount)).wait()).hash)
+
+  // const compTestToken = await hre.ethers.getContractAt("ERC20", "0x2D5ee574e710219a521449679A4A7f2B43f046ad");
+  // const compAmount = "10000000000000000"
+  // console.log("COMPOUND Token Transfer: ", (await (await compTestToken.transfer(deployments.sepolia["integratorAddress"], compAmount)).wait()).hash)
+
+  // const WETH = await hre.ethers.getContractAt("ERC20", deployments[chainName]["WETH"]);
+  // await (await WETH.transfer(deployments[chainName]["integratorAddress"], "100000000000")).wait()
+
+  // const USDC = await hre.ethers.getContractAt("ERC20", "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238");
+  // await (await USDC.approve(deployments[chainName]["arbitrationContract"], 500000)).wait()
+  // console.log("arbitration: ", await pool.arbitrationContract(), await pool.strategyIndex())
+
 }
 
 const sepoliaWithdraw = async () => {
@@ -398,26 +419,29 @@ const sepoliaCallPivot = async () => {
   const pool = await hre.ethers.getContractAt("PoolControl", deployments.sepolia["poolAddress"])
   const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.sepolia["integratorAddress"]);
   const registryContract = await hre.ethers.getContractAt("Registry", deployments.sepolia["registryAddress"]);
-
+  const protocolName = "compound"
+  const chainToName = { 84532: "base", 11155111: "sepolia" }
+  const targetChain = 11155111
+  const chainName = chainToName[targetChain]
   // Get hash of protocol
-  console.log("PIVOT TRANSACTION: ", (await (await pool.sendPositionChange(
-    "0x0585585858585",
-    "compound-v3",
-    84532,
-    { gasLimit: 4000000 }
 
-  )).wait()).hash)
+  // console.log("PIVOT TRANSACTION: ", (await (await pool.sendPositionChange(
+  //   deployments[chainName][protocolName + "MarketId"],
+  //   protocolName + "-v3",
+  //   targetChain,
+  //   { gasLimit: 4000000 }
+
+  // )).wait()).hash)
 
 
-  // const WETH = await hre.ethers.getContractAt("ERC20", deployments.base["WETH"]);
-  // await (await WETH.transfer(deployments.base["integratorAddress"], "100000000000")).wait()
+  const WETH = await hre.ethers.getContractAt("ERC20", deployments[chainName]["WETH"]);
+  await (await WETH.transfer(deployments[chainName]["integratorAddress"], "100000000000")).wait()
 
-  // const USDC = await hre.ethers.getContractAt("ERC20", "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238");
-  // await (await USDC.approve(deployments.sepolia["arbitrationContract"], 500000)).wait()
-  // console.log("arbitration: ", await pool.arbitrationContract(), await pool.strategyIndex())
+  const USDC = await hre.ethers.getContractAt("ERC20", "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238");
+  await (await USDC.approve(deployments[chainName]["arbitrationContract"], 500000)).wait()
+  console.log("arbitration: ", await pool.arbitrationContract(), await pool.strategyIndex())
 
-  // console.log((await (await pool.queryMovePosition("compound-v3", "0x0ef3f4gp", 11155111, 500000, { gasLimit: 7000000 })).wait()).hash)
-  //IMPORTANT - TEST IF UMA TESTNET FOLLOWS LIVENESS PERIOD
+  console.log((await (await pool.queryMovePosition(protocolName + "-v3", deployments[chainName][protocolName + "MarketId"], targetChain, { gasLimit: 7000000 })).wait()).hash)
 }
 
 const upgradeContract = async () => {
@@ -536,7 +560,8 @@ async function mainExecution() {
     // await sepoliaPoolDeploy()
     // await sepoliaPositionSetDeposit()
 
-    // await sepoliaDeposit()
+    // await sepoliaCallPivot()
+    await sepoliaDeposit()
     // --------------------------------------------------------------------------------------------
     // AFTER EXECUTING sepoliaPoolDeploy() OR sepoliaDeposit(), WAIT FOR THE ETHEREUM BASE ACROSS SPOKEPOOL TO RECEIVE THE DEPOSIT
     // GET THE MESSAGE DATA FROM SEPOLIASCAN, COPYING THE HEX DATA BYTES FROM EVENT "0x244e451036514e829e60556484796d2251dc3d952cd079db45d2bfb4c0aff2a1"
@@ -548,9 +573,11 @@ async function mainExecution() {
     // --------------------------------------------------------------------------------------------
     // await poolStatRead()
     // await sepoliaWithdraw()
-    // await sepoliaCallPivot()
     // await upgradeContract()
     await poolStatRead()
+
+
+
 
     // await baseSimulateCCIPReceive("0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001003705af6d000000000000000000000000000000000000000000000000000000000000000000000000000000009bdc76b596051e1e86eadb2e2af2a491e32bfa48000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000803f4c40f2d9e47df3a43c5c97200a65dd80990bf9d69827733cf5f393681c90dc000000000000000000000000000000000000000000000000000886c98b760000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000004a03cea247fc197")
     // --------------------------------------------------------------------------------------------
@@ -559,7 +586,11 @@ async function mainExecution() {
 
     // await baseIntegrationsTest()
 
+    // setTimeout(() => null, 10000)
 
+    // const interval = setInterval(async () => await poolStatRead(), 100000); // 300000 ms = 5 minutes
+
+    // return () => clearInterval(interval); // Clean up the interval on component unmount
 
   } catch (error) {
     console.error(error);

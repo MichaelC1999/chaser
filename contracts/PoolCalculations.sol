@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
+import {IArbitrationContract} from "./interfaces/IArbitrationContract.sol";
 
 contract PoolCalculations {
     mapping(bytes32 => address) public depositIdToDepositor;
@@ -16,7 +17,6 @@ contract PoolCalculations {
     mapping(bytes32 => bool) public withdrawIdToTokensBurned;
     mapping(address => uint256) public poolToPendingWithdraws;
 
-    mapping(address => uint256) public poolNonce;
     mapping(address => uint256) public poolDepositNonce;
     mapping(address => uint256) public poolWithdrawNonce;
     mapping(address => bool) public poolToPivotPending;
@@ -24,13 +24,13 @@ contract PoolCalculations {
     mapping(address => mapping(address => bool)) poolToUserPendingWithdraw;
     mapping(address => mapping(address => bool)) poolToUserPendingDeposit;
 
-    mapping(address => string) public targetPositionMarketId; //THE MARKET ADDRESS THAT WILL BE PASSED TO BRIDGECONNECTION, NOT THE FINAL ADDRESS THAT FUNDS ARE ACTUALLY HELD IN
+    mapping(address => bytes) public targetPositionMarketId; //THE MARKET ADDRESS THAT WILL BE PASSED TO BRIDGECONNECTION, NOT THE FINAL ADDRESS THAT FUNDS ARE ACTUALLY HELD IN
     mapping(address => uint256) public targetPositionChain;
     mapping(address => bytes32) public targetPositionProtocolHash;
     mapping(address => string) public targetPositionProtocol;
 
     mapping(address => address) public currentPositionAddress;
-    mapping(address => string) public currentPositionMarketId;
+    mapping(address => bytes) public currentPositionMarketId;
     mapping(address => bytes32) public currentPositionProtocolHash;
     mapping(address => string) public currentPositionProtocol;
     mapping(address => uint256) public currentRecordPositionValue; //This holds the most recently recorded value of the entire position sent from the current position chain.
@@ -54,10 +54,16 @@ contract PoolCalculations {
         _;
     }
 
-    modifier noPending(address _sender) {
+    modifier noPending(address _sender, bytes32 _openAssertion) {
         require(
             !poolToPivotPending[msg.sender],
             "If a pivot proposal has been approved, no position entrances are allowed"
+        );
+        require(
+            _openAssertion == bytes32("") ||
+                !IArbitrationContract(registry.arbitrationContract())
+                    .inAssertionBlockWindow(_openAssertion),
+            "An open pivot proposal has passed position entrance window. Wait until this pivot settles."
         );
         require(
             !poolToUserPendingDeposit[msg.sender][_sender],
@@ -73,8 +79,14 @@ contract PoolCalculations {
     function createWithdrawOrder(
         uint256 _amount,
         address _poolToken,
-        address _sender
-    ) external onlyValidPool noPending(_sender) returns (bytes memory) {
+        address _sender,
+        bytes32 _openAssertion
+    )
+        external
+        onlyValidPool
+        noPending(_sender, _openAssertion)
+        returns (bytes memory)
+    {
         poolToUserPendingWithdraw[msg.sender][_sender] = true;
 
         bytes32 withdrawId = keccak256(
@@ -136,8 +148,6 @@ contract PoolCalculations {
         address depositor = withdrawIdToDepositor[_withdrawId];
         address poolAddress = msg.sender;
 
-        poolNonce[poolAddress] += 1;
-
         currentRecordPositionValue[poolAddress] = _positionValue;
         currentPositionValueTimestamp[poolAddress] = block.timestamp;
 
@@ -161,10 +171,10 @@ contract PoolCalculations {
     }
 
     function openSetPosition(
-        string memory _targetPositionMarketId,
+        bytes memory _targetPositionMarketId,
         string memory _targetProtocol,
         uint256 _targetChainId
-    ) external onlyValidPool {
+    ) external onlyValidPool returns (address) {
         poolToPivotPending[msg.sender] = true;
         targetPositionMarketId[msg.sender] = _targetPositionMarketId;
         targetPositionProtocolHash[msg.sender] = keccak256(
@@ -172,13 +182,25 @@ contract PoolCalculations {
         );
         targetPositionProtocol[msg.sender] = _targetProtocol;
         targetPositionChain[msg.sender] = _targetChainId;
+
+        return
+            getMarketAddressFromId(
+                _targetPositionMarketId,
+                targetPositionProtocolHash[msg.sender]
+            );
     }
 
     function createDepositOrder(
         address _sender,
         address _poolToken,
-        uint256 _amount
-    ) external onlyValidPool noPending(_sender) returns (bytes32, uint256) {
+        uint256 _amount,
+        bytes32 _openAssertion
+    )
+        external
+        onlyValidPool
+        noPending(_sender, _openAssertion)
+        returns (bytes32, uint256)
+    {
         IERC20 poolToken = IERC20(_poolToken);
         bytes32 depositId = bytes32(
             keccak256(abi.encode(msg.sender, _sender, _amount, block.timestamp))
@@ -215,7 +237,6 @@ contract PoolCalculations {
         currentRecordPositionValue[msg.sender] = _positionAmount;
         currentPositionValueTimestamp[msg.sender] = block.timestamp;
 
-        poolNonce[msg.sender] += 1;
         poolToUserPendingDeposit[msg.sender][
             depositIdToDepositor[_depositId]
         ] = false;
@@ -228,7 +249,6 @@ contract PoolCalculations {
 
     function pivotCompleted(
         address marketAddress,
-        uint256 nonce,
         uint256 positionAmount
     ) external onlyValidPool returns (uint256) {
         currentPositionMarketId[msg.sender] = targetPositionMarketId[
@@ -245,7 +265,6 @@ contract PoolCalculations {
         clearPivotTarget();
 
         currentPositionAddress[msg.sender] = marketAddress;
-        poolNonce[msg.sender] = nonce;
         currentRecordPositionValue[msg.sender] = positionAmount;
         currentPositionValueTimestamp[msg.sender] = block.timestamp;
         return currentPositionChain;
@@ -256,12 +275,11 @@ contract PoolCalculations {
     ) external onlyValidPool returns (address) {
         address originalSender = depositIdToDepositor[_depositId];
         poolToUserPendingDeposit[msg.sender][originalSender] = false;
-        targetPositionMarketId[msg.sender] = "";
+        targetPositionMarketId[msg.sender] = abi.encode(0);
         targetPositionChain[msg.sender] = 0;
         targetPositionProtocol[msg.sender] = "";
         targetPositionProtocolHash[msg.sender] = bytes32("");
 
-        poolNonce[msg.sender] = 0;
         poolToPivotPending[msg.sender] = false;
         depositIdToDepositor[_depositId] = address(0);
         depositIdToDepositAmount[_depositId] = 0;
@@ -283,17 +301,16 @@ contract PoolCalculations {
         uint256 _positionAmount
     ) external onlyValidPool {
         currentPositionAddress[msg.sender] = msg.sender;
-        currentPositionMarketId[msg.sender] = "";
+        currentPositionMarketId[msg.sender] = abi.encode(0);
         currentPositionProtocol[msg.sender] = "";
         currentPositionProtocolHash[msg.sender] = bytes32("");
         currentRecordPositionValue[msg.sender] = _positionAmount;
         currentPositionValueTimestamp[msg.sender] = block.timestamp;
-        poolNonce[msg.sender] = _nonce;
         clearPivotTarget();
     }
 
     function clearPivotTarget() public onlyValidPool {
-        targetPositionMarketId[msg.sender] = "";
+        targetPositionMarketId[msg.sender] = abi.encode(0);
         targetPositionChain[msg.sender] = 0;
         targetPositionProtocol[msg.sender] = "";
         targetPositionProtocolHash[msg.sender] = bytes32("");
@@ -302,25 +319,85 @@ contract PoolCalculations {
 
     function getCurrentPositionData(
         address _poolAddress
-    ) external view onlyValidPool returns (string memory, string memory) {
+    ) external view onlyValidPool returns (string memory, bytes memory, bool) {
         return (
             currentPositionProtocol[_poolAddress],
-            currentPositionMarketId[_poolAddress]
+            currentPositionMarketId[_poolAddress],
+            poolToPivotPending[_poolAddress]
         );
+    }
+
+    function createInitialSetPositionMessage(
+        bytes32 _depositId,
+        address _sender
+    ) external view returns (bytes memory) {
+        address marketAddress = getMarketAddressFromId(
+            targetPositionMarketId[msg.sender],
+            targetPositionProtocolHash[msg.sender]
+        );
+        return
+            abi.encode(
+                _depositId,
+                _sender,
+                marketAddress,
+                targetPositionProtocolHash[msg.sender]
+            );
     }
 
     function createPivotExitMessage(
         address _destinationBridgeReceiver
     ) external view returns (bytes memory) {
+        address marketAddress = getMarketAddressFromId(
+            targetPositionMarketId[msg.sender],
+            targetPositionProtocolHash[msg.sender]
+        );
         bytes memory data = abi.encode(
             targetPositionProtocolHash[msg.sender],
-            address(0), // IMPORTANT - REPLACE WITH MARKET ADDRESS VALIDATED IN ARBITRATION
-            targetPositionMarketId[msg.sender],
+            marketAddress,
             targetPositionChain[msg.sender],
             _destinationBridgeReceiver
         );
 
         return data;
+    }
+
+    function getMarketAddressFromId(
+        bytes memory _marketId,
+        bytes32 _protocolHash
+    ) public view returns (address) {
+        address marketAddress;
+        if (_protocolHash == keccak256(abi.encode("aave-v3"))) {
+            // The POOL() function on aave pools
+            // Pass in the market id used to compare markets in the subgraph, output the address where we make calls to deposit/withdraw/balance
+            (marketAddress, ) = extractAddressesFromBytes(_marketId);
+        } else if (_protocolHash == keccak256(abi.encode("compound-v3"))) {
+            (marketAddress, ) = extractAddressesFromBytes(_marketId);
+        }
+
+        return marketAddress;
+    }
+
+    function extractAddressesFromBytes(
+        bytes memory input
+    ) public pure returns (address addr1, address addr2) {
+        assembly {
+            addr1 := mload(add(input, 20))
+        }
+
+        if (input.length == 40) {
+            assembly {
+                addr2 := mload(add(input, 20))
+            }
+        } else {
+            addr2 = address(0);
+        }
+    }
+
+    function getPivotBond(
+        address _asset
+    ) external view onlyValidPool returns (uint256) {
+        // For test net, this will be set as a simple, hardcoded value. In production this will be a function of asset type, TVL, user amount etc
+        return 500000;
     }
 
     function calculatePoolTokensToMint(
