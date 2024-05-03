@@ -34,10 +34,6 @@ contract BridgeLogic is OwnableUpgradeable {
     mapping(address => mapping(uint256 => uint256))
         public poolToNonceToCumulativeWithdraw;
 
-    event AcrossMessageSent(bytes);
-    event Numbers(uint256, uint256);
-    event ExecutionMessage(string);
-
     function initialize(
         uint256 _localChainId,
         uint256 _managerChainId,
@@ -123,23 +119,6 @@ contract BridgeLogic is OwnableUpgradeable {
         uint256 _withdrawNonce,
         uint256 _amount
     ) external {
-        // IMPORTANT - !!! Does the user need to factor in pending deposits/withdraws when minting pool tokens?
-        // If all depos/withdraws finalize in order, this would not be issue
-        // Maybe get poolToken ratio of outputAmount/(currentPositionValue-pending) before bridging? CANT, THE RATIO/AMOUNT COULD BE MANIPULATED IN ACROSS MESSAGE
-        // Also, currentPositionValue would be based on outdated value. Wouldnt include interest (not applicable) and could be affected by tx that are started after but finalize before
-        // If ratio is recorded here, pending amounts to positionBalance arent an issue, but poolToken supply is
-        // If the deposit callback with ratio in its data gets executed on pool before a withdraw that had been deducted from positionBalance before the deposit, pool tokens would be disporportionate
-
-        // Why not on the callback? This way we are getting the poolToken supplies of finalized transactions and the ratio at moment of depo/with?
-
-        // IMPORTANT - !!! Why not keep poolTokens on here, separate off of pool? NO, PROPORTIONS WILL NOT TRANSFER TO OTHER CHAINS/STATE WILL NOT UPDATE ACROSS CHAINS
-        // - Can track proportions without worrying about bridging, pending transactions
-        // - burns/mints on here
-        // - !!! If no across sender/origin validation, users could fake being other addresses to withdraw
-        // - But could combine existing poolToken system with this in order to
-
-        // IMPORTANT - COULD MAYBE HAVE PREDEFINED 'CHASER RELAYER' IN BRIDGERECEIVER THAT IS THE ONLY ONE PERMITTED TO HANDLE MESSAGES, BUT ALSO GUARANTEES THEM IN ORDER
-        // But would require(relayerAddress = 0x...) revert yet fulfill the transaction? As in the transaction is considered fulfilled and cannot be relayed?
         require(
             msg.sender == bridgeReceiverAddress ||
                 registry.poolEnabled(msg.sender),
@@ -159,10 +138,6 @@ contract BridgeLogic is OwnableUpgradeable {
             _amount,
             currentPositionBalance
         );
-    }
-
-    function sendPositionBalance(bytes memory _data) external {
-        require(msg.sender == address(messenger), "Only callable by messenger");
     }
 
     /**
@@ -440,45 +415,6 @@ contract BridgeLogic is OwnableUpgradeable {
                 registry.poolEnabled(msg.sender),
             "Only callable by the Messenger or a valid pool"
         );
-        // - userWithdraw: bytes 20 userAddress, uint256 amountToWithdraw, uint256 userProportionRatio
-        // Pulls out the appropriate amount of asset from position
-        // Sends the withdrawn asset through Across back to pool to be sent to user
-        // IMPORTANT - MUST RECEIVE + VERIFY USER SIGNED MESSAGE FROM POOLCONTROL
-        //If the requested amount is over the actual asset amount user can withdraw, just withdraw the max
-
-        // IMPORTANT - WHAT HAPPENS IF POOLTOKENSUPPLY HAS NOT BEEN UPDATED, BUT THE POSITION BALANCE HAS? WE SHOULD MEASURE PROPORTION BEFORE EITHER ARE UPDATED FROM OTHER PENDING ORDERS
-        // IMPORTANT - WE NEED TO HAVE THE USER'S POOL TOKEN PROPORTION AT THE TIME OF WITHDRAW, AS WELL AS THE USERS ASSET PROPORTION FROM THAT SAME MOMENT
-        // IMPORTANT - MAINTAIN POOL DEPOSITS/WITHDRAWS NONCES ON THE POOL CONTRACT, ON THE POSITION CONTRACT KEEP SNAPSHOTS OF BALANCES AT THESE NONCES
-        // IMPORTANT - ORDERED CCIP MESSAGING IRRELEVANT TO THIS ISSUE, AS IT IS AB-BA. The issue is when AB state is read before the BA sequence of another tx is executed
-        // IMPORTANT - IF THE PoolControl SAYS USER PORTION IS 1/100, BUT THERE IS A PENDING USER DEPOSIT (FROM OTHER USER) OF 100, THE USER WILL HAVE ACCESS TO 2 UINTS (2/200)
-        // Example: Currently posBal is 10 - user has 20 pool tokens in a total of 200. The user can withdraw 1 asset
-        // Issue:   PosBal is 10 - user has 20 pool tokens in a total of 100, meanwhile the total should be 200 tokens because PosBal reflects a recent 5 asset deposit. The user can withdraw 2 asset
-        // Solution: If we take proportion before pending deposit, the proportions are fixed
-        //          PosBal is 5 - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
-
-        // IMPORTANT - BUT WITH POSITION VALUE SNPASHOTS, THE VALUE DOES NOT INCLUDE INTEREST GAINED SINCE SNAPSHOT
-        // Does this give depositor a higher stake than deserved, lower stake, or just disclude recently gained interest from user?
-        // POSBAL FROM SNAPSHOT: PosBal is 5 - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
-        // POSBAL GAINED 1 YIELD: PosBal is 6 - user has 20 pool tokens in a total of 100, the user can withdraw 1.2 asset
-        // WE ALSO TAKE THE SNAPSHOT FROM MOST RECENT PROCESSING TX, GET THE DIFFERENCE BETWEEN THIS SNAPSHOT AND LAST COMPLETE SNAPSHOT. SUBTRACT THIS VALUE FROM CURRENT POSITION VALUE
-        // POSBAL PENDING: PosBal is 5 with +5 pendng (most recent snapshot shows 10) - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
-        // POSBAL GAINED 1 YIELD: PosBal from completed snap is 5, pending snap is 10, current pos is 11. Get Pos bal from currentPos - (pending - completed) = 6 - user has 20 pool tokens in a total of 100, the user can withdraw 1.2 asset
-
-        // POSBAL PENDING: PosBal is 5 with -3 pendng (most recent snapshot shows 2) - user has 20 pool tokens in a total of 100, the user can withdraw 1 asset
-        // POSBAL GAINED 1 YIELD: PosBal from completed snap is 5, pending snap is 2, current pos is 3. Get Pos bal from currentPos - (pending - completed) = 6 - user has 20 pool tokens in a total of 100, the user can withdraw 1.2 asset
-        // The ratio to get maxAssetToWithdraw (x) is as follows: x/(currentPositionValue - (nonceToPositionValue[bridgeNonce] - nonceToPositionValue[poolNonce])) = userPoolTokenBalance/poolTokenSupply
-        // IMPORTANT - DOES THIS RATIO WORK IF THERE IS A PIVOT TO ANOTHER CONNECTOR, THEN BACK TO THIS ONE
-
-        // IMPORTANT - CAN THIS BE SOLVED BY PROVIDING THE PENDING DEPO AND WITHDRAW FROM THE POOLCALC?
-        // PoolCalc can record the outputAmount's passed to Across V3, and calculate pending values based on this
-        // Pending values then are the exact amounts contributed to the investment
-        // Can remove the nonce based balance system, less confusing crossing between chains
-        // Does this solve the yield lost issue where withdraws dont include interest gained since the last interaction?
-        // -Yield lost issue occurs because the withdraw portion reads from the balance at the nonce before pending transactions were made
-        // -The interest gained from the most recent depo/wthdraw until current moment is not included, nor is interest gained between the nonce of last completed transaction and the first currently pending transaction
-        // -The withdraw system now includes the interest in the total portion, because it takes getPositionBalance() - pendingDepos + pendingWithdraws
-        // -No issues with manipulative bridging, as this data is only passed through CCIP
-        // -The pending depos/withdraws are not included in poolToken supply/balance when the scaledRatio was taken
 
         (
             bytes32 withdrawId,

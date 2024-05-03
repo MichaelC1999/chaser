@@ -13,8 +13,6 @@ import {IPoolToken} from "./interfaces/IPoolToken.sol";
 import {IArbitrationContract} from "./interfaces/IArbitrationContract.sol";
 
 contract PoolControl {
-    //IMPORTANT - POOL SHOULD NOT BE UPGRADEABLE, COULD CAUSE ISSUES WITH CROSS CHAIN IDENTIFICATION OF POOL, AND POOLS HAVING DIFFERENT LOGIC FROM OTHERS
-
     address deployingUser;
     uint256 public localChain;
     address public poolToken;

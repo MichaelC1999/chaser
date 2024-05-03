@@ -4,8 +4,9 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IArbitrationContract} from "./interfaces/IArbitrationContract.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-contract PoolCalculations {
+contract PoolCalculations is OwnableUpgradeable {
     mapping(bytes32 => address) public depositIdToDepositor;
     mapping(bytes32 => uint256) public depositIdToDepositAmount;
     mapping(bytes32 => bool) public depositIdToTokensMinted;
@@ -41,10 +42,10 @@ contract PoolCalculations {
 
     IChaserRegistry public registry;
 
-    constructor(address _registryAddress) {
+    function initialize(address _registryAddress) public initializer {
+        __Ownable_init();
         registry = IChaserRegistry(_registryAddress);
     }
-    //IMPORTANT - NEED FUNCTION FOR RESETTING STATE WHEN DEPOSIT FAILS ON DESTINATION NETWORK
 
     modifier onlyValidPool() {
         require(

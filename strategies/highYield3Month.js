@@ -32,6 +32,11 @@ const strategyCalculation = async (args) => {
         })
 
         const deployments = await depos.json()
+        // From this JSON get the decentralized network query id
+
+        // console.log(Object.keys(deployments))
+
+
 
         const base = `https://api.thegraph.com/subgraphs/name/messari/`;
         const curSubgraphURL = base + currentProtocol + '-' + currentChain;
@@ -46,49 +51,68 @@ const strategyCalculation = async (args) => {
             },
             body: JSON.stringify({
                 query: `{
-                    marketDailySnapshots(first: 30, orderBy: timestamp, orderDirection: desc, where: {market:"${currentMarketId}"}) {
-                                            totalDepositBalanceUSD
-                    dailySupplySideRevenueUSD
+                    marketDailySnapshots(first: 90, orderBy: timestamp, orderDirection: desc, where: {market:"${currentMarketId}"}) {
+                        market {
+                            inputToken {
+                                id
+                            }
+                        }
+                        rates(where: {side: LENDER}) {
+                            side
+                            rate
+                        }
                     }
                 }`
             })
         });
         const curPositionData = await curPositionDataRes.json();
 
-        const positionDesDataRes = await fetch(desSubgraphURL, {
+        const desPositionDataRes = await fetch(desSubgraphURL, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
                 query: `{
-                    marketDailySnapshots(first: 30, orderBy: timestamp, orderDirection: desc, where: {market:"${requestMarketId}"}) {
-                                            totalDepositBalanceUSD
-                    dailySupplySideRevenueUSD
+                    marketDailySnapshots(first: 90, orderBy: timestamp, orderDirection: desc, where: {market:"${requestMarketId}"}) {
+                        market {
+                            inputToken {
+                                id
+                            }
+                        }
+                        rates(where: {side: LENDER}) {
+                            side
+                            rate
+                        }
                     }
                 }`
             })
         });
-        const positionDesData = await positionDesDataRes.json();
-        let curROR = [];
-        if (curPositionData?.data) curROR = curPositionData.data.marketDailySnapshots.map(ins => (Number(ins.dailySupplySideRevenueUSD) * 365) / Number(ins.totalDepositBalanceUSD) || 0);
-        const curMeanROR = curROR.reduce((acc, curr) => acc + curr, 0) / curROR.length;
+        const desPositionData = await desPositionDataRes.json();
+        console.log(curPositionData, desPositionData)
 
-        const curVariance = curROR.reduce((acc, curr) => acc + Math.pow(curr - curMeanROR, 2), 0) / curROR.length;
-        const curStandardDeviation = Math.sqrt(curVariance);
 
-        const curSharpeRatio = (curMeanROR / curStandardDeviation) || -1;
+        let curROR = 0;
+        if (curPositionData?.data) {
+            curPositionData.data.marketDailySnapshots.forEach(ins => {
+                curROR += (Number(ins.rates[0].rate))
+            });
+        }
+        const curMeanROR = curROR / curPositionData.data.marketDailySnapshots.length;
+        console.log(curMeanROR, '/', curPositionData.data.marketDailySnapshots[0].market.rates[0].rate)
 
-        let desROR = [];
-        if (positionDesData?.data) desROR = positionDesData.data.marketDailySnapshots.map(ins => (ins.dailySupplySideRevenueUSD * 365) / ins.totalDepositBalanceUSD);
-        const desMeanROR = desROR.reduce((acc, curr) => acc + curr, 0) / desROR.length;
+        let desROR = 0;
+        if (desPositionData?.data) {
+            desPositionData.data.marketDailySnapshots.forEach(ins => {
+                desROR += (Number(ins.rates[0].rate))
+            });
+        }
+        const desMeanROR = desROR / desPositionData.data.marketDailySnapshots.length;
+        console.log(desMeanROR, '/', desPositionData.data.marketDailySnapshots[0].market.rates[0].rate)
+        console.log(desPositionData.data.marketDailySnapshots[0].market)
+        if (!Object.values(supportedChainsAssets).includes(desPositionData.data.marketDailySnapshots[0].market.inputToken.id)) return false
 
-        const desVariance = desROR.reduce((acc, curr) => acc + Math.pow(curr - desMeanROR, 2), 0) / desROR.length;
-        const desStandardDeviation = Math.sqrt(desVariance);
-
-        const desSharpeRatio = desMeanROR / desStandardDeviation;
-        console.log(desSharpeRatio, curSharpeRatio)
-        if (desSharpeRatio > curSharpeRatio) return true;
+        if (desMeanROR > curMeanROR) return true;
     } catch (err) {
         console.log("Error caught - ", err.message);
     }

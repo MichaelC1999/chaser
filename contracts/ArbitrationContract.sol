@@ -7,8 +7,9 @@ import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IPoolControl} from "./interfaces/IPoolControl.sol";
 import {ISpokePool} from "./interfaces/ISpokePool.sol";
 import {AncillaryData} from "./libraries/AncillaryData.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-contract ArbitrationContract {
+contract ArbitrationContract is OwnableUpgradeable {
     IERC20 public umaCurrency; // umaCurrency is the asset used for UMA bond, not a pool's currency
     IOptimisticOracleV3 public oo;
     uint64 public constant assertionLiveness = 360; // 7200;
@@ -22,6 +23,7 @@ contract ArbitrationContract {
     mapping(bytes32 => uint256) public assertionToBlockTime;
     mapping(address => bool) public poolHasAssertionOpen;
     mapping(uint256 => string) public chainIdToName;
+    mapping(bytes32 => DataAssertion) public assertionsData;
 
     struct DataAssertion {
         bytes32 dataId; // The dataId that was asserted.
@@ -29,8 +31,6 @@ contract ArbitrationContract {
         address asserter; // The address that made the assertion.
         bool resolved; // Whether the assertion has been resolved.
     }
-
-    mapping(bytes32 => DataAssertion) public assertionsData;
 
     event DataAsserted(
         bytes32 indexed dataId,
@@ -45,12 +45,6 @@ contract ArbitrationContract {
         address indexed asserter,
         bytes32 indexed assertionId
     );
-
-    function inAssertionBlockWindow(
-        bytes32 assertionId
-    ) external view returns (bool) {
-        return (assertionToBlockTime[assertionId] < block.timestamp);
-    }
 
     // WHO MAY PROPOSE A PIVOT?
     // -Someone with a stake in the pool
@@ -78,7 +72,11 @@ contract ArbitrationContract {
     // -Could leave depos/withdraws open until assertion is settled. If there are pending transactions while assertion settles, the depos/withs are blocked and a bool on pool is set to true
     // -This true bool value allows anyone to call sendPositionChange on pool, which checks if there are still pending transactions before executing the pivot
 
-    constructor(address _registry, uint256 _chainId) {
+    function initialize(
+        address _registry,
+        uint256 _chainId
+    ) public initializer {
+        __Ownable_init();
         // address _optimisticOracleV3
         registry = IChaserRegistry(_registry);
         ISpokePool spokePool = ISpokePool(
@@ -117,10 +115,8 @@ contract ArbitrationContract {
             !poolHasAssertionOpen[msg.sender],
             "Assertion is already open on pool"
         );
-        //IMPORTANT - WHO SHOULD BE ALLOWED TO OPEN A POSITION MOVE? ANYONE WITH A STAKE IN THE POOL?
-
-        //IMPORTANT - BOND AMOUNT SHOULD BE A FUNCTION OF POOL TVL. A LOW BOND FOR A MULTI-MILLION POOL COULD BE SACRIFICED TO FRONTRUN, OR SPAMMED TO BLOCK DEPOSITS/WITH
-        // require(bond >= 1000000, "Bond provided must be above 1 USDC"); // IMPORTANT - INCREASE THIS AMOUNT
+        //IMPORTANT - FOR DEVELOPMENT, ANYONE CAN PROPOSE A POOL TO MOVE TO IF THEY PUT UP THE BOND
+        // In production, this could be just users with a stake in the pool
 
         bool protocolEnabled = registry.protocolEnabled(requestProtocol);
         require(
@@ -170,8 +166,6 @@ contract ArbitrationContract {
         address poolAddress,
         uint256 bond
     ) internal returns (bytes32 assertionId) {
-        //IMPORTANT - IF POOL HAS NO CURRENT POSITION OR IF FUNDS ARE IN THE POOL CONTROL CONTRACT, APPROVE POSITION MOVEMENT IF THE DESTINATION POOL IS VALID. NO UMA ASSERTION NEEDED
-
         bytes32 dataId = bytes32(abi.encode(asserter));
 
         bool success = umaCurrency.transferFrom(asserter, address(this), bond);
@@ -271,5 +265,11 @@ contract ArbitrationContract {
     function assertionDisputedCallback(bytes32 assertionId) public {
         //Clear up proposal
         //Even if the dispute was invalid, the proposal is cancelled
+    }
+
+    function inAssertionBlockWindow(
+        bytes32 assertionId
+    ) external view returns (bool) {
+        return (assertionToBlockTime[assertionId] < block.timestamp);
     }
 }

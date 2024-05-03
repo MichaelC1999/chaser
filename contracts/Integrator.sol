@@ -11,12 +11,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
 contract Integrator is Initializable {
-    // THIS CONTRACT HOLDS THE LP TOKENS, ROUTES THE DEPOSITS, FULFILLS WITHDRAWS FROM THESE EXTERNAL PROTOCOLS
-    //THE CONNECTION FUNCTIONS ARE ONLY CALLED FROM BridgeLogic
-    // DEPOSIT REQUESTS ALWAYS TRANSFER THE ERC20 TOKENS TO THIS CONTRACT, WHICH THEN APPROVES THE EXTERNAL PROTOCOL FOR TRANSFERING
-    //ON USER DEPOSITS, RETURN THE NUMBER OF ATOKENS MINTED FOR THIS NEW DEPOSIT. OR SHOULD IT JUST RETURN TOTAL NUMBER OF ATOKENS FOR USER?
-    // WITHDRAW REQUESTS CLEARS STATE AND TRANSFERS ASSET TO THE BridgeLogic
-
     address public bridgeLogicAddress;
     address public registryAddress;
     uint256 chainId;
@@ -46,8 +40,6 @@ contract Integrator is Initializable {
         }
 
         if (_operation == hasher("deposit")) {
-            emit ExecutionMessage("In deposit");
-
             IERC20(_assetAddress).approve(_marketAddress, _amount);
 
             IAavePool(_marketAddress).supply(
@@ -58,8 +50,6 @@ contract Integrator is Initializable {
             );
         }
         if (_operation == hasher("withdraw")) {
-            emit ExecutionMessage("In withdraw");
-
             bytes memory encodedFunction = abi.encodeWithSignature(
                 "withdraw(address,uint256,address)",
                 _assetAddress,
@@ -93,8 +83,6 @@ contract Integrator is Initializable {
         }
 
         if (_operation == hasher("deposit")) {
-            emit ExecutionMessage("In deposit");
-
             IERC20(_assetAddress).approve(_marketAddress, _amount);
 
             IComet(_marketAddress).supplyTo(
@@ -104,8 +92,6 @@ contract Integrator is Initializable {
             );
         }
         if (_operation == hasher("withdraw")) {
-            emit ExecutionMessage("In withdraw");
-
             bytes memory encodedFunction = abi.encodeWithSignature(
                 "withdraw(address,uint256)",
                 _assetAddress,

@@ -7,17 +7,18 @@ import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
 import {IPoolControl} from "./interfaces/IPoolControl.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-contract BridgeReceiver {
+contract BridgeReceiver is OwnableUpgradeable {
     IBridgeLogic public bridgeLogic;
     address spokePoolAddress;
-
     mapping(address => address) poolToAsset;
 
-    event AcrossMessageSent(bytes);
-    event ExecutionMessage(string);
-
-    constructor(address _bridgeLogicAddress, address _spokePoolAddress) {
+    function initialize(
+        address _bridgeLogicAddress,
+        address _spokePoolAddress
+    ) public initializer {
+        __Ownable_init();
         bridgeLogic = IBridgeLogic(_bridgeLogicAddress);
         spokePoolAddress = _spokePoolAddress;
     }
@@ -38,7 +39,6 @@ contract BridgeReceiver {
         address relayer,
         bytes memory message
     ) external {
-        // IMPORTANT - !!! A USER COULD BRIDGE WITH CUSTOM MANIPULATIVE MESSAGE FROM OWN CONTRACT. THE USER STILL HAS TO SEND amount IN ASSET, BUT THIS COULD EXPLOIT SOMETHING
         // require(
         //     msg.sender == spokePoolAddress,
         //     "Only the Across V3 Spokepool can handle these messages"
@@ -138,9 +138,7 @@ contract BridgeReceiver {
                 marketAddress,
                 protocolHash
             )
-        {
-            emit ExecutionMessage("AbBridgePositionInitializer success");
-        } catch Error(string memory reason) {
+        {} catch Error(string memory reason) {
             bridgeLogic.returnToPool(
                 _method,
                 _poolAddress,
@@ -148,7 +146,6 @@ contract BridgeReceiver {
                 _amount,
                 0
             );
-            emit ExecutionMessage(reason);
         }
     }
 
@@ -177,9 +174,7 @@ contract BridgeReceiver {
                 withdrawNonce,
                 _amount
             )
-        {
-            emit ExecutionMessage("AbBridgeDepositUser success");
-        } catch Error(string memory reason) {
+        {} catch Error(string memory reason) {
             bridgeLogic.returnToPool(
                 _method,
                 _poolAddress,
@@ -187,7 +182,6 @@ contract BridgeReceiver {
                 _amount,
                 0
             );
-            emit ExecutionMessage(reason);
         }
     }
 
@@ -219,9 +213,7 @@ contract BridgeReceiver {
                 targetMarketAddress,
                 poolNonce
             )
-        {
-            emit ExecutionMessage("BbPivotBridgeMovePosition success");
-        } catch Error(string memory reason) {
+        {} catch Error(string memory reason) {
             bridgeLogic.returnToPool(
                 _method,
                 _poolAddress,
@@ -229,7 +221,6 @@ contract BridgeReceiver {
                 _amount,
                 poolNonce
             );
-            emit ExecutionMessage(reason);
         }
     }
 

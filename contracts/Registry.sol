@@ -6,9 +6,9 @@ import {IChaserMessenger} from "./interfaces/IChaserMessenger.sol";
 import {PoolBroker} from "./PoolBroker.sol";
 
 import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.sol";
-import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/OwnerIsCreator.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-contract Registry is OwnerIsCreator {
+contract Registry is OwnableUpgradeable {
     event CCIPMessageSent(bytes32 indexed, bytes);
     event Marker(string);
 
@@ -48,17 +48,19 @@ contract Registry is OwnerIsCreator {
 
     address public investmentStrategyContract;
 
-    uint256 public immutable currentChainId;
+    uint256 public currentChainId;
 
-    uint256 public immutable managerChainId;
+    uint256 public managerChainId;
 
     uint256 public poolCount;
 
-    constructor(
+    function initialize(
         uint256 _currentChainId,
         uint256 _managerChainId,
         address _managerAddress
-    ) {
+    ) public initializer {
+        __Ownable_init();
+
         //_currentChainId is the chain that this registry is currently deployed on
         //_managerChainId is the chain that has the manager contract and all of the pools
         if (_currentChainId == _managerChainId) {
