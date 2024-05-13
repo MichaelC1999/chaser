@@ -17,10 +17,9 @@ interface IBridgeLogic {
         uint256,
         address,
         bytes32,
-        address,
-        uint256
+        address
     ) external;
-    function returnToPool(bytes4, address, bytes32, uint256, uint256) external;
+    function returnToPool(bytes4, address, address, bytes32, uint256) external;
     function handleUserDeposit(address, bytes32, uint256, uint256) external;
 
     function sendPositionBalance(address, bytes32, uint256) external;

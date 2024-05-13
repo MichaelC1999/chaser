@@ -91,8 +91,7 @@ contract BridgeLogic is OwnableUpgradeable {
         uint256 _amount,
         address _poolAddress,
         bytes32 _protocolHash,
-        address _marketAddress,
-        uint256 _poolNonce
+        address _marketAddress
     ) external {
         require(
             msg.sender == bridgeReceiverAddress,
@@ -245,6 +244,7 @@ contract BridgeLogic is OwnableUpgradeable {
 
         crossChainBridge(
             _amount,
+            poolToAsset[_poolAddress],
             _destinationBridgeReceiver,
             _poolAddress,
             _destinationChainId,
@@ -308,9 +308,9 @@ contract BridgeLogic is OwnableUpgradeable {
     function returnToPool(
         bytes4 _originalMethod,
         address _poolAddress,
+        address _tokenSent,
         bytes32 _depositId,
-        uint256 _amount,
-        uint256 _poolNonce
+        uint256 _amount
     ) external {
         require(
             msg.sender == bridgeReceiverAddress,
@@ -322,49 +322,25 @@ contract BridgeLogic is OwnableUpgradeable {
         bytes memory message = abi.encode(
             method,
             _poolAddress,
-            abi.encode(_originalMethod, _depositId, _poolNonce)
+            abi.encode(_originalMethod, _depositId)
         );
         address destinationBridgeReceiver = registry.chainIdToBridgeReceiver(
             managerChainId
         );
-        updatePositionState(_poolAddress, bytes32(""), address(0));
+        if (
+            _originalMethod ==
+            bytes4(keccak256(abi.encode("AbBridgeDepositUser")))
+        ) {
+            poolAddressToDepositNonce[_poolAddress] += 1;
+        }
         if (localChainId == managerChainId) {
-            if (
-                _originalMethod ==
-                bytes4(keccak256(abi.encode("AbBridgePositionInitializer")))
-            ) {
-                IERC20(poolToAsset[_poolAddress]).approve(
-                    _poolAddress,
-                    _amount
-                );
-
-                IPoolControl(_poolAddress).handleUndoPositionInitializer(
-                    _depositId,
-                    _amount
-                );
-            }
-
-            if (
-                _originalMethod ==
-                bytes4(keccak256(abi.encode("AbBridgeDepositUser")))
-            ) {
-                IERC20(poolToAsset[_poolAddress]).approve(
-                    _poolAddress,
-                    _amount
-                );
-
-                IPoolControl(_poolAddress).handleUndoDeposit(
-                    _depositId,
-                    _amount
-                );
-            }
-
+            //In cases of deposit, depositSetPosition, and Ab pivot to market on same chain as manager, never goes through bridge and will fail out of try/catch
             if (
                 _originalMethod ==
                 bytes4(keccak256(abi.encode("BbPivotBridgeMovePosition")))
             ) {
-                IPoolControl(_poolAddress).handleUndoPivot(_poolNonce, _amount);
-                bool success = IERC20(poolToAsset[_poolAddress]).transfer(
+                IPoolControl(_poolAddress).handleUndoPivot(_amount);
+                bool success = IERC20(_tokenSent).transfer(
                     _poolAddress,
                     _amount
                 );
@@ -373,6 +349,7 @@ contract BridgeLogic is OwnableUpgradeable {
         } else {
             crossChainBridge(
                 _amount,
+                _tokenSent,
                 destinationBridgeReceiver,
                 _poolAddress,
                 managerChainId,
@@ -383,17 +360,18 @@ contract BridgeLogic is OwnableUpgradeable {
 
     function crossChainBridge(
         uint256 _amount,
+        address _asset,
         address _destinationBridgeReceiver,
         address _poolAddress,
         uint256 _destinationChainId,
         bytes memory _message
     ) internal {
         address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
-        IERC20(poolToAsset[_poolAddress]).approve(acrossSpokePool, _amount);
+        IERC20(_asset).approve(acrossSpokePool, _amount);
         ISpokePool(acrossSpokePool).depositV3(
             address(this),
             _destinationBridgeReceiver,
-            poolToAsset[_poolAddress],
+            _asset,
             address(0),
             _amount,
             _amount - (_amount / 250),
@@ -497,6 +475,7 @@ contract BridgeLogic is OwnableUpgradeable {
         } else {
             crossChainBridge(
                 _amount,
+                poolToAsset[_poolAddress],
                 destinationBridgeReceiver,
                 _poolAddress,
                 managerChainId,

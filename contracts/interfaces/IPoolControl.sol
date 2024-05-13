@@ -16,7 +16,7 @@ interface IPoolControl {
     function userDeposit(uint256, uint256) external;
     function handleUndoPositionInitializer(bytes32, uint256) external;
     function handleUndoDeposit(bytes32, uint256) external;
-    function handleUndoPivot(uint256, uint256) external;
+    function handleUndoPivot(uint256) external;
     function handleClearPivotTarget() external;
     function queryMovePosition(string memory, bytes memory, uint256) external;
     function sendPositionChange(bytes memory, string memory, uint256) external;

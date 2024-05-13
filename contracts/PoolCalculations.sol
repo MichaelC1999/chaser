@@ -15,6 +15,7 @@ contract PoolCalculations is OwnableUpgradeable {
 
     mapping(bytes32 => address) public withdrawIdToDepositor;
     mapping(bytes32 => uint256) public withdrawIdToAmount;
+    mapping(bytes32 => uint256) public withdrawIdToUserPoolTokens;
     mapping(bytes32 => bool) public withdrawIdToTokensBurned;
     mapping(address => uint256) public poolToPendingWithdraws;
 
@@ -22,8 +23,10 @@ contract PoolCalculations is OwnableUpgradeable {
     mapping(address => uint256) public poolWithdrawNonce;
     mapping(address => bool) public poolToPivotPending;
 
-    mapping(address => mapping(address => bool)) poolToUserPendingWithdraw;
-    mapping(address => mapping(address => bool)) poolToUserPendingDeposit;
+    mapping(address => mapping(address => bool))
+        public poolToUserPendingWithdraw;
+    mapping(address => mapping(address => bool))
+        public poolToUserPendingDeposit;
 
     mapping(address => bytes) public targetPositionMarketId; //THE MARKET ADDRESS THAT WILL BE PASSED TO BRIDGECONNECTION, NOT THE FINAL ADDRESS THAT FUNDS ARE ACTUALLY HELD IN
     mapping(address => uint256) public targetPositionChain;
@@ -96,6 +99,9 @@ contract PoolCalculations is OwnableUpgradeable {
 
         withdrawIdToDepositor[withdrawId] = _sender;
         withdrawIdToAmount[withdrawId] = _amount;
+        withdrawIdToUserPoolTokens[withdrawId] = IERC20(_poolToken).balanceOf(
+            _sender
+        );
         poolToPendingWithdraws[msg.sender] += _amount;
         poolWithdrawNonce[msg.sender] += 1;
         emit WithdrawRecorded(withdrawId, _amount);
@@ -110,28 +116,6 @@ contract PoolCalculations is OwnableUpgradeable {
             scaledRatio
         );
         return data;
-    }
-
-    function getScaledRatio(
-        address _poolToken,
-        address _sender
-    ) public view returns (uint256) {
-        IERC20 poolToken = IERC20(_poolToken);
-
-        uint256 userPoolTokenBalance = poolToken.balanceOf(_sender);
-        if (userPoolTokenBalance == 0) {
-            return 0;
-        }
-        uint256 poolTokenSupply = poolToken.totalSupply();
-        require(poolTokenSupply > 0, "Pool Token has no supply");
-
-        uint256 scaledRatio = (10 ** 18);
-        if (userPoolTokenBalance != poolTokenSupply) {
-            scaledRatio =
-                (userPoolTokenBalance * (10 ** 18)) /
-                (poolTokenSupply);
-        }
-        return scaledRatio;
     }
 
     function fulfillWithdrawOrder(
@@ -152,15 +136,15 @@ contract PoolCalculations is OwnableUpgradeable {
         currentRecordPositionValue[poolAddress] = _positionValue;
         currentPositionValueTimestamp[poolAddress] = block.timestamp;
 
-        uint256 userPoolTokenBalance = IERC20(_poolToken).balanceOf(depositor);
-
         if (_totalAvailableForUser < _amount) {
             _amount = _totalAvailableForUser;
         }
-        uint256 poolTokensToBurn = userPoolTokenBalance;
+        uint256 poolTokensToBurn = withdrawIdToUserPoolTokens[_withdrawId];
         if (_totalAvailableForUser > 0) {
             uint256 ratio = (_amount * (10 ** 18)) / (_totalAvailableForUser);
-            poolTokensToBurn = (ratio * userPoolTokenBalance) / (10 ** 18);
+            poolTokensToBurn =
+                (ratio * withdrawIdToUserPoolTokens[_withdrawId]) /
+                (10 ** 18);
         }
 
         poolToUserPendingWithdraw[poolAddress][depositor] = false;
@@ -284,6 +268,7 @@ contract PoolCalculations is OwnableUpgradeable {
         poolToPivotPending[msg.sender] = false;
         depositIdToDepositor[_depositId] = address(0);
         depositIdToDepositAmount[_depositId] = 0;
+        poolDepositNonce[msg.sender] = 0;
         return originalSender;
     }
 
@@ -297,10 +282,7 @@ contract PoolCalculations is OwnableUpgradeable {
         return originalSender;
     }
 
-    function undoPivot(
-        uint256 _nonce,
-        uint256 _positionAmount
-    ) external onlyValidPool {
+    function undoPivot(uint256 _positionAmount) external onlyValidPool {
         currentPositionAddress[msg.sender] = msg.sender;
         currentPositionMarketId[msg.sender] = abi.encode(0);
         currentPositionProtocol[msg.sender] = "";
@@ -422,5 +404,48 @@ contract PoolCalculations is OwnableUpgradeable {
         }
 
         return (poolTokensToMint, depositor);
+    }
+
+    function getScaledRatio(
+        address _poolToken,
+        address _sender
+    ) public view returns (uint256) {
+        IERC20 poolToken = IERC20(_poolToken);
+
+        uint256 userPoolTokenBalance = poolToken.balanceOf(_sender);
+        if (userPoolTokenBalance == 0) {
+            return 0;
+        }
+        uint256 poolTokenSupply = poolToken.totalSupply();
+        require(poolTokenSupply > 0, "Pool Token has no supply");
+
+        uint256 scaledRatio = (10 ** 18);
+        if (userPoolTokenBalance != poolTokenSupply) {
+            scaledRatio =
+                (userPoolTokenBalance * (10 ** 18)) /
+                (poolTokenSupply);
+        }
+        return scaledRatio;
+    }
+
+    function readCurrentPositionData(
+        address _poolAddress
+    ) external view returns (address, bytes32, uint256, uint256) {
+        return (
+            currentPositionAddress[_poolAddress],
+            currentPositionProtocolHash[_poolAddress],
+            currentRecordPositionValue[_poolAddress],
+            currentPositionValueTimestamp[_poolAddress]
+        );
+    }
+
+    function poolTransactionStatus(
+        address _poolAddress
+    ) external view returns (uint256, uint256, bool) {
+        return (
+            poolDepositNonce[_poolAddress],
+            poolWithdrawNonce[_poolAddress],
+            poolToPivotPending[_poolAddress]
+        );
     }
 }

@@ -47,7 +47,7 @@ a {
   color: #1f2c33;
   width: 850px;
   /* Updated width */
-  height: 280px;
+  height: 350px;
   /* Updated height */
   border-radius: 3px;
   border: 1px black solid;
@@ -99,6 +99,8 @@ a {
   margin-bottom: 16px;
   padding-top: 4px;
   padding-left: 12px;
+  position: relative;
+  z-index: 2000;
 }
 
 .contentContainer {
@@ -143,7 +145,7 @@ a {
 .demoButton {
   cursor: pointer;
   width: 56px;
-  padding: 2px 0px;
+  padding: 8px 0px;
   font-size: 16px;
   border-width: 0px;
   border-radius: 6px;
@@ -211,7 +213,6 @@ a {
   border-radius: 50%;
   animation: spin .6s linear infinite;
 
-  margin: 50px;
   /* position: fixed;
   top: 50%;
   left: 50%; */

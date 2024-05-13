@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 const ethers = require("ethers");
 const fs = require('fs');
-const { stringToBytes } = require('viem')
+const { stringToBytes, bytesToString, hexToString, decodeEventLog } = require('viem')
 
 
 const deployments = require('./contractAddresses.json')
@@ -11,8 +11,6 @@ const sepoliaDeployments = async () => {
   const [deployer] = await hre.ethers.getSigners();
   const gasPrice = await deployer.provider.getFeeData();
   console.log(gasPrice)
-
-  // Deploy manager to user level chain, deploy the test pool
 
   const Manager = await hre.ethers.getContractFactory("ChaserManager");
   const manager = await hre.upgrades.deployProxy(Manager, [11155111]);
@@ -101,7 +99,7 @@ const sepoliaDeployments = async () => {
 
   await (await bridgeLogicContract.addConnections(deployments.sepolia["messengerAddress"], deployments.sepolia["receiverAddress"], deployments.sepolia["integratorAddress"])).wait()
 
-  await (await registry.addBridgeLogic(bridgeLogicAddress, deployments.sepolia["messengerAddress"], deployments.sepolia["receiverAddress"])).wait()
+  await (await registry.addBridgeLogic(deployments.sepolia["bridgeLogicAddress"], deployments.sepolia["messengerAddress"], deployments.sepolia["receiverAddress"])).wait()
 
   console.log('MESSENGER: ', await bridgeLogicContract.messenger(), await registry.chainIdToMessageReceiver(11155111))
 
@@ -236,8 +234,8 @@ const sepoliaPositionSetDeposit = async () => {
     amount,
     totalFeeCalc(amount),
     "aave-v3",
-    deployments.base["aaveMarketId"],
-    84532,
+    deployments.sepolia["aaveMarketId"],
+    11155111,
     { gasLimit: 8000000 }
   )
 
@@ -286,8 +284,9 @@ const setPivotConfigs = async () => {
   const arbitrationContract = await hre.upgrades.deployProxy(ArbitrationContract, [deployments.sepolia["registryAddress"], 11155111]);
   await arbitrationContract.waitForDeployment();
   const arbitrationAddress = await arbitrationContract.getAddress()
-  console.log("BRIDGE RECEIVER", arbitrationAddress)
-  deployments.sepolia["receiverAddress"] = arbitrationAddress
+  console.log("Arb", arbitrationAddress)
+  deployments.sepolia["arbitrationContract"] = arbitrationAddress
+
   writeAddressesToFile(deployments)
 
 
@@ -301,72 +300,86 @@ const setPivotConfigs = async () => {
 
   // deployments.sepolia["investmentStrategy"] = investmentStrategyAddress
   await (await registryContract.addInvestmentStrategyContract(deployments.sepolia["investmentStrategy"])).wait();
-
-  deployments.sepolia["arbitrationContract"] = arbitrationContract.target
   await (await registryContract.addArbitrationContract(deployments.sepolia["arbitrationContract"])).wait()
 
-  writeAddressesToFile(deployments)
+  // writeAddressesToFile(deployments)
 }
 
 const addStrategyCode = async () => {
   let sourceString = ``
+
   const sourceCode = stringToBytes(sourceString)
-  const investmentStrategyContract = await hre.ethers.getContractAt("InvestmentStrategy", deployments.base["investmentStrategy"]);
 
-  console.log(sourceCode)
-  const transactionResponse = await investmentStrategyContract.addStrategy(sourceCode, "lowVolHighYield", { gasLimit: 7000000 });
-  const receipt = await transactionResponse.wait();
+  const investmentStrategyContract = await hre.ethers.getContractAt("InvestmentStrategy", deployments.sepolia["investmentStrategy"]);
 
+  // console.log(sourceCode)
+  // const transactionResponse = await investmentStrategyContract.addStrategy(sourceCode, "highYield3Month", { gasLimit: 7000000 });
+  // const receipt = await transactionResponse.wait();
+  console.log(hexToString(await investmentStrategyContract.strategyCode(1)))
 }
 
 
 const poolStatRead = async () => {
   // "0xec9a7d48230bec7a8b7cc88a8d4edff45d7da01f"
 
-  const pool = await hre.ethers.getContractAt("PoolControl", deployments.sepolia["poolAddress"])
-  const tokenContract = await (hre.ethers.getContractAt("IPoolToken", await pool.poolToken()))
-  const calcContract = await hre.ethers.getContractAt("PoolCalculations", await pool.poolCalculations())
+  // const pool = await hre.ethers.getContractAt("PoolControl", "0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607")
+  // const tokenContract = await (hre.ethers.getContractAt("IPoolToken", await pool.poolToken()))
+  // const calcContract = await hre.ethers.getContractAt("PoolCalculations", await pool.poolCalculations())
 
-  console.log(
-    "TARGETS: ",
-    await calcContract.targetPositionMarketId(deployments.sepolia["poolAddress"]),
-    await calcContract.targetPositionChain(deployments.sepolia["poolAddress"]),
-    await calcContract.targetPositionProtocolHash(deployments.sepolia["poolAddress"]),
-    await calcContract.targetPositionProtocol(deployments.sepolia["poolAddress"]),
-    "CURRENTS: ",
-    await calcContract.poolDepositNonce(deployments.sepolia["poolAddress"]),
-    await calcContract.poolWithdrawNonce(deployments.sepolia["poolAddress"]),
-    await pool.currentPositionChain(),
-    await calcContract.currentPositionAddress(deployments.sepolia["poolAddress"]),
-    await calcContract.currentPositionMarketId(deployments.sepolia["poolAddress"]),
-    await calcContract.currentPositionProtocolHash(deployments.sepolia["poolAddress"]),
-    await calcContract.currentPositionProtocol(deployments.sepolia["poolAddress"]),
-    await calcContract.currentRecordPositionValue(deployments.sepolia["poolAddress"]),
-    await calcContract.currentPositionValueTimestamp(deployments.sepolia["poolAddress"]))
+  // console.log(
+  //   "TARGETS: ",
+  //   await calcContract.targetPositionMarketId("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+  //   await calcContract.targetPositionChain("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+  //   await calcContract.targetPositionProtocolHash("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+  //   await calcContract.targetPositionProtocol("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+  //   "CURRENTS: ",
+  //   await calcContract.poolDepositNonce("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+  //   await calcContract.poolWithdrawNonce("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+  //   await pool.currentPositionChain(),
+  //   await calcContract.currentPositionAddress("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+  //   await calcContract.currentPositionMarketId("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+  //   await calcContract.currentPositionProtocolHash("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+  //   await calcContract.currentPositionProtocol("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+  //   await calcContract.currentRecordPositionValue("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+  //   await calcContract.currentPositionValueTimestamp("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"))
 
-  console.log("TOKENS: ",
-    await pool.poolToken(),
-    "totalSupply - ",
-    await tokenContract.totalSupply(),
-    "balanceOf 1b5E - ",
-    await tokenContract.balanceOf("0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E"),
-    "scaledRatio - ",
-    await calcContract.getScaledRatio(await pool.poolToken(), "0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E"),
-  )
+  // console.log("TOKENS: ",
+  //   await pool.poolToken(),
+  //   "totalSupply - ",
+  //   await tokenContract.totalSupply(),
+  //   "balanceOf 1b5E - ",
+  //   await tokenContract.balanceOf("0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E"),
+  //   "scaledRatio - ",
+  //   await calcContract.getScaledRatio(await pool.poolToken(), "0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E"),
+  // )
 
-  const bridgeLogicAddress = deployments.sepolia["bridgeLogicAddress"]
+  const bridgeLogicAddress = deployments.base["bridgeLogicAddress"]
   const bridgeLogic = await hre.ethers.getContractAt("BridgeLogic", bridgeLogicAddress);
 
 
-  const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.sepolia["integratorAddress"]);
+  const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.base["integratorAddress"]);
+  console.log(await integratorContract.getCurrentPosition(
+    "0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607",
+    "0x4200000000000000000000000000000000000006",
+    "0x07eA79F68B2B3df564D0A34F8e19D9B1e339814b",
+    "0x465a559e4de536e9b6feec6cb09331bad8f94c75e1f63a0b1a8e46bbc990c476"
+  ));
+  // }
 
-  // Get hash of protocol
-  const protocolHash = await integratorContract.hasher("aave-v3")
-  // console.log(await bridgeLogic.poolToAsset(deployments.sepolia["poolAddress"]),
-  //   await bridgeLogic.poolToCurrentPositionMarket(deployments.sepolia["poolAddress"]),
-  //   await bridgeLogic.poolToCurrentProtocolHash(deployments.sepolia["poolAddress"]),)
+  console.log(await bridgeLogic.getNonPendingPositionBalance(
+    "0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607",
+    2,
+    0
+  ))
+  // // Get hash of protocol
+  // const protocolHash = await integratorContract.hasher("aave-v3")
+  console.log(await bridgeLogic.poolToAsset("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+    await bridgeLogic.poolToCurrentPositionMarket("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+    await bridgeLogic.poolToCurrentProtocolHash("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+    await bridgeLogic.poolAddressToDepositNonce("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
+    await bridgeLogic.poolAddressToWithdrawNonce("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"))
 
-  const curPos = await bridgeLogic.getPositionBalance(deployments.sepolia["poolAddress"])
+  const curPos = await bridgeLogic.getPositionBalance("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607")
 
 
   console.log('CURRENT POSITION VALUE + INTEREST: ', curPos)
@@ -399,11 +412,11 @@ const sendTokens = async () => {
   // console.log("AAVE Token Transfer: ", (await (await aaveTestToken.transfer(deployments.sepolia["integratorAddress"], aaveAmount)).wait()).hash)
 
   // const compTestToken = await hre.ethers.getContractAt("ERC20", "0x2D5ee574e710219a521449679A4A7f2B43f046ad");
-  // const compAmount = "10000000000000000"
+  // const compAmount = "100000000000000"
   // console.log("COMPOUND Token Transfer: ", (await (await compTestToken.transfer(deployments.sepolia["integratorAddress"], compAmount)).wait()).hash)
 
-  // const WETH = await hre.ethers.getContractAt("ERC20", deployments[chainName]["WETH"]);
-  // await (await WETH.transfer(deployments[chainName]["integratorAddress"], "100000000000")).wait()
+  // const WETH = await hre.ethers.getContractAt("ERC20", deployments["sepolia"]["WETH"]);
+  // await (await WETH.transfer(deployments["sepolia"]["integratorAddress"], "1000000000")).wait()
 
   // const USDC = await hre.ethers.getContractAt("ERC20", "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238");
   // await (await USDC.approve(deployments[chainName]["arbitrationContract"], 500000)).wait()
@@ -426,7 +439,7 @@ const sepoliaCallPivot = async () => {
   const registryContract = await hre.ethers.getContractAt("Registry", deployments.sepolia["registryAddress"]);
   const protocolName = "compound"
   const chainToName = { 84532: "base", 11155111: "sepolia" }
-  const targetChain = 11155111
+  const targetChain = 84532
   const chainName = chainToName[targetChain]
   // Get hash of protocol
   // const WETH = await hre.ethers.getContractAt("ERC20", deployments[chainName]["WETH"]);
@@ -450,15 +463,11 @@ const sepoliaCallPivot = async () => {
 }
 
 const upgradeContract = async () => {
-  const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.sepolia["integratorAddress"]);
-  const WETH = await hre.ethers.getContractAt("ERC20", deployments.sepolia["WETH"]);
 
-  console.log(await integratorContract.registryAddress(), await WETH.balanceOf(deployments.sepolia["integratorAddress"]))
-  const IntV2 = await hre.ethers.getContractFactory("Integrator");
-  const int = await hre.upgrades.upgradeProxy(deployments.sepolia["integratorAddress"], IntV2);
+  const BridgeV2 = await hre.ethers.getContractFactory("BridgeLogic");
+  const int = await hre.upgrades.upgradeProxy(deployments.base["bridgeLogicAddress"], BridgeV2);
   const newAddr = await int.getAddress()
   console.log("Int upgraded", newAddr);
-  console.log(await int.registryAddress())
 }
 
 const baseIntegrationsTest = async () => {
@@ -507,12 +516,10 @@ const upgradeCalc = async () => {
   console.log("Manager upgraded", newAddr);
 
   const PoolCalculations = await hre.ethers.getContractFactory("PoolCalculations");
-  const poolCalculationsContract = await hre.upgrades.deployProxy(PoolCalculations, [deployments.sepolia["registryAddress"]]);
-  await poolCalculationsContract.waitForDeployment();
+  const poolCalculationsContract = await hre.upgrades.upgradeProxy(deployments.sepolia["poolCalculationsAddress"], PoolCalculations);
   const poolCalculationsAddress = await poolCalculationsContract.getAddress()
   console.log("POOL CALCULATIONS", poolCalculationsAddress)
   deployments.sepolia["poolCalculationsAddress"] = poolCalculationsAddress
-  deployments.sepolia["managerAddress"] = newAddr
   writeAddressesToFile(deployments)
 
   await manager.addPoolCalculationsAddress(poolCalculationsAddress)
@@ -542,6 +549,70 @@ const manualAcrossMessageHandle = async (amount, message) => {
 
 }
 
+const testLogFinder = async () => {
+  const URI = "https://api-sepolia.etherscan.io/api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + "0xdc4514c31907b06f2495661c4a3b34b43d384e4f" + "&topic0=0xad71167b35ad58b7606cb5f5fda8b03a5799113db8f0a73939d152ac29d023a0"
+
+  const event = await fetch(URI, {
+    method: "get",
+    headers: {
+      "Content-Type": "application/json",
+    }
+  })
+
+  const pivotEvent = await event.json()
+
+  console.log(pivotEvent)
+
+  log = pivotEvent.result[0]
+  const hash = log.transactionHash
+  const args = decodeEventLog({
+    abi: PoolABI,
+    data: log.data,
+    topics: log.topics
+  }).args
+
+  console.log(args)
+  let topic = ""
+  let contractAddr = ""
+  if (args[0].toString() === "11155111") {
+    //across
+    topic = "0xa123dc29aebf7d0c3322c8eeb5b999e859f39937950ed31056532713d0de396f"
+    contractAddr = deployments.sepolia["spokePool"]
+  } else {
+    //ccip
+    topic = "0x3d8a9f055772202d2c3c1fddbad930d3dbe588d8692b75b84cee071946282911"
+    contractAddr = deployments.sepolia["messengerAddress"]
+  }
+
+  const logUri = "https://api-sepolia.etherscan.io/api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + contractAddr + "&topic0=" + topic
+
+  const messageEvent = await fetch(logUri, {
+    method: "get",
+    headers: {
+      "Content-Type": "application/json",
+    }
+  })
+
+  const messageLogEvents = await messageEvent.json()
+
+  console.log(messageLogEvents.result.find(x => x.transactionHash === hash))
+
+  // const url = "https://corsproxy.io/?https%3A%2F%2Fccip.chain.link%2Fapi%2Fquery%2FMESSAGE_DETAILS_QUERY%3Fvariables%3D%257B%2522messageId%2522%253A%25220x4a39b65996d7b11d31156727e48a3398c63f84e13012dfa7e3394ce4ecb78703%2522%257D";
+
+  // const event = await fetch(url, {
+  //     method: "get",
+  //     headers: {
+  //         "Content-Type": "application/json",
+  //     }
+  // })
+
+  // const deployments = await event.json()
+
+  // console.log(deployments.data.allCcipMessages.nodes[0])
+
+
+}
+
 async function mainExecution() {
 
   try {
@@ -554,17 +625,19 @@ async function mainExecution() {
     // IF LOOKING TO DEPLOY YOUR OWN INSTANCE OF ALL CONTRACTS - EXECUTE THE FOLLOWING TWO FUNCTIONS ONE AT A TIME.
     // await sepoliaDeployments() //CHECK THAT THE DEFAULT NETWORK IN "..hardhat.config.js" IS sepolia
     // await baseDeployments() //CHANGE THE DEFAULT NETWORK IN "..hardhat.config.js" TO base
-    await sepoliaSecondConfig() //CHANGE THE DEFAULT NETWORK IN "..hardhat.config.js" TO sepolia
+    // await sepoliaSecondConfig() //CHANGE THE DEFAULT NETWORK IN "..hardhat.config.js" TO sepolia
     // --------------------------------------------------------------------------------------------
     // IF YOU EXECUTED THE PRIOR SECTION AND/OR WOULD LIKE TO DEPLOY YOUR POOL FOR TESTING - EXECUTE THE FOLLOWING FUNCTION
     // This function also sends the initial deposit funds through the bridge into the investment as the position is set on base
-    await setPivotConfigs()
-    // await upgradeCalc()
+    // await setPivotConfigs()
+    await upgradeCalc()
     // await sepoliaPoolDeploy()
     // await sepoliaPositionSetDeposit()
+    // await addStrategyCode()
 
     // await sepoliaCallPivot()
     // await sepoliaDeposit()
+
     // --------------------------------------------------------------------------------------------
     // AFTER EXECUTING sepoliaPoolDeploy() OR sepoliaDeposit(), WAIT FOR THE ETHEREUM BASE ACROSS SPOKEPOOL TO RECEIVE THE DEPOSIT
     // GET THE MESSAGE DATA FROM SEPOLIASCAN, COPYING THE HEX DATA BYTES FROM EVENT "0x244e451036514e829e60556484796d2251dc3d952cd079db45d2bfb4c0aff2a1"
@@ -585,10 +658,10 @@ async function mainExecution() {
     // await baseSimulateCCIPReceive("0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001003705af6d000000000000000000000000000000000000000000000000000000000000000000000000000000009bdc76b596051e1e86eadb2e2af2a491e32bfa48000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000803f4c40f2d9e47df3a43c5c97200a65dd80990bf9d69827733cf5f393681c90dc000000000000000000000000000000000000000000000000000886c98b760000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000004a03cea247fc197")
     // --------------------------------------------------------------------------------------------
     // baseReceivers()
-    // await manualAcrossMessageHandle("748125000000000", "0x5F240EEE000000000000000000000000000000000000000000000000000000000000000000000000000000000D97A1F718E8D7428F0524EE8CFF88E914E10EC3000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000404C22EBADB4B19A5A2B9315B9365E7BC1EF3A510F9E9925ACBF45EEB78D0E397A0000000000000000000000000000000000000000000000000000000000000000")
+    // await manualAcrossMessageHandle("9975000000000", "0x5F240EEE0000000000000000000000000000000000000000000000000000000000000000000000000000000044EC0B546845FAFA3D9D85C3E8F66FA7A6F9B607000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000404D74196A31C3E9D4433A6E770BA18498F1C4E217AD7596075F336C74EE4A0D050000000000000000000000000000000000000000000000000000000000000000")
 
     // await baseIntegrationsTest()
-
+    // await testLogFinder()
 
     // const interval = setInterval(async () => await poolStatRead(), 100000); // 300000 ms = 5 minutes
 

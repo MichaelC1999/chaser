@@ -21,6 +21,7 @@ contract ArbitrationContract is OwnableUpgradeable {
     mapping(bytes32 => uint256) public assertionToRequestedChainId;
     mapping(bytes32 => address) public assertionToPoolAddress;
     mapping(bytes32 => uint256) public assertionToBlockTime;
+    mapping(bytes32 => uint256) public assertionToSettleTime;
     mapping(address => bool) public poolHasAssertionOpen;
     mapping(uint256 => string) public chainIdToName;
     mapping(bytes32 => DataAssertion) public assertionsData;
@@ -154,6 +155,9 @@ contract ArbitrationContract is OwnableUpgradeable {
         assertionToBlockTime[assertionId] =
             block.timestamp +
             ((assertionLiveness * 3) / 5);
+        assertionToSettleTime[assertionId] =
+            block.timestamp +
+            assertionLiveness;
         poolHasAssertionOpen[msg.sender] = true;
 
         return assertionId;
@@ -255,6 +259,7 @@ contract ArbitrationContract is OwnableUpgradeable {
             delete assertionToRequestedChainId[assertionId];
             delete assertionToPoolAddress[assertionId];
             delete assertionToBlockTime[assertionId];
+            delete assertionToSettleTime[assertionId];
             delete poolHasAssertionOpen[poolAddress];
             poolControl.handleClearPivotTarget();
         }

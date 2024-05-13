@@ -43,7 +43,7 @@ interface IPoolCalculations {
 
     function undoDeposit(bytes32) external returns (address);
 
-    function undoPivot(uint256, uint256) external;
+    function undoPivot(uint256) external;
 
     function clearPivotTarget() external;
 
@@ -85,4 +85,10 @@ interface IPoolCalculations {
         bytes32,
         uint256
     ) external view returns (uint256, address);
+    function readCurrentPositionData(
+        address
+    ) external view returns (address, bytes32, uint256, uint256);
+    function poolTransactionStatus(
+        address
+    ) external view returns (uint256, uint256, bool);
 }

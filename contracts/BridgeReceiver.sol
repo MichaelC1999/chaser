@@ -142,9 +142,9 @@ contract BridgeReceiver is OwnableUpgradeable {
             bridgeLogic.returnToPool(
                 _method,
                 _poolAddress,
+                _tokenSent,
                 depositId,
-                _amount,
-                0
+                _amount
             );
         }
     }
@@ -178,9 +178,9 @@ contract BridgeReceiver is OwnableUpgradeable {
             bridgeLogic.returnToPool(
                 _method,
                 _poolAddress,
+                _tokenSent,
                 depositId,
-                _amount,
-                0
+                _amount
             );
         }
     }
@@ -192,11 +192,10 @@ contract BridgeReceiver is OwnableUpgradeable {
         address _poolAddress,
         bytes memory _data
     ) internal {
-        (
-            bytes32 protocolHash,
-            address targetMarketAddress,
-            uint256 poolNonce
-        ) = abi.decode(_data, (bytes32, address, uint256));
+        (bytes32 protocolHash, address targetMarketAddress) = abi.decode(
+            _data,
+            (bytes32, address)
+        );
 
         bool success = IERC20(_tokenSent).transfer(
             address(bridgeLogic),
@@ -210,16 +209,15 @@ contract BridgeReceiver is OwnableUpgradeable {
                 _amount,
                 _poolAddress,
                 protocolHash,
-                targetMarketAddress,
-                poolNonce
+                targetMarketAddress
             )
         {} catch Error(string memory reason) {
             bridgeLogic.returnToPool(
                 _method,
                 _poolAddress,
+                _tokenSent,
                 bytes32(""),
-                _amount,
-                poolNonce
+                _amount
             );
         }
     }
@@ -231,9 +229,9 @@ contract BridgeReceiver is OwnableUpgradeable {
         address _poolAddress,
         bytes memory _data
     ) internal {
-        (bytes4 originalMethod, bytes32 txId, uint256 poolNonce) = abi.decode(
+        (bytes4 originalMethod, bytes32 txId) = abi.decode(
             _data,
-            (bytes4, bytes32, uint256)
+            (bytes4, bytes32)
         );
 
         if (
@@ -264,7 +262,7 @@ contract BridgeReceiver is OwnableUpgradeable {
                 _amount
             );
             require(success, "Token transfer failure");
-            IPoolControl(_poolAddress).handleUndoPivot(poolNonce, _amount);
+            IPoolControl(_poolAddress).handleUndoPivot(_amount);
         }
     }
 }

@@ -30,6 +30,9 @@ contract PoolControl {
     IERC20 public asset;
 
     event ExecutionMessage(string);
+    event ExecutePivot(uint256, uint256);
+    event DepositCrossChain(address);
+    event WithdrawCrossChain(address);
 
     /**
      * @notice Initial pool configurations and address caching
@@ -150,6 +153,7 @@ contract PoolControl {
         if (currentPositionChain == localChain) {
             localBridgeLogic.userWithdrawSequence(address(this), data);
         } else {
+            emit WithdrawCrossChain(msg.sender);
             registry.sendMessage(
                 currentPositionChain,
                 method,
@@ -301,6 +305,7 @@ contract PoolControl {
         uint256 _feeTotal,
         bytes memory _message
     ) internal {
+        emit DepositCrossChain(_sender);
         // fund entrance can automatically bridge into position.
         address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
         uint256 receivingChain = currentPositionChain;
@@ -401,6 +406,8 @@ contract PoolControl {
             "Transactions still pending on this pool, try to resolve the pivot again soon"
         );
 
+        emit ExecutePivot(currentPositionChain, _targetPositionChain);
+
         poolCalculations.openSetPosition(
             _targetPositionMarketId,
             _targetPositionProtocol,
@@ -478,12 +485,9 @@ contract PoolControl {
         require(success, "Token transfer failure");
     }
 
-    function handleUndoPivot(
-        uint256 _poolNonce,
-        uint256 _positionAmount
-    ) external callerSource {
+    function handleUndoPivot(uint256 _positionAmount) external callerSource {
         currentPositionChain = localChain;
-        poolCalculations.undoPivot(_poolNonce, _positionAmount);
+        poolCalculations.undoPivot(_positionAmount);
     }
 
     function handleClearPivotTarget() external callerSource {
@@ -550,5 +554,53 @@ contract PoolControl {
             strategyIndex
         );
         return string(strategyBytes);
+    }
+
+    function poolMetaData()
+        external
+        view
+        returns (address, address, string memory)
+    {
+        return (poolToken, address(asset), poolName);
+    }
+
+    function readPoolCurrentPositionData()
+        external
+        view
+        returns (address, bytes32, uint256, uint256, uint256)
+    {
+        (
+            address currentPositionAddress,
+            bytes32 currentPositionProtocolHash,
+            uint256 currentRecordPositionValue,
+            uint256 currentPositionValueTimestamp
+        ) = poolCalculations.readCurrentPositionData(address(this));
+
+        return (
+            currentPositionAddress,
+            currentPositionProtocolHash,
+            currentRecordPositionValue,
+            currentPositionValueTimestamp,
+            currentPositionChain
+        );
+    }
+
+    function transactionStatus()
+        external
+        view
+        returns (uint256, uint256, bool, bytes32)
+    {
+        (
+            uint256 poolDepositNonce,
+            uint256 poolWithdrawNonce,
+            bool poolToPivotPending
+        ) = poolCalculations.poolTransactionStatus(address(this));
+
+        return (
+            poolDepositNonce,
+            poolWithdrawNonce,
+            poolToPivotPending,
+            openAssertion
+        );
     }
 }
