@@ -1,12 +1,13 @@
 import React, { useMemo } from 'react';
 import { ethers } from 'ethers';
+import { sepolia, baseSepolia } from 'viem/chains';
 
 const ConnectButton = ({ connected, setErrorMessage }) => {
     const windowOverride = typeof window !== 'undefined' ? window : null;
 
     // Instantiate the provider, if the window object remains the same no need to recalculate
     const provider = useMemo(() => {
-        return new ethers.BrowserProvider(windowOverride?.ethereum);
+        return new ethers.JsonRpcProvider("https://rpc.sepolia.org");
     }, [windowOverride]);
 
     const connect = async () => {
@@ -15,6 +16,7 @@ const ConnectButton = ({ connected, setErrorMessage }) => {
             try {
                 await provider.send("eth_requestAccounts", []);
                 await provider.getSigner();
+
             } catch (err) {
                 setErrorMessage("Connection Error: " + err?.info?.error?.message ?? err?.message);
             }

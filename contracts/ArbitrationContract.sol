@@ -270,6 +270,7 @@ contract ArbitrationContract is OwnableUpgradeable {
     function assertionDisputedCallback(bytes32 assertionId) public {
         //Clear up proposal
         //Even if the dispute was invalid, the proposal is cancelled
+        //IMPORTANT - Close the proposal
     }
 
     function inAssertionBlockWindow(

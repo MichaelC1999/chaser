@@ -4,7 +4,7 @@ import Withdraw from './Withdraw.jsx';
 import PivotMechanism from './PivotMechanism.jsx';
 
 
-const UserPoolSection = ({ user, changeStep, poolData, provider, setErrorMessage, txData, setTxData, demoMode, step }) => {
+const UserPoolSection = ({ fetchPoolData, user, poolData, provider, setErrorMessage, txData, setTxData }) => {
     const userData = poolData?.user
 
     let userPositionInfo = null
@@ -16,19 +16,25 @@ const UserPoolSection = ({ user, changeStep, poolData, provider, setErrorMessage
         if (!userData?.userRatio) {
             stakePct = "0.00"
         }
+        let fundsText = "No Deposits From User"
+        if (userData?.userDepositValue > 0) {
+            fundsText = "Position: " + userData?.userDepositValue + " " + poolData?.poolAssetSymbol
+        }
+
         userPositionInfo = (
             <div style={{ margin: "14px 0" }}>
-                <span className="infoSpan" style={{ border: "white 1px solid", fontSize: "20px" }}>Value ({poolData?.poolAssetSymbol}) - {userData?.userDepositValue ?? 0}</span>
-                <span className="infoSpan" style={{ border: "white 1px solid", fontSize: "20px" }}>Your Stake - {stakePct}%</span>
-                {poolData?.isPivoting ? null : <span className="infoSpan" style={poolData?.currentApy < 0 ? { color: "red", border: "white 1px solid", fontSize: "20px" } : { color: "white", border: "white 1px solid", fontSize: "20px" }}>Earning APY - {poolData?.currentApy?.toFixed(2)}%</span>}
+                <span className="infoSpan" style={{ border: "white 1px solid", fontSize: "20px" }}>{fundsText}</span>
+                <span className="infoSpan" style={{ border: "white 1px solid", fontSize: "20px" }}>Your Stake: {stakePct}%</span>
+                {poolData?.isPivoting ? null : <span className="infoSpan" style={poolData?.currentApy < 0 ? { color: "red", border: "white 1px solid", fontSize: "20px" } : { color: "white", border: "white 1px solid", fontSize: "20px" }}>APY: {poolData?.currentApy?.toFixed(2)}%</span>}
             </div>
         )
     }
 
     let withdraw = null
     if (!!userData.userRatio) {
-        withdraw = <Withdraw demoMode={demoMode} poolAddress={poolData?.address} poolData={poolData} provider={provider} setErrorMessage={(x) => setErrorMessage(x)} txData={txData} setTxData={setTxData} />
-        pivotMechanism = <PivotMechanism demoMode={demoMode} changeStep={changeStep} step={step} poolData={poolData} provider={provider} setErrorMessage={(x) => setErrorMessage(x)} txData={txData} setTxData={setTxData} />
+        console.log(poolData)
+        withdraw = <Withdraw fetchPoolData={fetchPoolData} poolAddress={poolData?.address} poolData={poolData} provider={provider} setErrorMessage={(x) => setErrorMessage(x)} txData={txData} setTxData={setTxData} />
+        pivotMechanism = <PivotMechanism fetchPoolData={fetchPoolData} poolData={poolData} provider={provider} setErrorMessage={(x) => setErrorMessage(x)} txData={txData} setTxData={setTxData} />
     }
     return (
         <div style={{ width: "100%", backgroundColor: "#374d59", padding: "50px 30px", display: "flex" }}>
@@ -37,7 +43,7 @@ const UserPoolSection = ({ user, changeStep, poolData, provider, setErrorMessage
                 <span className="infoSpan" style={{ color: "#1f2c33", backgroundColor: "white", fontSize: "26px" }}><b>{user}</b></span>
                 {userPositionInfo}
                 <div style={{ display: "flex" }}>
-                    <Deposit poolAddress={poolData?.address} demoMode={demoMode} changeStep={changeStep} poolData={poolData} provider={provider} setErrorMessage={(x) => setErrorMessage(x)} txData={txData} setTxData={setTxData} />
+                    <Deposit fetchPoolData={fetchPoolData} poolAddress={poolData?.address} poolData={poolData} provider={provider} setErrorMessage={(x) => setErrorMessage(x)} txData={txData} setTxData={setTxData} />
                     {withdraw}
                     {pivotMechanism}
                 </div>

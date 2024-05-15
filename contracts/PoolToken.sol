@@ -30,7 +30,6 @@ contract PoolToken is ERC20 {
 
     function burn(address holder, uint256 amount) external {
         require(msg.sender == poolAddress, "Only pool may call burn");
-        require(balanceOf(msg.sender) >= amount);
         _burn(holder, amount);
     }
 

@@ -49,17 +49,17 @@ Regardless of where the pool currently is investing the funds, you will always w
 It is important to keep in mind that when a pool has an investment position on a different network, there are delays when finalizing your interactions. Specifically, deposits to other chains need to bridge and send a callback message before minting pool tokens. Also, withdraws from positions on other chains face similar delays. The current idea of the Chaser token is to facilitate instant liquidity for pools with positions on other chains.
 If there is an open proposal to move the pools funds, there is a block on deposits and withdraws to prevent funds lost when bridging gets executed.
 
-# Tutorials
+## Tutorials
 
 The Chaser demo is live: 
 
-## Making a Deposit
+### Making a Deposit
 
-## Making a Withdraw
+### Making a Withdraw
 
-## Moving Pool Funds
+### Moving Pool Funds
 
-## Creating a Strategy
+### Creating a Strategy
 
 #### Investigating Transaction Failures
 
@@ -73,7 +73,7 @@ As Chaser is still in development using newer technologies, the contracts are st
 Give up to 30 minutes total for a transaction to finalize. If after this time your deposit/withdraw/pivot is not reflected on the frontend, you can assume something went wrong. Of course, reach out to the Chaser team to notify us in these cases. If you would like to debug this yourself, there are many ways to get some insights into issues.
 
 
-# Technical
+## Technical
 
 Here are the essential tools that make Chaser work
 - Across Bridge, for facilitating investments between different networks.
@@ -87,13 +87,17 @@ For an end user or DAO depositing into a pool, the only interaction needed is to
 
 #### Mechanics of custom investment strategies
 
-Strategy contracts help UMA OO disputers make an objective, data-based determination as to whether or not a proposed investment is "better" for the given strategy. Before moving investments, a pool must go through a process of determining whether or not to move  
+Strategy contracts help UMA OO disputers make an objective, data-based determination as to whether or not a proposed investment is better for the given strategy. Before moving investments, a pool must go through a process of determining whether or not to move  
 
 - A user proposes that a given market is a better investment than the market where funds are currently deposited into, according to the current strategy (example: The Compound-Mainnet ETH market returns a higher yield with lower 30 day volatility than the current market on AAVE-V3-Optimism WETH) 
-- This proposal is made by opening up an UMA assertion with a combination of the target protocol + network + market address and a hardcoded proposal complete with instructions on how disputers can verify the proposal.
-- The proposal can be verified by reading the Javascript code saved on the strategy contract and executing it locally. Alternatively, Chainlink functions can execute this code and verify the investment proposal immediately
-- This code saved in the strategy contract does two things; queries the subgraphs of the lending markets in question and analyzes their data. This code returns the pool id of the better investment. If the pool id of the market currently holding the deposits is returned, the assertion should be rejected and the funds do not move.
-- If the assertion is successful, the "sendPositionChange()" callback is executed. This function unwinds the current position and sends the funds through the Across bridge to whatever network the new, better investment is on. This function also sends a CCIP message to the destination network with instructions on how and where to deposit the funds
+- This proposal opens up an UMA assertion with a combination of the target protocol + network + market address and a hardcoded proposal template complete with instructions on how disputers can verify the proposal.
+- UMA disputers verify that this proposal is true by reading the Javascript code saved on the strategy contract and executing it locally.
+- This code does two things; queries the subgraphs of the lending markets in question and analyzes their data.
+- This code returns `true` if the proposed investment is currently better for your strategy than the current market the pool is invested into, and should therefore move funds to the new market.
+- If the code returns `false`, the proposed market is not a better investment and is not worth moving funds. Disputers will  
+- When a proposal is successful, Chaser unwinds the current position and sends the funds through the Across bridge to whatever network the new, better investment is on. This function also sends a CCIP message to the destination network with instructions on how and where to deposit the funds
+
+See the strategy contract creation tutorial above to make your own strategy.
 
 
 #### Mechanics of a deposit

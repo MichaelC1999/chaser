@@ -12,9 +12,9 @@
                 "type": "address"
             },
             {
-                "internalType": "string",
-                "name": "_strategySource",
-                "type": "string"
+                "internalType": "uint256",
+                "name": "_strategyIndex",
+                "type": "uint256"
             },
             {
                 "internalType": "string",
@@ -41,27 +41,16 @@
         "type": "constructor"
     },
     {
-        "inputs": [
-            {
-                "internalType": "string",
-                "name": "reason",
-                "type": "string"
-            }
-        ],
-        "name": "WithdrawOrderFailure",
-        "type": "error"
-    },
-    {
         "anonymous": false,
         "inputs": [
             {
                 "indexed": false,
-                "internalType": "bytes",
+                "internalType": "address",
                 "name": "",
-                "type": "bytes"
+                "type": "address"
             }
         ],
-        "name": "AcrossMessageSent",
+        "name": "DepositCrossChain",
         "type": "event"
     },
     {
@@ -69,12 +58,18 @@
         "inputs": [
             {
                 "indexed": false,
-                "internalType": "bytes32",
+                "internalType": "uint256",
                 "name": "",
-                "type": "bytes32"
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
             }
         ],
-        "name": "CheckId",
+        "name": "ExecutePivot",
         "type": "event"
     },
     {
@@ -95,68 +90,12 @@
         "inputs": [
             {
                 "indexed": false,
-                "internalType": "bytes4",
-                "name": "",
-                "type": "bytes4"
-            },
-            {
-                "indexed": false,
-                "internalType": "bytes",
-                "name": "",
-                "type": "bytes"
-            }
-        ],
-        "name": "LzMessageSent",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "name": "Numbers",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": false,
-                "internalType": "string",
-                "name": "",
-                "type": "string"
-            },
-            {
-                "indexed": false,
                 "internalType": "address",
                 "name": "",
                 "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "bytes32",
-                "name": "",
-                "type": "bytes32"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
             }
         ],
-        "name": "PivotCompleted",
+        "name": "WithdrawCrossChain",
         "type": "event"
     },
     {
@@ -187,72 +126,7 @@
     },
     {
         "inputs": [],
-        "name": "currentPositionAddress",
-        "outputs": [
-            {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
         "name": "currentPositionChain",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "currentPositionMarketId",
-        "outputs": [
-            {
-                "internalType": "string",
-                "name": "",
-                "type": "string"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "currentPositionProtocolHash",
-        "outputs": [
-            {
-                "internalType": "bytes32",
-                "name": "",
-                "type": "bytes32"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "currentPositionValueTimestamp",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "currentRecordPositionValue",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -298,17 +172,66 @@
     },
     {
         "inputs": [],
-        "name": "getPositionData",
+        "name": "handleClearPivotTarget",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "_depositId",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_amount",
+                "type": "uint256"
+            }
+        ],
+        "name": "handleUndoDeposit",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_positionAmount",
+                "type": "uint256"
+            }
+        ],
+        "name": "handleUndoPivot",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "_depositId",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_amount",
+                "type": "uint256"
+            }
+        ],
+        "name": "handleUndoPositionInitializer",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
     },
     {
         "inputs": [],
-        "name": "lastPositionAddress",
+        "name": "localBridgeLogic",
         "outputs": [
             {
-                "internalType": "address",
+                "internalType": "contract IBridgeLogic",
                 "name": "",
                 "type": "address"
             }
@@ -318,36 +241,10 @@
     },
     {
         "inputs": [],
-        "name": "lastPositionChain",
+        "name": "localBridgeReceiver",
         "outputs": [
             {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "lastPositionProtocolHash",
-        "outputs": [
-            {
-                "internalType": "bytes32",
-                "name": "",
-                "type": "bytes32"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "localBridgeLogic",
-        "outputs": [
-            {
-                "internalType": "contract IBridgeLogic",
+                "internalType": "address",
                 "name": "",
                 "type": "address"
             }
@@ -382,16 +279,24 @@
         "type": "function"
     },
     {
+        "inputs": [],
+        "name": "openAssertion",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
         "inputs": [
             {
                 "internalType": "address",
                 "name": "marketAddress",
                 "type": "address"
-            },
-            {
-                "internalType": "uint256",
-                "name": "nonce",
-                "type": "uint256"
             },
             {
                 "internalType": "uint256",
@@ -402,19 +307,6 @@
         "name": "pivotCompleted",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "pivotPending",
-        "outputs": [
-            {
-                "internalType": "bool",
-                "name": "",
-                "type": "bool"
-            }
-        ],
-        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -432,8 +324,18 @@
     },
     {
         "inputs": [],
-        "name": "poolName",
+        "name": "poolMetaData",
         "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            },
             {
                 "internalType": "string",
                 "name": "",
@@ -445,12 +347,12 @@
     },
     {
         "inputs": [],
-        "name": "poolNonce",
+        "name": "poolName",
         "outputs": [
             {
-                "internalType": "uint256",
+                "internalType": "string",
                 "name": "",
-                "type": "uint256"
+                "type": "string"
             }
         ],
         "stateMutability": "view",
@@ -473,17 +375,17 @@
         "inputs": [
             {
                 "internalType": "string",
-                "name": "_requestProtocolSlug",
+                "name": "_requestProtocol",
                 "type": "string"
             },
             {
-                "internalType": "string",
+                "internalType": "bytes",
                 "name": "_requestMarketId",
-                "type": "string"
+                "type": "bytes"
             },
             {
                 "internalType": "uint256",
-                "name": "_bond",
+                "name": "_requestChainId",
                 "type": "uint256"
             }
         ],
@@ -494,9 +396,48 @@
     },
     {
         "inputs": [],
-        "name": "readPositionBalance",
-        "outputs": [],
-        "stateMutability": "nonpayable",
+        "name": "readPoolCurrentPositionData",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "readStrategyCode",
+        "outputs": [
+            {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+            }
+        ],
+        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -508,19 +449,6 @@
             }
         ],
         "name": "receivePositionBalance",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "bytes",
-                "name": "_data",
-                "type": "bytes"
-            }
-        ],
-        "name": "receivePositionData",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -554,18 +482,18 @@
     {
         "inputs": [
             {
-                "internalType": "string",
-                "name": "_requestMarketId",
-                "type": "string"
+                "internalType": "bytes",
+                "name": "_targetPositionMarketId",
+                "type": "bytes"
             },
             {
                 "internalType": "string",
-                "name": "_targetProtocol",
+                "name": "_targetPositionProtocol",
                 "type": "string"
             },
             {
                 "internalType": "uint256",
-                "name": "_destinationChainId",
+                "name": "_targetPositionChain",
                 "type": "uint256"
             }
         ],
@@ -576,20 +504,7 @@
     },
     {
         "inputs": [],
-        "name": "strategySource",
-        "outputs": [
-            {
-                "internalType": "string",
-                "name": "",
-                "type": "string"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "targetPositionChain",
+        "name": "strategyIndex",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -602,21 +517,23 @@
     },
     {
         "inputs": [],
-        "name": "targetPositionMarketId",
+        "name": "transactionStatus",
         "outputs": [
             {
-                "internalType": "string",
+                "internalType": "uint256",
                 "name": "",
-                "type": "string"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "targetPositionProtocolHash",
-        "outputs": [
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            },
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            },
             {
                 "internalType": "bytes32",
                 "name": "",
@@ -658,18 +575,18 @@
             },
             {
                 "internalType": "string",
-                "name": "_targetPositionMarketId",
+                "name": "_targetPositionProtocol",
                 "type": "string"
+            },
+            {
+                "internalType": "bytes",
+                "name": "_targetPositionMarketId",
+                "type": "bytes"
             },
             {
                 "internalType": "uint256",
                 "name": "_targetPositionChain",
                 "type": "uint256"
-            },
-            {
-                "internalType": "string",
-                "name": "_targetPositionProtocol",
-                "type": "string"
             }
         ],
         "name": "userDepositAndSetPosition",

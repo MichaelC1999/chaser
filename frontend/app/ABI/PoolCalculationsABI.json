@@ -23,6 +23,38 @@
         "inputs": [
             {
                 "indexed": false,
+                "internalType": "uint8",
+                "name": "version",
+                "type": "uint8"
+            }
+        ],
+        "name": "Initialized",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "previousOwner",
+                "type": "address"
+            },
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "newOwner",
+                "type": "address"
+            }
+        ],
+        "name": "OwnershipTransferred",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
                 "internalType": "bytes32",
                 "name": "",
                 "type": "bytes32"
@@ -48,11 +80,6 @@
                 "internalType": "uint256",
                 "name": "_totalPoolPositionAmount",
                 "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "_poolTokenSupply",
-                "type": "uint256"
             }
         ],
         "name": "calculatePoolTokensToMint",
@@ -72,6 +99,13 @@
         "type": "function"
     },
     {
+        "inputs": [],
+        "name": "clearPivotTarget",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
         "inputs": [
             {
                 "internalType": "address",
@@ -79,9 +113,19 @@
                 "type": "address"
             },
             {
+                "internalType": "address",
+                "name": "_poolToken",
+                "type": "address"
+            },
+            {
                 "internalType": "uint256",
                 "name": "_amount",
                 "type": "uint256"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "_openAssertion",
+                "type": "bytes32"
             }
         ],
         "name": "createDepositOrder",
@@ -90,6 +134,11 @@
                 "internalType": "bytes32",
                 "name": "",
                 "type": "bytes32"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
             }
         ],
         "stateMutability": "nonpayable",
@@ -98,13 +147,51 @@
     {
         "inputs": [
             {
-                "internalType": "uint256",
-                "name": "_amount",
-                "type": "uint256"
+                "internalType": "bytes32",
+                "name": "_depositId",
+                "type": "bytes32"
             },
             {
+                "internalType": "address",
+                "name": "_sender",
+                "type": "address"
+            }
+        ],
+        "name": "createInitialSetPositionMessage",
+        "outputs": [
+            {
+                "internalType": "bytes",
+                "name": "",
+                "type": "bytes"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_destinationBridgeReceiver",
+                "type": "address"
+            }
+        ],
+        "name": "createPivotExitMessage",
+        "outputs": [
+            {
+                "internalType": "bytes",
+                "name": "",
+                "type": "bytes"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
                 "internalType": "uint256",
-                "name": "_poolNonce",
+                "name": "_amount",
                 "type": "uint256"
             },
             {
@@ -116,6 +203,11 @@
                 "internalType": "address",
                 "name": "_sender",
                 "type": "address"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "_openAssertion",
+                "type": "bytes32"
             }
         ],
         "name": "createWithdrawOrder",
@@ -132,14 +224,115 @@
     {
         "inputs": [
             {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "currentPositionAddress",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "currentPositionMarketId",
+        "outputs": [
+            {
+                "internalType": "bytes",
+                "name": "",
+                "type": "bytes"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "currentPositionProtocol",
+        "outputs": [
+            {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "currentPositionProtocolHash",
+        "outputs": [
+            {
                 "internalType": "bytes32",
-                "name": "_depositId",
+                "name": "",
                 "type": "bytes32"
             }
         ],
-        "name": "depositIdMinted",
-        "outputs": [],
-        "stateMutability": "nonpayable",
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "currentPositionValueTimestamp",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "currentRecordPositionValue",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -188,12 +381,171 @@
                 "type": "bytes32"
             }
         ],
+        "name": "depositIdToPoolTokenSupply",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
         "name": "depositIdToTokensMinted",
         "outputs": [
             {
                 "internalType": "bool",
                 "name": "",
                 "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes",
+                "name": "input",
+                "type": "bytes"
+            }
+        ],
+        "name": "extractAddressesFromBytes",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "addr1",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "addr2",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "_withdrawId",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_positionValue",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_totalAvailableForUser",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_amount",
+                "type": "uint256"
+            },
+            {
+                "internalType": "address",
+                "name": "_poolToken",
+                "type": "address"
+            }
+        ],
+        "name": "fulfillWithdrawOrder",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_poolAddress",
+                "type": "address"
+            }
+        ],
+        "name": "getCurrentPositionData",
+        "outputs": [
+            {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+            },
+            {
+                "internalType": "bytes",
+                "name": "",
+                "type": "bytes"
+            },
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes",
+                "name": "_marketId",
+                "type": "bytes"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "_protocolHash",
+                "type": "bytes32"
+            }
+        ],
+        "name": "getMarketAddressFromId",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_asset",
+                "type": "address"
+            }
+        ],
+        "name": "getPivotBond",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
             }
         ],
         "stateMutability": "view",
@@ -226,33 +578,92 @@
     {
         "inputs": [
             {
-                "internalType": "bytes32",
-                "name": "withdrawId",
-                "type": "bytes32"
-            },
-            {
-                "internalType": "uint256",
-                "name": "totalAvailableForUser",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "amount",
-                "type": "uint256"
-            },
-            {
                 "internalType": "address",
-                "name": "_poolToken",
+                "name": "_registryAddress",
                 "type": "address"
             }
         ],
-        "name": "getWithdrawOrderFulfillment",
+        "name": "initialize",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes",
+                "name": "_targetPositionMarketId",
+                "type": "bytes"
+            },
+            {
+                "internalType": "string",
+                "name": "_targetProtocol",
+                "type": "string"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_targetChainId",
+                "type": "uint256"
+            }
+        ],
+        "name": "openSetPosition",
         "outputs": [
             {
                 "internalType": "address",
                 "name": "",
                 "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "marketAddress",
+                "type": "address"
             },
+            {
+                "internalType": "uint256",
+                "name": "positionAmount",
+                "type": "uint256"
+            }
+        ],
+        "name": "pivotCompleted",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "poolDepositNonce",
+        "outputs": [
             {
                 "internalType": "uint256",
                 "name": "",
@@ -265,9 +676,361 @@
     {
         "inputs": [
             {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "poolToPendingDeposits",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "poolToPendingWithdraws",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "poolToPivotPending",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "poolToUserPendingDeposit",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "poolToUserPendingWithdraw",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_poolAddress",
+                "type": "address"
+            }
+        ],
+        "name": "poolTransactionStatus",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            },
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "poolWithdrawNonce",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_poolAddress",
+                "type": "address"
+            }
+        ],
+        "name": "readCurrentPositionData",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "registry",
+        "outputs": [
+            {
+                "internalType": "contract IChaserRegistry",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "renounceOwnership",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "targetPositionChain",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "targetPositionMarketId",
+        "outputs": [
+            {
+                "internalType": "bytes",
+                "name": "",
+                "type": "bytes"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "targetPositionProtocol",
+        "outputs": [
+            {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "name": "targetPositionProtocolHash",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "newOwner",
+                "type": "address"
+            }
+        ],
+        "name": "transferOwnership",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
                 "internalType": "bytes32",
                 "name": "_depositId",
                 "type": "bytes32"
+            }
+        ],
+        "name": "undoDeposit",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_positionAmount",
+                "type": "uint256"
+            }
+        ],
+        "name": "undoPivot",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "_depositId",
+                "type": "bytes32"
+            }
+        ],
+        "name": "undoPositionInitializer",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "_depositId",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_positionAmount",
+                "type": "uint256"
             },
             {
                 "internalType": "uint256",
@@ -276,7 +1039,13 @@
             }
         ],
         "name": "updateDepositReceived",
-        "outputs": [],
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
         "stateMutability": "nonpayable",
         "type": "function"
     },
@@ -288,7 +1057,7 @@
                 "type": "bytes32"
             }
         ],
-        "name": "withdrawIdToDepositAmount",
+        "name": "withdrawIdToAmount",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -313,6 +1082,44 @@
                 "internalType": "address",
                 "name": "",
                 "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "name": "withdrawIdToTokensBurned",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "name": "withdrawIdToUserPoolTokens",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
             }
         ],
         "stateMutability": "view",

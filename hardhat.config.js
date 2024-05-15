@@ -7,7 +7,7 @@ require('@openzeppelin/hardhat-upgrades');
 require('dotenv').config({ path: __dirname + '/.env' });
 
 module.exports = {
-  defaultNetwork: "sepolia",
+  defaultNetwork: "base",
   solidity: {
     version: "0.8.22",
     settings: {

@@ -16,17 +16,14 @@ import UserPoolSection from '@/app/components/UserPoolSection';
 import contractAddresses from '../../JSON/contractAddresses.json'
 import ErrorPopup from '@/app/components/ErrorPopup.jsx';
 import TxPopup from '@/app/components/TxPopup';
-import DemoPopup from '@/app/components/DemoPopup';
+import Loader from '@/app/components/Loader';
 
 export default function Page() {
 
-    const [step, setStep] = useState(null);
-    const [prevStep, setPrevStep] = useState(null)
-    const [demoMode, setDemoMode] = useState(true);
     const [poolData, setPoolData] = useState(null);
     const [errorMessage, setErrorMessage] = useState("");
     const [txData, setTxData] = useState({})
-    const [showPivotPopup, setShowPivotPopup] = useState(false)
+    const [showPivotSuccess, setShowPivotSuccess] = useState(false)
 
     const pathname = usePathname()
 
@@ -56,168 +53,127 @@ export default function Page() {
         }
     }
 
-    useEffect(() => {
-        const getPoolData = async (address) => {
-            const returnObject = {}
-            const pool = new ethers.Contract(address || "0x0", PoolABI, provider);
-            const poolCalc = new ethers.Contract(contractAddresses["sepolia"].poolCalculationsAddress || "0x0", PoolCalculationsABI, provider);
+    const getPoolData = async (address) => {
+        const returnObject = {}
+        const pool = new ethers.Contract(address || "0x0", PoolABI, provider);
+        const poolCalc = new ethers.Contract(contractAddresses["sepolia"].poolCalculationsAddress || "0x0", PoolCalculationsABI, provider);
 
-            try {
-                returnObject.poolTokenAddress = await pool.poolToken()
-                if (returnObject.poolTokenAddress) {
-                    const poolToken = new ethers.Contract(returnObject.poolTokenAddress || "0x0", PoolTokenABI, provider);
-                }
-            } catch (err) {
+        const metaData = await pool.poolMetaData()
+        returnObject.poolTokenAddress = metaData["0"]
+        returnObject.poolAsset = metaData["1"]
+        returnObject.name = metaData["2"]
+        const currents = await pool.readPoolCurrentPositionData()
+        returnObject.protocol = protocolHashes[currents["1"]]
+        returnObject.recordPositionValue = formatEther(currents["2"])
+        returnObject.recordTimestamp = currents["3"]
+        returnObject.currentChain = currents["4"]
+        const transactionStatus = await pool.transactionStatus()
+        returnObject.depoNonce = transactionStatus["0"]
+        returnObject.withdrawNonce = transactionStatus["1"]
+        returnObject.nonce = returnObject.depoNonce + returnObject.withdrawNonce
 
+        returnObject.userIsDepositing = await poolCalc.poolToUserPendingDeposit(address, windowOverride?.ethereum?.selectedAddress)
+        returnObject.userIsWithdrawing = await poolCalc.poolToUserPendingWithdraw(address, windowOverride?.ethereum?.selectedAddress)
+
+        returnObject.isPivoting = transactionStatus["2"]
+        returnObject.openAssertion = transactionStatus["3"]
+
+        console.log(returnObject)
+
+
+
+        try {
+            if (returnObject.poolTokenAddress) {
+                const poolToken = new ethers.Contract(returnObject.poolTokenAddress || "0x0", PoolTokenABI, provider);
             }
+        } catch (err) {
 
-            try {
-                returnObject.poolAsset = await pool.asset()
+        }
 
-                const poolAssetContract = new ethers.Contract(returnObject.poolAsset || "0x0", PoolTokenABI, provider);
-                returnObject.poolAssetName = await poolAssetContract.name()
-                returnObject.poolAssetSymbol = await poolAssetContract.symbol()
-            } catch (err) {
-                returnObject.poolAsset = zeroAddress
-            }
+        try {
+            const poolAssetContract = new ethers.Contract(returnObject.poolAsset || "0x0", PoolTokenABI, provider);
+            returnObject.poolAssetName = await poolAssetContract.name()
+            returnObject.poolAssetSymbol = await poolAssetContract.symbol()
+        } catch (err) {
+            returnObject.poolAsset = zeroAddress
+        }
 
-            try {
-
-                returnObject.recordPositionValue = formatEther(await poolCalc.currentRecordPositionValue(address))
-                returnObject.recordTimestamp = await poolCalc.currentPositionValueTimestamp(address)
-            } catch (err) {
-
-            }
-
-            try {
-
-                returnObject.name = await pool.poolName()
-                returnObject.nonce = await poolCalc.poolNonce(address)
-            } catch (err) {
-
-            }
-
-            try {
-
+        try {
+            if (returnObject?.nonce > 0) {
                 returnObject.userRatio = await poolCalc.getScaledRatio(returnObject.poolTokenAddress, windowOverride?.ethereum?.selectedAddress)
-                returnObject.currentChain = await pool.currentPositionChain()
-                returnObject.protocol = await poolCalc.currentPositionProtocolHash(address)
-            } catch (err) {
-                console.log(err)
             }
-            try {
-                returnObject.isPivoting = await poolCalc.poolToPivotPending(address)
-
-            } catch (err) {
-            }
-
-            // Have json with mapping of protocol hashes to the protocol name, read slug/protocolname from this list. No need to be on chain
-            return { address, name, user: { userRatio: returnObject.userRatio, address: windowOverride?.ethereum?.selectedAddress }, ...returnObject }
+        } catch (err) {
+            console.log(err)
         }
 
-        const getBridgePoolData = async (address, hash, chainId, data) => {
-            if (!chainId) {
-                return {}
-            }
-            let chain = sepolia
-            let chainName = 'sepolia'
-            if (chainId.toString() === "84532") {
-                chain = baseSepolia
-                chainName = 'base'
-            }
-            const publicClient = createPublicClient({
-                chain,
-                transport: http()
+        // Have json with mapping of protocol hashes to the protocol name, read slug/protocolname from this list. No need to be on chain
+        return { address, name, user: { userRatio: returnObject.userRatio, address: windowOverride?.ethereum?.selectedAddress }, ...returnObject }
+    }
+
+    const getBridgePoolData = async (address, hash, chainId, data) => {
+        if (!chainId) {
+            return {}
+        }
+        let chain = sepolia
+        let chainName = 'sepolia'
+        if (chainId.toString() === "84532") {
+            chain = baseSepolia
+            chainName = 'base'
+        }
+        const publicClient = createPublicClient({
+            chain,
+            transport: http()
+        })
+
+        try {
+
+            const bridgeLogic = getContract({
+                address: contractAddresses[chainName].bridgeLogicAddress,
+                abi: BridgeLogicABI,
+                client: publicClient,
             })
-
-            try {
-
-                const bridgeLogic = getContract({
-                    address: contractAddresses[chainName].bridgeLogicAddress,
-                    abi: BridgeLogicABI,
-                    client: publicClient,
-                })
-
-                const tvl = await bridgeLogic.read.getPositionBalance([address]);
-                const nonce = await bridgeLogic.read.bridgeNonce([address])
-
-                let userDepositValue = 0
-                if (Number(tvl.toString()) > 0) {
-                    userDepositValue = formatEther(await bridgeLogic.read.getUserMaxWithdraw([tvl, data.user.userRatio, address, nonce]))
-                }
-
-                return { user: { ...data.user, userDepositValue }, TVL: formatEther(tvl) }
-            } catch (err) {
-                console.log(err)
-                return {}
+            const tvl = await bridgeLogic.read.getNonPendingPositionBalance([address, 1, data.withdrawNonce])
+            let userDepositValue = 0
+            if (Number(tvl.toString()) > 0) {
+                const maxWithdraw = await bridgeLogic.read.getUserMaxWithdraw([tvl, data.user.userRatio])
+                userDepositValue = formatEther(maxWithdraw)
             }
 
+            return { user: { ...data.user, userDepositValue }, TVL: formatEther(tvl) }
+        } catch (err) {
+            console.log(err)
+            return {}
         }
 
-        const execution = async () => {
-            const poolDataReturn = await getPoolData(poolId)
-            try {
-                const bridgedPoolData = await getBridgePoolData(poolId, poolDataReturn.protocol, poolDataReturn.currentChain, poolDataReturn)
-                if (!poolDataReturn.isPivoting) {
-                    poolDataReturn.currentApy = calculateAPY(poolDataReturn?.recordPositionValue, bridgedPoolData?.TVL, poolDataReturn?.recordTimestamp)
-                }
+    }
 
-                if (poolDataReturn?.isPivoting === false && poolData?.isPivoting === true) {
-                    setShowPivotPopup(true)
-                }
-                setPoolData({ ...poolDataReturn, ...bridgedPoolData })
+    useEffect(() => {
 
-            } catch (err) {
-                console.log(err)
-                setErrorMessage("Error fetching pool data: " + (err?.info?.error?.message ?? "Try reloading"))
-            }
-        }
-        execution()
+        fetchPoolData()
 
-        const interval = setInterval(execution, 300000); // 300000 ms = 5 minutes
+        const interval = setInterval(fetchPoolData, 300000); // 300000 ms = 5 minutes
 
         return () => clearInterval(interval); // Clean up the interval on component unmount
 
     }, [txData])
 
+    const fetchPoolData = async () => {
+        try {
+            const poolDataReturn = await getPoolData(poolId)
+            const bridgedPoolData = await getBridgePoolData(poolId, poolDataReturn.protocol, poolDataReturn.currentChain, poolDataReturn)
+            if (!poolDataReturn.isPivoting) {
+                poolDataReturn.currentApy = calculateAPY(poolDataReturn?.recordPositionValue, bridgedPoolData?.TVL, poolDataReturn?.recordTimestamp)
+            }
 
-    useEffect(() => {
+            if (poolDataReturn?.isPivoting === false && poolData?.isPivoting === true) {
+                setShowPivotSuccess(true)
+            }
+            setPoolData({ ...poolDataReturn, ...bridgedPoolData })
 
-        // step logic
-        let stepToSet = null
-        if (!!step) {
-            return
+        } catch (err) {
+            console.log(err)
+            setErrorMessage("Error fetching pool data: " + (err?.info?.error?.message ?? "Try reloading"))
         }
-        if (poolData?.nonce?.toString() === "0" && !poolData?.protocol && prevStep === null) {
-            stepToSet = 0
-        }
-        if (poolData?.nonce?.toString() === "1" && protocolHashes[poolData?.protocol] === "compound-v3" && !poolData?.isPivoting && !(prevStep > 0)) {
-            stepToSet = 1
-        }
-        if (prevStep === 1) {
-            stepToSet = 2;
-        }
-        if (prevStep === 2) {
-            stepToSet = 3;
-        }
-
-        if (prevStep === 4) {
-            stepToSet = 5;
-        }
-
-        if (poolData?.isPivoting && poolData?.nonce?.toString() === "1" && prevStep !== 6) {
-            stepToSet = 6
-        }
-        if (!poolData?.isPivoting && poolData?.nonce?.toString() === "2" && protocolHashes[poolData?.protocol] === "aave-v3" && prevStep !== 7) {
-            stepToSet = 7
-        }
-
-        setStep(stepToSet)
-    }, [poolData, txData, step])
-
-    const changeStep = (newStep) => {
-        setPrevStep(step)
-        setStep(newStep)
     }
 
     let ele = null
@@ -236,12 +192,12 @@ export default function Page() {
                 key = `${formatString(x)} (${poolData?.poolAssetSymbol})`
             } else if (x === 'currentApy') {
                 key = "Current APY";
-                value = (poolData[x]).toFixed(2) + '%'
+                value = (poolData[x]).toFixed(10) + '%'
             } else {
                 key = formatString(x)
             }
             if (x === 'protocol') {
-                value = protocolHashes[poolData[x]]
+                value = poolData[x]
             }
             if (x === 'currentChain') {
                 value = networks[poolData.currentChain]
@@ -274,45 +230,38 @@ export default function Page() {
 
     let infoHeader = (<div style={{ display: "block", marginTop: "22px", fontSize: "16px" }}>
         <span className="infoSpan">{poolData?.name}</span>
-        <span className="infoSpan">{protocolHashes?.[poolData?.protocol] ?? "Protocol"} - {networks?.[poolData?.currentChain?.toString()] ?? "Chain"}</span>
+        <span className="infoSpan">{poolData?.protocol ?? "Protocol"} - {networks?.[poolData?.currentChain?.toString()] ?? "Chain"}</span>
         <span className="infoSpan"><b>{poolData?.poolAssetSymbol}</b></span>
     </div>)
 
     if (poolData === null) {
-        ele = <div style={{ width: "60%" }}><div style={{ marginTop: "22px" }} className="small-loader"></div></div>
+        ele = <div style={{ margin: "30px" }}><div style={{ height: "50px", width: "50px" }} className="loader loaderBig"></div></div>
         infoHeader = null
     }
 
     if (windowOverride?.ethereum?.selectedAddress && poolData) {
-        userEle = <UserPoolSection demoMode={demoMode} step={step} setErrorMessage={(x) => setErrorMessage(x)} changeStep={changeStep} user={windowOverride?.ethereum?.selectedAddress} poolData={poolData} provider={provider} txData={txData} setTxData={setTxData} />
+        userEle = <UserPoolSection fetchPoolData={fetchPoolData} setErrorMessage={(x) => setErrorMessage(x)} user={windowOverride?.ethereum?.selectedAddress} poolData={poolData} provider={provider} txData={txData} setTxData={setTxData} />
     }
 
     let txPopup = null
     if (Object.keys(txData)?.length > 0) {
         txPopup = <TxPopup popupData={txData} clearPopupData={() => setTxData({})} />
     }
-    let demo = null
-    let demoButton = <button style={{ backgroundColor: "lime", marginLeft: "8px" }} onClick={() => setDemoMode(true)} className={'demoButton'}><b>On</b></button>
-    if (demoMode) {
-        demo = <DemoPopup step={step} clearDemoStep={() => changeStep(null)} turnOffDemo={() => setDemoMode(false)} />
-        demoButton = <button style={{ backgroundColor: "red", marginLeft: "16px" }} onClick={() => setDemoMode(false)} className={'demoButton'}><b>Off</b></button>
-    }
 
     let pivotPopup = null
-    if (showPivotPopup) {
+    if (showPivotSuccess) {
         pivotPopup = (<div className="popup-container">
             <div className="popup">
                 <div className="popup-title">Pivot Success</div>
                 <div className="popup-message">
-                    <span style={{ display: "block" }}>The pivot on this pool successfully moved funds to {protocolHashes[poolData.protocol]} {protocolHashes[poolData.currentChain]}. Deposits are now earning yield on this protocol. Interactions are now enabled once again.</span>
+                    <span style={{ display: "block" }}>The pivot on this pool successfully moved funds to {poolData.protocol} {poolData.currentChain}. Deposits are now earning yield on this protocol. Interactions are now enabled once again.</span>
                 </div>
-                <button onClick={() => setShowPivotPopup(false)} className="popup-ok-button">OK</button>
+                <button onClick={() => setShowPivotSuccess(false)} className="popup-ok-button">OK</button>
             </div>
         </div>)
     }
 
     return (<>
-        {demo}
         {pivotPopup}
         <ErrorPopup errorMessage={errorMessage} clearErrorMessage={() => setErrorMessage("")} />
         {txPopup}
@@ -321,14 +270,7 @@ export default function Page() {
                 <span style={{ display: "block", fontSize: "28px" }}>{poolId}</span>
 
                 {infoHeader}
-                <div style={{ marginTop: "20px", width: "100%", display: "flex", justifyContent: "flex-start", alignItems: "center", paddingLeft: "8px" }}>
-                    {poolData ?
-                        (<>
-                            <p>Demo Mode is <span style={demoMode ? { color: "lime" } : { color: "red" }}>{demoMode ? 'ON' : 'OFF'}</span></p>
-                            {demoButton}
-                        </>) :
-                        null}
-                </div>
+
             </div>
             {ele}
             {userEle}
@@ -357,7 +299,7 @@ function calculateAPY(baseDepositValue, currentDepositValue, recordTimestamp) {
     // Record the amount added+subtracted at the time of recording each nonce.
     // This determines how much yield was made between each nonce recorded 
     // Get the position value recorded on the bridge logic at the nonce, minus the deposit amount/plus the withdraw amount if the bridge nonce  
-
+    if (!currentDepositValue) return 0
     const timeElapsed = Date.now() / 1000 - Number(recordTimestamp)
     // Constants
     const secondsInYear = 365 * 24 * 60 * 60;
@@ -371,14 +313,14 @@ function calculateAPY(baseDepositValue, currentDepositValue, recordTimestamp) {
     // Extrapolate profit per second to APY
     // Note: Assuming compounding once per year for simplicity
     let apy = Math.pow((profitPerSecond * secondsInYear) / baseDepositValue + 1, 1) - 1;
-
+    console.log(apy)
     // Convert APY to a percentage
     apy = apy * 100;
     if (!apy) {
         return 0
     }
 
-    console.log(`APY (Annual Percentage Yield): ${apy.toFixed(2)}%`);
+    console.log(`APY (Annual Percentage Yield): ${apy.toFixed(12)}%`);
 
     // Return the APY and profit per second as an object for further use
     return apy;

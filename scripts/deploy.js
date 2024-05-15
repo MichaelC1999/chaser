@@ -321,68 +321,68 @@ const addStrategyCode = async () => {
 
 const poolStatRead = async () => {
   // "0xec9a7d48230bec7a8b7cc88a8d4edff45d7da01f"
+  const poolAddress = deployments.sepolia['poolAddress']
+  const pool = await hre.ethers.getContractAt("PoolControl", poolAddress)
+  const tokenContract = await (hre.ethers.getContractAt("IPoolToken", await pool.poolToken()))
+  const calcContract = await hre.ethers.getContractAt("PoolCalculations", await pool.poolCalculations())
 
-  // const pool = await hre.ethers.getContractAt("PoolControl", "0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607")
-  // const tokenContract = await (hre.ethers.getContractAt("IPoolToken", await pool.poolToken()))
-  // const calcContract = await hre.ethers.getContractAt("PoolCalculations", await pool.poolCalculations())
+  console.log(
+    "TARGETS: ",
+    await calcContract.targetPositionMarketId(poolAddress),
+    await calcContract.targetPositionChain(poolAddress),
+    await calcContract.targetPositionProtocolHash(poolAddress),
+    await calcContract.targetPositionProtocol(poolAddress),
+    "CURRENTS: ",
+    await calcContract.poolDepositNonce(poolAddress),
+    await calcContract.poolWithdrawNonce(poolAddress),
+    await pool.currentPositionChain(),
+    await calcContract.currentPositionAddress(poolAddress),
+    await calcContract.currentPositionMarketId(poolAddress),
+    await calcContract.currentPositionProtocolHash(poolAddress),
+    await calcContract.currentPositionProtocol(poolAddress),
+    await calcContract.currentRecordPositionValue(poolAddress),
+    await calcContract.currentPositionValueTimestamp(poolAddress))
 
-  // console.log(
-  //   "TARGETS: ",
-  //   await calcContract.targetPositionMarketId("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-  //   await calcContract.targetPositionChain("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-  //   await calcContract.targetPositionProtocolHash("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-  //   await calcContract.targetPositionProtocol("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-  //   "CURRENTS: ",
-  //   await calcContract.poolDepositNonce("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-  //   await calcContract.poolWithdrawNonce("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-  //   await pool.currentPositionChain(),
-  //   await calcContract.currentPositionAddress("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-  //   await calcContract.currentPositionMarketId("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-  //   await calcContract.currentPositionProtocolHash("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-  //   await calcContract.currentPositionProtocol("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-  //   await calcContract.currentRecordPositionValue("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-  //   await calcContract.currentPositionValueTimestamp("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"))
+  console.log("TOKENS: ",
+    await pool.poolToken(),
+    "totalSupply - ",
+    await tokenContract.totalSupply(),
+    "balanceOf 1b5E - ",
+    await tokenContract.balanceOf("0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E"),
+    "scaledRatio - ",
+    await calcContract.getScaledRatio(await pool.poolToken(), "0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E"),
+  )
 
-  // console.log("TOKENS: ",
-  //   await pool.poolToken(),
-  //   "totalSupply - ",
-  //   await tokenContract.totalSupply(),
-  //   "balanceOf 1b5E - ",
-  //   await tokenContract.balanceOf("0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E"),
-  //   "scaledRatio - ",
-  //   await calcContract.getScaledRatio(await pool.poolToken(), "0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E"),
-  // )
-
-  const bridgeLogicAddress = deployments.base["bridgeLogicAddress"]
-  const bridgeLogic = await hre.ethers.getContractAt("BridgeLogic", bridgeLogicAddress);
+  // const bridgeLogicAddress = deployments.base["bridgeLogicAddress"]
+  // const bridgeLogic = await hre.ethers.getContractAt("BridgeLogic", bridgeLogicAddress);
 
 
-  const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.base["integratorAddress"]);
-  console.log(await integratorContract.getCurrentPosition(
-    "0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607",
-    "0x4200000000000000000000000000000000000006",
-    "0x07eA79F68B2B3df564D0A34F8e19D9B1e339814b",
-    "0x465a559e4de536e9b6feec6cb09331bad8f94c75e1f63a0b1a8e46bbc990c476"
-  ));
+  // const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.base["integratorAddress"]);
+  // console.log(await integratorContract.getCurrentPosition(
+  //   poolAddress,
+  //   "0x4200000000000000000000000000000000000006",
+  //   "0x07eA79F68B2B3df564D0A34F8e19D9B1e339814b",
+  //   "0x465a559e4de536e9b6feec6cb09331bad8f94c75e1f63a0b1a8e46bbc990c476"
+  // ));
   // }
 
-  console.log(await bridgeLogic.getNonPendingPositionBalance(
-    "0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607",
-    2,
-    0
-  ))
-  // // Get hash of protocol
-  // const protocolHash = await integratorContract.hasher("aave-v3")
-  console.log(await bridgeLogic.poolToAsset("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-    await bridgeLogic.poolToCurrentPositionMarket("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-    await bridgeLogic.poolToCurrentProtocolHash("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-    await bridgeLogic.poolAddressToDepositNonce("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"),
-    await bridgeLogic.poolAddressToWithdrawNonce("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607"))
+  // console.log(await bridgeLogic.getNonPendingPositionBalance(
+  //   poolAddress,
+  //   2,
+  //   0
+  // ))
+  // // // Get hash of protocol
+  // // const protocolHash = await integratorContract.hasher("aave-v3")
+  // console.log(await bridgeLogic.poolToAsset(poolAddress),
+  //   await bridgeLogic.poolToCurrentPositionMarket(poolAddress),
+  //   await bridgeLogic.poolToCurrentProtocolHash(poolAddress),
+  //   await bridgeLogic.poolAddressToDepositNonce(poolAddress),
+  //   await bridgeLogic.poolAddressToWithdrawNonce(poolAddress))
 
-  const curPos = await bridgeLogic.getPositionBalance("0x44ec0b546845fafa3d9d85c3e8f66fa7a6f9b607")
+  // const curPos = await bridgeLogic.getPositionBalance(poolAddress)
 
 
-  console.log('CURRENT POSITION VALUE + INTEREST: ', curPos)
+  // console.log('CURRENT POSITION VALUE + INTEREST: ', curPos)
 }
 
 const sepoliaDeposit = async () => {
@@ -519,16 +519,12 @@ const upgradeCalc = async () => {
   const poolCalculationsContract = await hre.upgrades.upgradeProxy(deployments.sepolia["poolCalculationsAddress"], PoolCalculations);
   const poolCalculationsAddress = await poolCalculationsContract.getAddress()
   console.log("POOL CALCULATIONS", poolCalculationsAddress)
-  deployments.sepolia["poolCalculationsAddress"] = poolCalculationsAddress
-  writeAddressesToFile(deployments)
-
-  await manager.addPoolCalculationsAddress(poolCalculationsAddress)
 }
 
 const manualAcrossMessageHandle = async (amount, message) => {
   //This is used when a Bridge message doesnt seem to go through and we need to determine if the issue is reversion
-  const receiverContract = await hre.ethers.getContractAt("BridgeReceiver", deployments.base["receiverAddress"]);
-  const wethAddr = deployments.base["WETH"]
+  const receiverContract = await hre.ethers.getContractAt("BridgeReceiver", deployments.sepolia["receiverAddress"]);
+  const wethAddr = deployments.sepolia["WETH"]
 
   //message should be bytes from topic 0xe503f02a28c80b867adfed9777a61077c421693358e2f0f1fc54e13acaa18005
   const trimMessageData = message
@@ -537,10 +533,10 @@ const manualAcrossMessageHandle = async (amount, message) => {
     .split("000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000c0")
     .join("")
 
-  // Simulate the receiver on base getting bridged WETH, by sending WETH from within base to the receiver
+  // Simulate the receiver on sepolia getting bridged WETH, by sending WETH from within sepolia to the receiver
   const WETH = await hre.ethers.getContractAt("ERC20", wethAddr);
 
-  console.log((await (await WETH.transfer(deployments.base["receiverAddress"], amount)).wait()).hash)
+  console.log((await (await WETH.transfer(deployments.sepolia["receiverAddress"], amount)).wait()).hash)
 
   // Paste the message from the V3FundsDeposited event that succeeded on the origin chain
   console.log(await receiverContract.decodeMessageEvent(trimMessageData))
@@ -610,7 +606,6 @@ const testLogFinder = async () => {
 
   // console.log(deployments.data.allCcipMessages.nodes[0])
 
-
 }
 
 async function mainExecution() {
@@ -630,7 +625,7 @@ async function mainExecution() {
     // IF YOU EXECUTED THE PRIOR SECTION AND/OR WOULD LIKE TO DEPLOY YOUR POOL FOR TESTING - EXECUTE THE FOLLOWING FUNCTION
     // This function also sends the initial deposit funds through the bridge into the investment as the position is set on base
     // await setPivotConfigs()
-    await upgradeCalc()
+    // await upgradeCalc()
     // await sepoliaPoolDeploy()
     // await sepoliaPositionSetDeposit()
     // await addStrategyCode()
@@ -651,14 +646,14 @@ async function mainExecution() {
     // await sepoliaWithdraw()
     // await upgradeContract()
     // await poolStatRead()
-    // await sendTokens()
+    await sendTokens()
 
 
 
     // await baseSimulateCCIPReceive("0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001003705af6d000000000000000000000000000000000000000000000000000000000000000000000000000000009bdc76b596051e1e86eadb2e2af2a491e32bfa48000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000803f4c40f2d9e47df3a43c5c97200a65dd80990bf9d69827733cf5f393681c90dc000000000000000000000000000000000000000000000000000886c98b760000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000004a03cea247fc197")
     // --------------------------------------------------------------------------------------------
     // baseReceivers()
-    // await manualAcrossMessageHandle("9975000000000", "0x5F240EEE0000000000000000000000000000000000000000000000000000000000000000000000000000000044EC0B546845FAFA3D9D85C3E8F66FA7A6F9B607000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000404D74196A31C3E9D4433A6E770BA18498F1C4E217AD7596075F336C74EE4A0D050000000000000000000000000000000000000000000000000000000000000000")
+    // await manualAcrossMessageHandle("3984000000000", "0xBD4F4B8900000000000000000000000000000000000000000000000000000000000000000000000000000000F0A9873B21401C0364AD7BA371D454F10BA6A2B70000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000008031AC05DE107EFE4D62837ECD2F0AEEA4121838CD62A776279A6D671CA564B6C4000000000000000000000000000000000000000000000000000009127C54E6000000000000000000000000000000000000000000000000000000056F29C0A600000000000000000000000000000000000000000000000000000003A352944000")
 
     // await baseIntegrationsTest()
     // await testLogFinder()

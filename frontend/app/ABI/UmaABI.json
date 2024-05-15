@@ -1,0 +1,106 @@
+[
+    {
+        "inputs": [
+            {
+                "internalType": "bytes",
+                "name": "claim",
+                "type": "bytes"
+            },
+            {
+                "internalType": "address",
+                "name": "asserter",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "callbackRecipient",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "escalationManager",
+                "type": "address"
+            },
+            {
+                "internalType": "uint64",
+                "name": "liveness",
+                "type": "uint64"
+            },
+            {
+                "internalType": "contract IERC20",
+                "name": "currency",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "bond",
+                "type": "uint256"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "identifier",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "domainId",
+                "type": "bytes32"
+            }
+        ],
+        "name": "assertTruth",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "defaultIdentifier",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "currency",
+                "type": "address"
+            }
+        ],
+        "name": "getMinimumBond",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "assertionId",
+                "type": "bytes32"
+            }
+        ],
+        "name": "settleAssertion",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]

@@ -4,15 +4,21 @@ import PoolABI from '../ABI/PoolABI.json'; // Adjust the path as needed
 import PoolTokenABI from '../ABI/PoolTokenABI.json'; // Adjust the path as needed
 import { formatEther } from 'viem'
 import networks from '../JSON/networks.json'
-import { decodeCCIPSendMessageEvent } from '../utils';
+import { decodeCCIPSendMessageEvent, userLastWithdraw } from '../utils';
+import WithdrawStatus from './WithdrawStatus'
 import LoadingPopup from './LoadingPopup';
 
 
-const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, txData, setTxData }) => {
+const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, fetchPoolData, txData, setTxData }) => {
     const [assetAmount, setAssetAmount] = useState('');
     const [buyInputError, setBuyInputError] = useState(false);
     const [withdrawInitialized, setWithdrawInitialized] = useState(false);
-    const [userAssetBalance, setUserAssetBalance] = useState(0)
+    const [withdrawId, setWithdrawId] = useState("")
+
+
+    useEffect(() => {
+        fetchPoolData()
+    }, [withdrawId])
 
     useEffect(() => {
         getBalanceOf()
@@ -58,10 +64,11 @@ const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, txData, se
             let txCCIPMessage = ''
             if (networks[poolData?.currentChain] !== 'sepolia') {
                 const ccipData = await decodeCCIPSendMessageEvent(tx.logs)
-                txCCIPMessage = `CCIP is sending a message to Chaser contracts on ${networks[poolData?.currentChain]} network. The CCIP message ID is ${ccipData?.messageId}. This CCIP message will trigger functions on ${networks[poolData?.currentChain]} which will send your funds through the Across bridge back to your wallet on Base Sepolia. This whole process can take up to 30 minutes.`
                 URIs.push("https://ccip.chain.link/msg/" + ccipData?.messageId)
+                setWithdrawId(ccipData?.messageId);
+                setTimeout(() => fetchPoolData(), 60000)
             }
-            setTxData({ hash: tx.hash, URI: URIs, poolAddress, message: `Chaser is processing your Withdraw. ${txCCIPMessage}` })
+
         } catch (err) {
             console.log('HIT?', err?.hash, err?.error, err, Object.getOwnPropertyNames(err), 'data', err.data, 'reason', err.reason, 'meassage', err.message, 'transaction', err.transaction, 'receipt', err.receipt)
             setErrorMessage(err?.info?.error?.message ?? "This transaction has failed\n\n" + (err?.receipt ? "TX: " + err.receipt.hash : ""))
@@ -74,21 +81,31 @@ const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, txData, se
     if (withdrawInitialized) {
         withdrawLoader = <LoadingPopup loadingMessage={"Please wait for your transactions to fill"} />
     }
+
+    let withdrawPopup = null
+    if (poolData?.userIsWithdrawing || withdrawId) {
+        console.log('HIT WITH')
+        withdrawPopup = <WithdrawStatus provider={provider} withdrawId={withdrawId} poolData={poolData} fetchPoolData={fetchPoolData} poolAddress={poolAddress} />
+    }
     return (
         <div className="interactionSection">
+            {withdrawPopup}
             {withdrawLoader}
             <div>
                 <span className="">Withdraw Amount</span>
                 <input
+                    step="0.00000001"
                     type="number"
                     placeholder="0.0"
                     className="new-pool-inputs"
-                    value={assetAmount}
+                    value={assetAmount.toString()}
                     onChange={(x) => setAssetAmount(x.target.value)}
                 />
+                <span onClick={() => setAssetAmount((poolData.user.userDepositValue))} style={{ cursor: "pointer", fontSize: "13px", width: "100%", display: "block", textAlign: "right" }}><b>Deposited: {poolData?.user?.userDepositValue?.toString()?.slice(0, 7)}</b></span>
+
             </div>
             <button className="button" onClick={() => {
-                if (formatEther(userAssetBalance) > assetAmount) {
+                if (Number(poolData.user.userDepositValue) >= assetAmount) {
                     setWithdrawInitialized(true)
                 }
             }}>Withdraw</button>

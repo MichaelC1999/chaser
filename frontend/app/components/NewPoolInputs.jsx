@@ -3,20 +3,38 @@ import SubmitButton from './SubmitButton.jsx';
 import ManagerABI from '../ABI/ManagerABI.json'; // Adjust the path as needed
 import { ethers } from 'ethers';
 import networks from '../JSON/networks.json'
+import strategies from '../JSON/strategies.json'
+
 import contractAddresses from '../JSON/contractAddresses.json'
 import LoadingPopup from './LoadingPopup.jsx';
+import StrategyPopup from './StrategyPopup.jsx'
 import { useRouter } from 'next/navigation';
 
 const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
     const router = useRouter()
     const instructionBoxDefault = 'Hover over an input for more instruction...'
     const [poolName, setPoolName] = useState('');
-    const [assetAddress, setAssetAddress] = useState('0x4200000000000000000000000000000000000006');
+    const [assetAddress, setAssetAddress] = useState('0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14');
     const [strategyIndex, setStrategyIndex] = useState('0');
     const [instructionBox, setInstructionBox] = useState(instructionBoxDefault)
     const [supportedNetworks, setSupportedNetworks] = useState([]);
     const [submitting, setSubmitting] = useState(false)
+    const [showStrategyPopup, setShowStrategyPopup] = useState(false)
 
+
+    useEffect(() => {
+        console.log(strategyIndex)
+    }, [strategyIndex])
+
+    useEffect(() => {
+        console.log('showStrat', showStrategyPopup)
+    }, [showStrategyPopup])
+
+    const check = async () => {
+        // const uri = ("https://ccip.chain.link/api/query/MESSAGE_DETAILS_QUERY?variables=%7B%22messageId%22%3A%220xd00748dd14742ecafc4802182ec92d086db92852efb138554b63564f63f76f6b%22%7D")
+        // const res = (await fetch(uri))
+        // console.log(res.json())
+    }
 
     const submitLogic = async () => {
         let signer = null;
@@ -44,7 +62,7 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
             const hash = poolTx.hash
             router.push(("/pool/" + poolAddress))
         } catch (err) {
-
+            console.log('test! ', err)
             setErrorMessage(err?.info?.error?.message)
         }
         setSubmitting(false)
@@ -78,9 +96,12 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
                 Asset Address:
                 <input type="text" value={assetAddress} />
             </label>
-            <label key={3} onMouseEnter={() => setInstructionBox("This points to a strategy where the UMA OO can determine objectively if a proposed investment is better than the current position.\nFor the time being, this is disabled. While Chaser is in development, moving deposits between different protocols/chains is done manually.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
-                Strategy:
-                <input type="text" value={strategyIndex} />
+            <label key={3} onMouseEnter={() => setInstructionBox("You select one strategy for a pool, this strategy determines where and how to move funds in order to make the best ROI while following custom risk parameters. Each strategy contains code that helps the UMA OO objectively determine where to move deposits.\nView details about approved strategies or create your own (COMING SOON)")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
+                Strategy: {strategies[strategyIndex]}
+
+                <div className="button" style={{ textAlign: "center", border: "white 1px solid" }} onClick={() => setShowStrategyPopup(true)}>Strategy Selection</div>
+                {showStrategyPopup ? <StrategyPopup provider={provider} strategyIndex={strategyIndex} setStrategyIndex={setStrategyIndex} strategies={strategies} setShowStrategyPopup={(x) => setShowStrategyPopup(x)} /> : null}
+
             </label>
             <label key={4} onMouseEnter={() => setInstructionBox("Network selection will allow the deploying user to select what chains they want enabled for deposits.\nCurrently the pool does not take in this input, but will be supported at a later date.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
                 Networks:

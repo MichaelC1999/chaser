@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { fromHex } from 'viem'
+import networks from "../JSON/networks.json"
 
 
 export function NetworkSwitcher() {
@@ -23,10 +24,10 @@ export function NetworkSwitcher() {
 
     const switchNetwork = async () => {
         try {
-            // Prompt user to switch to Sepolia
+            // Prompt user to switch to {networks[process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID]}
             await windowOverride?.ethereum?.request({
                 method: 'wallet_addEthereumChain',
-                params: [{ chainId: '0xaa36a7', rpcUrls: ["https://sepolia.base.org"], chainName: "Sepolia", nativeCurrency: { symbol: "ETH", decimals: 18, name: "Ether" } }],
+                params: [{ chainId: '0xaa36a7', rpcUrls: ["https://1rpc.io/sepolia"], chainName: "Sepolia", nativeCurrency: { symbol: "ETH", decimals: 18, name: "Ether" } }],
             });
             await windowOverride?.ethereum?.request({
                 method: 'wallet_switchEthereumChain',
@@ -52,11 +53,11 @@ export function NetworkSwitcher() {
         <div className="popup-container">
             <div className="popup">
                 <div className="popup-title">Network Switcher</div>
-                <div className="popup-message">Chaser is interfaced on Sepolia (Chain ID 11155111)</div>
+                <div className="popup-message">Chaser is interfaced on {networks[process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID]} (Chain ID {process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID})</div>
                 <div className="popup-message">
                     You are currently connected to Chain ID {fromHex(newChain, 'number') || "N/A"}
                 </div>
-                <button onClick={switchNetwork} className="popup-ok-button">Switch to Base</button>
+                <button onClick={switchNetwork} className="popup-ok-button">Switch to {networks[process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID]}</button>
             </div>
         </div>
     );

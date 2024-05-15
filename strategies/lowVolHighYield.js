@@ -33,7 +33,7 @@ const strategyCalculation = async (args) => {
 
         const deployments = await depos.json()
 
-        const base = `https://api.thegraph.com/subgraphs/name/messari/`;
+        const base = "https://api.thegraph.com/subgraphs/name/messari/";
         const curSubgraphURL = base + currentProtocol + '-' + currentChain;
         const desSubgraphURL = base + requestProtocol + '-' + requestChain;
 
@@ -45,12 +45,12 @@ const strategyCalculation = async (args) => {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                query: `{
-                    marketDailySnapshots(first: 30, orderBy: timestamp, orderDirection: desc, where: {market:"${currentMarketId}"}) {
-                                            totalDepositBalanceUSD
-                    dailySupplySideRevenueUSD
-                    }
-                }`
+                query: '{                                                                                                               \
+                    marketDailySnapshots(first: 30, orderBy: timestamp, orderDirection: desc, where: {market:"' + currentMarketId + '"}) {   \
+                        totalDepositBalanceUSD                                                                      \
+                        dailySupplySideRevenueUSD                                                                                           \
+                    }                                                                                                                   \
+                }'
             })
         });
         const curPositionData = await curPositionDataRes.json();
@@ -61,12 +61,17 @@ const strategyCalculation = async (args) => {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                query: `{
-                    marketDailySnapshots(first: 30, orderBy: timestamp, orderDirection: desc, where: {market:"${requestMarketId}"}) {
-                                            totalDepositBalanceUSD
-                    dailySupplySideRevenueUSD
-                    }
-                }`
+                query: '{                                                                                                               \
+                    marketDailySnapshots(first: 30, orderBy: timestamp, orderDirection: desc, where: {market:"' + requestMarketId + '"}) {   \
+                        totalDepositBalanceUSD                                                                      \
+                        dailySupplySideRevenueUSD                                                                                           \
+                        market {                                                                                                        \
+                            inputToken {                                                                                                \
+                                id                                                                                                      \
+                            }                                                                                                           \
+                        }                                                                                                               \
+                    }                                                                                                                   \
+                }'
             })
         });
         const positionDesData = await positionDesDataRes.json();
@@ -87,12 +92,17 @@ const strategyCalculation = async (args) => {
         const desStandardDeviation = Math.sqrt(desVariance);
 
         const desSharpeRatio = desMeanROR / desStandardDeviation;
-        console.log(desSharpeRatio, curSharpeRatio)
-        if (desSharpeRatio > curSharpeRatio) return true;
+        console.log(desMeanROR, desStandardDeviation, curMeanROR, curStandardDeviation, desSharpeRatio, curSharpeRatio, positionDesData.data.marketDailySnapshots[0].market.inputToken.id)
+        if (!Object.values(supportedChainsAssets).map(x => x.toUpperCase()).includes(positionDesData.data.marketDailySnapshots[0].market.inputToken.id.toUpperCase())) {
+            console.log('supported assets does not include ' + positionDesData.data.marketDailySnapshots[0].market.inputToken.id)
+            return false
+        }
+
+        return (desSharpeRatio > curSharpeRatio);
     } catch (err) {
         console.log("Error caught - ", err.message);
+        return false;
     }
-    return false;
 }
 
 // INPUT THE FOLLOWING TO THE ARGUMENT ARRAY IN THE SAME ORDER
@@ -101,11 +111,11 @@ const strategyCalculation = async (args) => {
 // - The proposed pool ID that the assertion says is a better investment
 // - The subgraph slug of the protocol-network that the proposed investment is located
 
-const requestChain = "ethereum"
-const requestProtocol = "aave-v3"
-const requestMarketId = "0x98c23e9d8f34fefb1b7bd6a91b7ff122f4e16f5c"
-const currentChain = "arbitrum"
-const currentProtocol = "compound-v3"
-const currentMarketId = "0x9c4ec768c28520b50860ea7a15bd7213a9ff58bfaf88d065e77c8cc2239327c5edb3a432268e5831"
+const requestChain = "arbitrum"
+const requestProtocol = "compound-v3"
+const requestMarketId = "0x9c4ec768c28520b50860ea7a15bd7213a9ff58bfaf88d065e77c8cc2239327c5edb3a432268e5831"
+const currentChain = "ethereum"
+const currentProtocol = "aave-v3"
+const currentMarketId = "0x98c23e9d8f34fefb1b7bd6a91b7ff122f4e16f5c"
 const res = strategyCalculation([requestChain, requestProtocol, requestMarketId, currentChain, currentProtocol, currentMarketId]);
 res.then(x => console.log(x))

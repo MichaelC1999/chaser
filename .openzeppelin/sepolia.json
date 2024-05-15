@@ -6345,7 +6345,7 @@
             "label": "registry",
             "offset": 0,
             "slot": "126",
-            "type": "t_contract(IChaserRegistry)5770",
+            "type": "t_contract(IChaserRegistry)8044",
             "contract": "PoolCalculations",
             "src": "contracts/PoolCalculations.sol:46"
           }
@@ -6375,7 +6375,7 @@
             "label": "bytes",
             "numberOfBytes": "32"
           },
-          "t_contract(IChaserRegistry)5770": {
+          "t_contract(IChaserRegistry)8044": {
             "label": "contract IChaserRegistry",
             "numberOfBytes": "20"
           },
@@ -6422,6 +6422,111 @@
           "t_string_storage": {
             "label": "string",
             "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          }
+        },
+        "namespaces": {}
+      }
+    },
+    "f9bb7ba5a51ff11d0634287ae942e40592a8ca12b8a07fcdc2c5b143e6b1e252": {
+      "address": "0x538F89eF012aaF943FA0b66C9aC80c2097C8f865",
+      "txHash": "0x1fbd6bb82f544a908059496827dec7a0e3303d266664c3b475af6f9940c4953d",
+      "layout": {
+        "solcVersion": "0.8.22",
+        "storage": [
+          {
+            "label": "_initialized",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint8",
+            "contract": "Initializable",
+            "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:63",
+            "retypedFrom": "bool"
+          },
+          {
+            "label": "_initializing",
+            "offset": 1,
+            "slot": "0",
+            "type": "t_bool",
+            "contract": "Initializable",
+            "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:68"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "ContextUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol:36"
+          },
+          {
+            "label": "_owner",
+            "offset": 0,
+            "slot": "51",
+            "type": "t_address",
+            "contract": "OwnableUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:22"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "52",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "OwnableUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:94"
+          },
+          {
+            "label": "registry",
+            "offset": 0,
+            "slot": "101",
+            "type": "t_contract(IChaserRegistry)8044",
+            "contract": "ChaserManager",
+            "src": "contracts/ChaserManager.sol:19"
+          },
+          {
+            "label": "currentChainId",
+            "offset": 0,
+            "slot": "102",
+            "type": "t_uint256",
+            "contract": "ChaserManager",
+            "src": "contracts/ChaserManager.sol:21"
+          },
+          {
+            "label": "poolCalculationsAddress",
+            "offset": 0,
+            "slot": "103",
+            "type": "t_address",
+            "contract": "ChaserManager",
+            "src": "contracts/ChaserManager.sol:23"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_uint256)49_storage": {
+            "label": "uint256[49]",
+            "numberOfBytes": "1568"
+          },
+          "t_array(t_uint256)50_storage": {
+            "label": "uint256[50]",
+            "numberOfBytes": "1600"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_contract(IChaserRegistry)8044": {
+            "label": "contract IChaserRegistry",
+            "numberOfBytes": "20"
           },
           "t_uint256": {
             "label": "uint256",

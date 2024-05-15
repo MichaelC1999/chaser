@@ -29,17 +29,17 @@ const PoolRow = ({ poolNumber, provider, registry, setErrorMessage }) => {
         const getPoolData = async (address) => {
             const pool = new ethers.Contract(address || "0x0", PoolABI, provider);
 
-            const calc = new ethers.Contract(await pool.poolCalculations() || "0x0", PoolCalculationsABI, provider)
-
-            const name = await pool.poolName()
-            const currentChain = await pool.currentPositionChain()
-            const currentProtocolHash = await calc.currentPositionProtocolHash(address)
-            return { address, name, currentChain, currentProtocolHash }
+            const metaData = await pool.poolMetaData()
+            const currents = await pool.readPoolCurrentPositionData()
+            const returnObj = { address, name: metaData["2"], currentChain: currents["4"], currentProtocol: protocolHashes[currents["1"]] }
+            return returnObj
         }
 
-        const getBridgedPoolData = async (address, hash, chainId) => {
+        const getBridgedPoolData = async (address, chainId) => {
+            if (chainId == '0') {
+                return { tvl: 0 }
+            }
             let chain = sepolia
-
             let chainName = 'sepolia'
             if (chainId.toString() === "84532") {
                 chain = baseSepolia
@@ -64,16 +64,22 @@ const PoolRow = ({ poolNumber, provider, registry, setErrorMessage }) => {
 
         const execution = async () => {
             try {
+
                 const address = await getPoolAddress()
                 const poolDataReturn = await getPoolData(address)
-                const bridgedPoolData = await getBridgedPoolData(address, poolDataReturn.currentProtocolHash, poolDataReturn.currentChain)
+                const bridgedPoolData = await getBridgedPoolData(address, poolDataReturn.currentChain)
                 setPoolData({ ...poolDataReturn, ...bridgedPoolData })
+
+
             } catch (err) {
                 setErrorMessage('Error Loading Pool: ' + err.message)
             }
             setLoaded(true)
         }
-        execution()
+        if (poolNumber > 8) {
+
+            execution()
+        }
     }, []);
 
     if (!poolData && !loaded) {
@@ -91,9 +97,9 @@ const PoolRow = ({ poolNumber, provider, registry, setErrorMessage }) => {
 
     return (
         <tr className="pool-row" style={{ height: '22px', cursor: "pointer" }} onClick={() => router.push('/pool/' + poolData.address)}>
-            <td>{poolData.name} - 0x...{poolData.address.slice(22, 42)}</td>
-            <td>{(formatEther(poolData.tvl.toString())).slice(0, 10)}</td>
-            <td>{networks[poolData.currentChain.toString()]} - {protocolHashes[poolData.currentProtocolHash]}</td>
+            <td>{poolData?.name} - 0x...{poolData.address.slice(22, 42)}</td>
+            <td>{(formatEther(poolData?.tvl?.toString())).slice(0, 10)}</td>
+            <td>{networks[poolData?.currentChain?.toString()]} - {poolData?.currentProtocol}</td>
         </tr>
     );
 };
