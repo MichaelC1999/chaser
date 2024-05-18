@@ -33,8 +33,8 @@ const UserPoolSection = ({ fetchPoolData, user, poolData, provider, setErrorMess
     let withdraw = null
     if (!!userData.userRatio) {
         console.log(poolData)
-        withdraw = <Withdraw fetchPoolData={fetchPoolData} poolAddress={poolData?.address} poolData={poolData} provider={provider} setErrorMessage={(x) => setErrorMessage(x)} txData={txData} setTxData={setTxData} />
-        pivotMechanism = <PivotMechanism fetchPoolData={fetchPoolData} poolData={poolData} provider={provider} setErrorMessage={(x) => setErrorMessage(x)} txData={txData} setTxData={setTxData} />
+        withdraw = <Withdraw fetchPoolData={fetchPoolData} poolAddress={poolData?.address} poolData={poolData} provider={provider} setErrorMessage={(x) => setErrorMessage(x)} />
+        pivotMechanism = <PivotMechanism fetchPoolData={fetchPoolData} poolData={poolData} provider={provider} setErrorMessage={(x) => setErrorMessage(x)} />
     }
     return (
         <div style={{ width: "100%", backgroundColor: "#374d59", padding: "50px 30px", display: "flex" }}>
@@ -43,7 +43,7 @@ const UserPoolSection = ({ fetchPoolData, user, poolData, provider, setErrorMess
                 <span className="infoSpan" style={{ color: "#1f2c33", backgroundColor: "white", fontSize: "26px" }}><b>{user}</b></span>
                 {userPositionInfo}
                 <div style={{ display: "flex" }}>
-                    <Deposit fetchPoolData={fetchPoolData} poolAddress={poolData?.address} poolData={poolData} provider={provider} setErrorMessage={(x) => setErrorMessage(x)} txData={txData} setTxData={setTxData} />
+                    <Deposit fetchPoolData={fetchPoolData} poolAddress={poolData?.address} poolData={poolData} provider={provider} setErrorMessage={(x) => setErrorMessage(x)} />
                     {withdraw}
                     {pivotMechanism}
                 </div>

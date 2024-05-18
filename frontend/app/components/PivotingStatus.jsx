@@ -32,20 +32,28 @@ function PivotingStatus({ provider, pivotTx, fetchPoolData, poolAddress, closePo
     }, [])
 
     useEffect(() => {
-        if (Object.keys(targetData)?.length > 0) {
+        let interval = null
+        if (Object.keys(targetData)?.length > 0 && targetData?.targetChainId !== 0) {
             fetchPivotEventData()
-            setTimeout(() => fetchPivotEventData(), 20000)
-            setTimeout(() => fetchPivotEventData(), 40000)
+            setTimeout(() => fetchPivotEventData(), 25000)
+            setTimeout(() => fetchPivotEventData(), 70000)
 
-            if (!ccip1 && !ccip2 && !acrossDepositId) {
-                setTimeout(() => fetchPivotEventData(), 60000)
-            }
+            interval = setInterval(() => {
+                if (!ccip1 && !ccip2 && !acrossDepositId) {
+                    fetchPivotEventData()
+                }
+            }, 60000)
         }
         fetchPoolData()
         if (targetData?.targetChainId?.toString() === "0") {
             closePopup()
         }
-    }, [targetData])
+        if (interval) {
+            return () => clearInterval(interval)
+        } else {
+            return () => null
+        }
+    }, [targetData, pivotTx])
 
     useEffect(() => {
         if (acrossDepositId && !acrossLoaded && targetData) {
@@ -100,42 +108,48 @@ function PivotingStatus({ provider, pivotTx, fetchPoolData, poolAddress, closePo
         data.targetPositionProtocol = await poolCalculations.targetPositionProtocol(poolAddress)
 
         const currents = await pool.readPoolCurrentPositionData()
+
         data.currentPositionAddress = currents["0"]
         data.currentChainId = currents["4"]
-        data.currentPositionAddress = await poolCalculations.currentPositionAddress(poolAddress)
-        data.currentPositionMarketId = await poolCalculations.currentPositionMarketId(poolAddress)
-        data.currentPositionProtocol = await poolCalculations.currentPositionProtocol(poolAddress)
+        data.currentPositionMarketId = currents["6"]
+        data.currentPositionProtocol = currents["5"]
+        data.pivotNonce = await poolCalculations.poolPivotNonce(poolAddress)
+
         setTargetData(data)
     }
 
     const fetchPivotEventData = async () => {
         let id = ""
         let medium = ""
+        // Refactor this to be based on targetChainId and currentChainId rather than strictly pulling most recent of each
         if (pivotTx) {
-            const msg = await findCcipMessageFromTxHash(pivotTx, process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID)
-            if (msg.messageId) {
-                id = msg.messageId
-                medium = "ccip1"
+            if (targetData?.currentChainId !== process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID) {
+                const msg = await findCcipMessageFromTxHash(pivotTx, process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID)
+                if (msg.messageId) {
+                    id = msg.messageId
+                    medium = "ccip1"
+                }
+            } else {
+                const depo = await findAcrossDepositFromTxHash(pivotTx, process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID)
+                if (depo?.depositId) {
+                    id = depo.depositId
+                    medium = "across"
+                }
             }
-            const depo = await findAcrossDepositFromTxHash(pivotTx, process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID)
-            if (depo?.depositId) {
-                id = depo.depositId
-                medium = "across"
-            }
-
         } else {
-            const pivotData = await decodePoolPivot(poolAddress)
+            const pivotData = await decodePoolPivot(poolAddress, targetData?.pivotNonce?.toString())
+            if (!pivotData) return
             id = pivotData.id
             medium = pivotData.medium
         }
-
-        if (medium == "ccip1") {
+        console.log(targetData?.currentChainId, typeof (targetData?.currentChainId), typeof (process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID))
+        if (targetData?.currentChainId.toString() !== process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID) {
             setCcip1MessageId(id)
-        } else if (medium == "ccip2") {
-            setCcip2MessageId(id)
-        } else if (medium == "across") {
+
+        } else {
             setAcrossDepositId(id)
         }
+
     }
 
     const fetchCCIPStatus = async (messageId, ccipStep) => {
@@ -233,12 +247,12 @@ function PivotingStatus({ provider, pivotTx, fetchPoolData, poolAddress, closePo
         }
         if (acrossDepositId && !acrossLoaded) {
             acrossStatus = <><div className="small-loader"></div></>
-            acrossMsg = "Across Deposit" + acrossDepositId
+            acrossMsg = "Across Deposit: " + acrossDepositId
 
         }
         if (acrossDepositId && acrossLoaded) {
             acrossStatus = <span style={{ color: "green" }}><b>SUCCESS</b></span>
-            acrossMsg = "Across Deposit" + acrossDepositId
+            acrossMsg = "Across Deposit: " + acrossDepositId
         }
 
 
@@ -282,7 +296,7 @@ function PivotingStatus({ provider, pivotTx, fetchPoolData, poolAddress, closePo
         }
         if (ccip1 && !ccip1Loaded) {
             ccipStatus = <div className="small-loader"></div>
-            ccipMsg = <span>CCIP Message: <a href={"https://ccip.chain.link/msg/" + ccip1} target="_blank"><u>{ccip1.slice(0, 7) + "..." + ccip1.slice(ccip1.length - 8)}</u></a></span>
+            ccipMsg = <span>CCIP Message: <a href={"https://ccip.chain.link/msg/" + ccip1} target="_blank"><u>{ccip1?.slice(0, 7) + "..." + ccip1?.slice(ccip1.length - 8)}</u></a></span>
 
         }
         if (ccip1 && ccip1Loaded) {
@@ -385,12 +399,12 @@ function PivotingStatus({ provider, pivotTx, fetchPoolData, poolAddress, closePo
         }
         if (ccip2 && !ccip2Loaded) {
             ccip2Status = <div className="small-loader"></div>
-            ccip2Msg = <span>CCIP Message: <a href={"https://ccip.chain.link/msg/" + ccip2} target="_blank"><u>{ccip2.slice(0, 7) + "..." + ccip2.slice(ccip2.length - 8, ccip2.length - 1)}</u></a></span>
+            ccip2Msg = <span>CCIP Message: <a href={"https://ccip.chain.link/msg/" + ccip2} target="_blank"><u>{ccip2.slice(0, 7) + "..." + ccip2.slice(ccip2.length - 8, ccip2.length)}</u></a></span>
 
         }
         if (ccip2 && ccip2Loaded) {
             ccip2Status = <span style={{ color: "green" }}><b>SUCCESS</b></span>
-            ccip2Msg = <span>CCIP Message: <a href={"https://ccip.chain.link/msg/" + ccip2} target="_blank"><u>{ccip2.slice(0, 7) + "..." + ccip2.slice(ccip2.length - 8, ccip2.length - 1)}</u></a></span>
+            ccip2Msg = <span>CCIP Message: <a href={"https://ccip.chain.link/msg/" + ccip2} target="_blank"><u>{ccip2.slice(0, 7) + "..." + ccip2.slice(ccip2.length - 8, ccip2.length)}</u></a></span>
         }
 
         display = (<>
@@ -411,7 +425,7 @@ function PivotingStatus({ provider, pivotTx, fetchPoolData, poolAddress, closePo
                         </tr>
                         {acrossEle}
                         <tr style={{ height: '22px' }}>
-                            <td style={{ padding: "0 15px" }}><span>Finalize Pivot on <b>{networks[process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID]?.toUpperCase()}</b></span></td>
+                            <td style={{ padding: "0 15px" }}><span>Finalize Pivot Callback on <b>{networks[process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID]?.toUpperCase()}</b></span></td>
                             <td style={{ padding: "0 15px" }}>{ccip2Msg}</td>
                             <td style={{ padding: "0 15px" }}>{ccip2Status}</td>
                         </tr>
@@ -426,7 +440,7 @@ function PivotingStatus({ provider, pivotTx, fetchPoolData, poolAddress, closePo
     let displaySection = <><div className="popup-title">Pivoting to <b>{targetData?.targetPositionProtocol} {networks[targetData?.targetChainId?.toString()]?.toUpperCase()}</b></div>
         <div className="popup-message">
             <div style={{ display: "block", marginTop: "22px", fontSize: "16px" }}>
-                <span style={{ display: "block" }} >This pivot will deposit into market <b>{targetData?.targetPositionMarketId?.slice(0, 6)}...{targetData?.targetPositionMarketId?.slice(targetData?.targetPositionMarketId?.length - 15, targetData?.targetPositionMarketId - 1)}</b></span>
+                <span style={{ display: "block" }} >This pivot will deposit into market <b>{targetData?.targetPositionMarketId?.slice(0, 6)}...{targetData?.targetPositionMarketId?.slice(targetData?.targetPositionMarketId?.length - 15)}</b></span>
                 <span style={{ display: "block" }} >This involves exiting the current position on <b>{targetData?.currentPositionProtocol} {networks[targetData?.currentChainId?.toString()]?.toUpperCase()}</b> and entering into <b>{targetData?.targetPositionProtocol} {networks[targetData?.targetChainId?.toString()]?.toUpperCase()}</b></span>
 
             </div>

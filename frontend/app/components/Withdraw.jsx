@@ -9,12 +9,19 @@ import WithdrawStatus from './WithdrawStatus'
 import LoadingPopup from './LoadingPopup';
 
 
-const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, fetchPoolData, txData, setTxData }) => {
+const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, fetchPoolData }) => {
     const [assetAmount, setAssetAmount] = useState('');
     const [buyInputError, setBuyInputError] = useState(false);
     const [withdrawInitialized, setWithdrawInitialized] = useState(false);
     const [withdrawId, setWithdrawId] = useState("")
 
+    useEffect(() => {
+        if (poolData) {
+            if (!poolData.userIsWithdrawing) {
+                setWithdrawId("")
+            }
+        }
+    }, [poolData])
 
     useEffect(() => {
         fetchPoolData()
@@ -67,10 +74,11 @@ const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, fetchPoolD
                 URIs.push("https://ccip.chain.link/msg/" + ccipData?.messageId)
                 setWithdrawId(ccipData?.messageId);
                 setTimeout(() => fetchPoolData(), 60000)
+            } else {
+                setTimeout(() => fetchPoolData(), 20000)
             }
 
         } catch (err) {
-            console.log('HIT?', err?.hash, err?.error, err, Object.getOwnPropertyNames(err), 'data', err.data, 'reason', err.reason, 'meassage', err.message, 'transaction', err.transaction, 'receipt', err.receipt)
             setErrorMessage(err?.info?.error?.message ?? "This transaction has failed\n\n" + (err?.receipt ? "TX: " + err.receipt.hash : ""))
         }
         setWithdrawInitialized(false)

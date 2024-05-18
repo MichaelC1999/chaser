@@ -16,10 +16,20 @@ function PivotPopup({ isPivoting, poolData, provider, tvl, pivotTx, fetchPoolDat
 
     const [loading, setLoading] = useState(false)
     const [assertionData, setAssertionData] = useState({})
+    const [openingProposal, setOpeningProposal] = useState(true)
 
     useEffect(() => {
         fetchPoolData()
     }, [])
+
+    useEffect(() => {
+        if (!isPivoting && !openingProposal && (openAssertion === "0x0000000000000000000000000000000000000000000000000000000000000000" || !openAssertion)) {
+            closePopup()
+        }
+        if (isPivoting || (openAssertion !== "0x0000000000000000000000000000000000000000000000000000000000000000" && openAssertion)) {
+            setOpeningProposal(false)
+        }
+    }, [isPivoting, openAssertion])
 
     useEffect(() => {
         if (openAssertion && openAssertion !== "0x0000000000000000000000000000000000000000000000000000000000000000") {
@@ -86,7 +96,8 @@ function PivotPopup({ isPivoting, poolData, provider, tvl, pivotTx, fetchPoolDat
 
         const settleTime = new Date(assertionData?.assertionSettleTime)
         if ((Number(assertionData?.assertionBlockTime || 0) - currentTimestamp) > 0) {
-            setTimeout(getPivotAssertionData, (Number(assertionData?.assertionBlockTime || 0) - currentTimestamp))
+            setTimeout(getPivotAssertionData, (Number(assertionData?.assertionBlockTime || 0) - currentTimestamp) + 15000)
+            setTimeout(getPivotAssertionData, (Number(assertionData?.assertionBlockTime || 0) - currentTimestamp) + 45000)
 
         }
 
@@ -100,6 +111,8 @@ function PivotPopup({ isPivoting, poolData, provider, tvl, pivotTx, fetchPoolDat
             }} className={'demoButton'}><b>Execute Pivot</b></button>
         } else {
             setTimeout(fetchPoolData, (Number(assertionData?.assertionSettleTime || 0) - currentTimestamp))
+            setTimeout(fetchPoolData, (Number(assertionData?.assertionSettleTime || 0) - currentTimestamp) + 30000)
+
         }
 
         let assertionSection = <Loader />
@@ -117,7 +130,7 @@ function PivotPopup({ isPivoting, poolData, provider, tvl, pivotTx, fetchPoolDat
             {Object.keys(assertionData) === Object.keys({}) ? null : assertionSection}
             <div style={{ display: "block", marginTop: "22px", fontSize: "16px" }} className="popup-message">
                 <span style={{ display: "block" }} >Interactions are <b>{assertionData?.interactionPaused ? <span style={{ color: "red" }}>PAUSED</span> : <span style={{ color: "green" }}>OPEN</span>}</b></span>
-                <span style={{ display: "block" }} >This pivot will <b>{crossChain ? "be cross chain" : "NOT be cross chain"}</b></span>
+                <span style={{ display: "block" }} >This pivot will <b>{crossChain ? "bridge cross chain" : "NOT bridge cross chain"}</b></span>
                 {settle}
             </div></>)
     } else if (!loading) {

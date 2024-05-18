@@ -9,7 +9,7 @@ import PivotPopup from './PivotPopup.jsx';
 import { decodeAcrossDepositEvent, decodeCCIPSendMessageEvent } from '../utils';
 
 
-const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage, txData, setTxData }) => {
+const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) => {
     const [targetChain, setTargetChain] = useState('11155111');
     const [protocolName, setProtocolName] = useState("aave-v3")
     const [pivotInitialized, setPivotInitialized] = useState(false);
@@ -53,7 +53,6 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage, tx
             setPivotTx(tx.hash)
 
         } catch (err) {
-            console.log('HIT?', err?.hash, err?.error, err)
             setErrorMessage(err?.info?.error?.message ?? "This transaction has failed\n\n" + (err?.receipt ? "TX: " + err.receipt.hash : ""))
         }
         setPivotInitialized(false)
@@ -151,7 +150,7 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage, tx
                 </div>
 
             </div>
-            <button className="button" onClick={() => {
+            <div style={{ marginRight: "30px", width: "100%", textAlign: "center", border: "white 1px solid" }} className='demoButton button' onClick={() => {
 
                 if (!networks[targetChain]) {
                     setErrorMessage("The chain you have entered is not supported at this time.")
@@ -163,7 +162,7 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage, tx
                 }
                 setPivotInitialized(true)
 
-            }}>Send Pivot</button>
+            }}>Send Pivot</div>
         </div>
     );
 };

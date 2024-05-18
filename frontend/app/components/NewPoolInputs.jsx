@@ -94,18 +94,18 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
             </label>
             <label key={2} onMouseEnter={() => setInstructionBox("Add the asset address that will be used for deposits and investments.\nThis address should be on Base Sepolia. Chaser uses Across to bridge to the equivalent of this asset on other networks.\nFor the time being, the only asset allowed is WETH.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
                 Asset Address:
-                <input type="text" value={assetAddress} />
+                <input type="text" value={assetAddress} onChange={() => null} />
             </label>
             <label key={3} onMouseEnter={() => setInstructionBox("You select one strategy for a pool, this strategy determines where and how to move funds in order to make the best ROI while following custom risk parameters. Each strategy contains code that helps the UMA OO objectively determine where to move deposits.\nView details about approved strategies or create your own (COMING SOON)")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
                 Strategy: {strategies[strategyIndex]}
 
                 <div className="button" style={{ textAlign: "center", border: "white 1px solid" }} onClick={() => setShowStrategyPopup(true)}>Strategy Selection</div>
-                {showStrategyPopup ? <StrategyPopup provider={provider} strategyIndex={strategyIndex} setStrategyIndex={setStrategyIndex} strategies={strategies} setShowStrategyPopup={(x) => setShowStrategyPopup(x)} /> : null}
+                {showStrategyPopup ? <StrategyPopup setErrorMessage={(x) => setErrorMessage(x)} provider={provider} strategyIndexOnPool={null} strategyIndex={strategyIndex} setStrategyIndex={setStrategyIndex} strategies={strategies} setShowStrategyPopup={(x) => setShowStrategyPopup(x)} /> : null}
 
             </label>
             <label key={4} onMouseEnter={() => setInstructionBox("Network selection will allow the deploying user to select what chains they want enabled for deposits.\nCurrently the pool does not take in this input, but will be supported at a later date.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
                 Networks:
-                <select multiple value={supportedNetworks} >
+                <select onChange={() => null} multiple value={supportedNetworks} >
                     {Object.keys(networks).map(network => (
                         <option key={networks[network]} value={networks[network]}>{networks[network]}</option>
                     ))}

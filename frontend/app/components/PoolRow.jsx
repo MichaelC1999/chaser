@@ -31,7 +31,7 @@ const PoolRow = ({ poolNumber, provider, registry, setErrorMessage }) => {
 
             const metaData = await pool.poolMetaData()
             const currents = await pool.readPoolCurrentPositionData()
-            const returnObj = { address, name: metaData["2"], currentChain: currents["4"], currentProtocol: protocolHashes[currents["1"]] }
+            const returnObj = { address, name: metaData["2"], currentChain: currents["4"], currentProtocol: currents["5"] }
             return returnObj
         }
 
@@ -76,10 +76,7 @@ const PoolRow = ({ poolNumber, provider, registry, setErrorMessage }) => {
             }
             setLoaded(true)
         }
-        if (poolNumber > 8) {
-
-            execution()
-        }
+        execution()
     }, []);
 
     if (!poolData && !loaded) {

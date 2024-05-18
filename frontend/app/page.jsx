@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useEffect, useState } from "react";
-import Mint from "./components/Deposit";
 import { NetworkSwitcher } from "./components/NetworkSwitcher";
 import { ethers } from "ethers";
 import ConnectButton from "./components/ConnectButton";
@@ -20,11 +19,14 @@ const MainPage = () => {
       setErrorMessage("")
     }} />
     <div className="MainPage">
-      <div className="component-container">
-        <span style={{ fontSize: "32px" }}>POOL SELECTION</span>
-        <span style={{ fontSize: "18px" }}>To demo Chaser, you need to select a pool. You can either choose a pool from the list, or deploy a new pool</span>
+      <div style={{ marginLeft: "64px", color: "white" }}>
+        <span style={{ paddingTop: "220px", display: "block", fontSize: "138px" }}>Chaser Finance</span>
+        <span style={{ paddingLeft: "16px", paddingTop: "2px", display: "block", fontSize: "32px" }}>Chase Better Yields, Unlock Data Based Investing for Your DAO</span>
+        <div style={{ display: "flex", paddingLeft: "16px", paddingTop: "16px" }}>
+          <button style={{ width: "225px", padding: "8px" }} className={'button'}>Earn Yield</button>
+          <button style={{ marginLeft: "6px", width: "225px", padding: "8px" }} className={'button'}>Create A Strategy</button>
+        </div>
       </div>
-      <Inputs step={0} setStep={() => null} setErrorMessage={(x) => setErrorMessage(x)} />
     </div>
   </>
   );

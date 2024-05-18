@@ -53,19 +53,6 @@ function WithdrawStatus({ provider, withdrawId, poolData, fetchPoolData, poolAdd
         fetchPoolData()
     }, [withdrawId])
 
-    useEffect(() => {
-        if (acrossWithdrawId && !acrossLoaded) {
-            fetchAcrossTx()
-        }
-        const interval = setInterval(() => {
-            if (acrossWithdrawId && !acrossLoaded) {
-                fetchAcrossTx()
-            }
-        }, 90000);
-        return () => clearInterval(interval);
-
-        //Clearing the interval
-    }, [acrossWithdrawId])
 
     useEffect(() => {
         if (ccip1 && !ccip1Loaded) {
@@ -82,7 +69,11 @@ function WithdrawStatus({ provider, withdrawId, poolData, fetchPoolData, poolAdd
     }, [ccip1, ccip1Loaded, targetData])
 
 
-    ///////////////////////////////////////////////////////////////////////
+    useEffect(() => {
+        if (acrossLoaded) {
+            setTimeout(() => fetchPoolData(), 30000)
+        }
+    }, [acrossLoaded])
 
 
     useEffect(() => {
@@ -98,20 +89,6 @@ function WithdrawStatus({ provider, withdrawId, poolData, fetchPoolData, poolAdd
 
         //Clearing the interval
     }, [acrossWithdrawId, poolData, targetData])
-
-    useEffect(() => {
-        if (ccip1 && !ccip1Loaded) {
-            fetchCCIPStatus(ccip1)
-        }
-        const interval = setInterval(() => {
-            if (ccip1 && !ccip1Loaded) {
-                fetchCCIPStatus(ccip1)
-            }
-        }, 120000);
-        return () => clearInterval(interval);
-
-        //Clearing the interval
-    }, [ccip1, ccip1Loaded])
 
 
     const fetchWithdrawEventData = async () => {
@@ -156,7 +133,7 @@ function WithdrawStatus({ provider, withdrawId, poolData, fetchPoolData, poolAdd
 
 
     const fetchAcrossTx = async () => {
-        const message = await fetchAcrossRelayFillTx(numberToHex(Number(process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID), { size: 32 }), acrossWithdrawId)
+        const message = await fetchAcrossRelayFillTx(process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID, numberToHex(Number(acrossWithdrawId), { size: 32 }))
         //Fetch the destination spokepool's recent events. 
         // If the matching message ID is there, set step
         //possibly get the  CCIP message id

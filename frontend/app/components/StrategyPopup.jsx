@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { hexToString, numberToHex, zeroAddress } from 'viem';
+import { hexToString, numberToHex, stringToBytes, zeroAddress } from 'viem';
 import PoolABI from '../ABI/PoolABI.json'; // Adjust the path as needed
 import networks from '../JSON/networks.json'
 import protocolHashes from '../JSON/protocolHashes.json'
@@ -12,19 +12,21 @@ import PoolCalculationABI from '../ABI/PoolCalculationsABI.json'; // Adjust the 
 import { ethers, parseEther, solidityPackedKeccak256 } from 'ethers';
 
 
-function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, setShowStrategyPopup }) {
+function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, setShowStrategyPopup, strategyIndexOnPool }) {
     const [newStrategy, setNewStrategy] = useState(false)
-    const [strategyToView, setStrategyToView] = useState(null)
+    const [newStrategyName, setNewStrategyName] = useState("")
+    const [newStrategyCode, setNewStrategyCode] = useState("")
 
+    const [strategyToView, setStrategyToView] = useState(strategyIndexOnPool)
     const [strategyCode, setStrategyCode] = useState("")
 
     useEffect(() => {
-        console.log('reached strategy popup')
+        console.log('reached strategy popup', strategyIndexOnPool, strategyToView, strategyToView || strategyToView === "0", !!strategyToView, strategyToView === 0, strategyToView.toString() === "0")
     }, [])
 
     useEffect(() => {
         // Fetch code from strategy contract
-        if (strategyToView || strategyToView === 0) {
+        if (strategyToView || strategyToView === "0") {
             getStrategyLogic()
         }
     }, [strategyToView])
@@ -37,11 +39,41 @@ function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, 
         setStrategyCode(code)
     }
 
+    const submitNewStrategy = async () => {
+        let signer = null;
+        try {
+            await provider.send("eth_requestAccounts", []);
+            signer = await provider.getSigner();
+        } catch (err) {
+            console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
+            // setErrorMessage("Connection Error: " + err?.info?.error?.message)
+            return
+        }
+        const stratContact = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, signer)
+        //Maybe here a loading spinner popup? Then once Tx success or fail then do tx popup?
+
+        const codeBytes = stringToBytes(newStrategyCode)
+        try {
+            const stratTx = await (await stratContact.addStrategy(
+                codeBytes,
+                newStrategyName,
+                {
+                    gasLimit: 8000000
+                }
+            )).wait();
+
+            const hash = stratTx.hash
+            setStrategyIndex(strategies.length)
+            setShowStrategyPopup(false)
+        } catch (err) {
+            // console.log('test! ', err)
+            setErrorMessage(err?.info?.error?.message ?? "This transaction has failed\n\n" + (err?.receipt ? "TX: " + err.receipt.hash : ""))
+            // setErrorMessage(err?.info?.error?.message)
+        }
+    }
 
 
-    // DISPLAY 1 - SHOW LIST OF STRATEGY NAMES (else)
-    // DISPLAY 2 - DEPENDING ON THE STRATEGY INDEX PROVIDED, READ THE STRATEGY CODE AND DISPLAY IT (if state.strategyToView)
-    // DISPLAY 3 - INPUTS FOR CREATING NEW STRATEGY if (state.newStrategy)
+    let popupStyle = {}
 
     let display = (<>
         <select value={strategyIndex} onChange={(e) => setStrategyIndex(e.target.value)}>
@@ -49,7 +81,8 @@ function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, 
                 <option key={name} value={idx}>{name}</option>
             ))}
         </select>
-        <button onClick={() => setStrategyToView(strategyIndex)}>View Strategy Logic</button>
+        <div style={{ backgroundColor: "#374d59", marginRight: "30px", width: "100%", textAlign: "center", border: "white 1px solid" }} className={'demoButton button'} onClick={() => setStrategyToView(strategyIndex)}>View Strategy Logic</div>
+        {strategyIndexOnPool ? null : <div style={{ backgroundColor: "#374d59", marginRight: "30px", width: "100%", textAlign: "center", border: "white 1px solid" }} className={'demoButton button'} onClick={() => setNewStrategy(true)}>Add New Strategy</div>}
     </>)
 
     let displaySection = <>
@@ -65,18 +98,23 @@ function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, 
 
     if (strategyToView) {
         if (strategyCode) {
-            display = <div style={{ fontFamily: "Courier New", fontWeight: "lighter", width: "100%", overflow: "scroll", backgroundColor: "black", color: "white", whiteSpace: "pre-wrap" }}>
+            display = (<div style={{ fontFamily: "Courier New", fontSize: "14px", fontWeight: "lighter", width: "100%", overflow: "scroll", backgroundColor: "black", color: "white", whiteSpace: "pre-wrap" }}>
                 {strategyCode}
-
-            </div>
+            </div>)
+            popupStyle = { height: "620px", width: "1100px" }
         } else {
             display = <Loader />
         }
         displaySection = <>
-            <div className="popup-title">{strategies[strategyToView]}</div>
-            <div style={{ backgroundColor: "#374d59", marginRight: "30px", width: "134px", textAlign: "center", border: "white 1px solid" }} onClick={() => setStrategyToView(null)} className={'demoButton button'}><b>Back</b></div>
-            {display}
             <div style={{ width: "100%", display: "flex", justifyContent: "flex-end" }}>
+                {strategyIndexOnPool ? null :
+                    <div style={{ backgroundColor: "#374d59", marginRight: "30px", width: "134px", textAlign: "center", border: "white 1px solid" }} onClick={() => setStrategyToView(null)} className={'demoButton button'}>
+                        <b>Back</b>
+                    </div>}
+            </div>
+            <div className="popup-title">{strategies[strategyToView]}</div>
+            {display}
+            <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
                 <div style={{ backgroundColor: "#374d59", marginRight: "30px", width: "134px", textAlign: "center", border: "white 1px solid" }} onClick={() => setShowStrategyPopup(false)} className={'demoButton button'}>
                     <b>OK</b>
                 </div>
@@ -85,12 +123,32 @@ function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, 
     }
 
     if (newStrategy) {
+        display = (<>
+            <input onChange={(e) => setNewStrategyName(e.target.value)} value={newStrategyName} placeholder='Strategy Name'></input>
+            <textarea onChange={(e) => setNewStrategyCode(e.target.value)} style={{ fontFamily: "Courier New", fontWeight: "lighter", height: "100%", width: "100%", overflow: "scroll", backgroundColor: "black", color: "white", whiteSpace: "pre-wrap" }}>
+            </textarea></>)
+        popupStyle = { height: "620px", width: "1100px" }
 
+        displaySection = <>
+            <div style={{ width: "100%", display: "flex", justifyContent: "flex-end" }}>
+                {strategyIndexOnPool ? null :
+                    <div style={{ backgroundColor: "#374d59", marginRight: "30px", width: "134px", textAlign: "center", border: "white 1px solid" }} onClick={() => setNewStrategy(false)} className={'demoButton button'}>
+                        <b>Back</b>
+                    </div>}
+            </div>
+            <div className="popup-title">New Strategy</div>
+            {display}
+            <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+                <div style={{ backgroundColor: "#374d59", marginRight: "30px", width: "134px", textAlign: "center", border: "white 1px solid" }} onClick={() => submitNewStrategy()} className={'demoButton button'}>
+                    <b>Submit New Strategy</b>
+                </div>
+            </div>
+        </>
     }
 
     return (
         <div className="popup-container">
-            <div className="popup">
+            <div className="popup" style={popupStyle}>
                 {displaySection}
             </div>
         </div>

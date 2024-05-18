@@ -3,12 +3,6 @@
         "anonymous": false,
         "inputs": [
             {
-                "indexed": true,
-                "internalType": "bytes32",
-                "name": "dataId",
-                "type": "bytes32"
-            },
-            {
                 "indexed": false,
                 "internalType": "bytes",
                 "name": "data",
@@ -33,12 +27,6 @@
     {
         "anonymous": false,
         "inputs": [
-            {
-                "indexed": true,
-                "internalType": "bytes32",
-                "name": "dataId",
-                "type": "bytes32"
-            },
             {
                 "indexed": false,
                 "internalType": "bytes",
@@ -94,6 +82,19 @@
         "type": "event"
     },
     {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "bytes",
+                "name": "",
+                "type": "bytes"
+            }
+        ],
+        "name": "TestBytes",
+        "type": "event"
+    },
+    {
         "inputs": [
             {
                 "internalType": "bytes32",
@@ -146,6 +147,25 @@
             }
         ],
         "name": "assertionToBlockTime",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "name": "assertionToOpeningTime",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -262,11 +282,6 @@
         "name": "assertionsData",
         "outputs": [
             {
-                "internalType": "bytes32",
-                "name": "dataId",
-                "type": "bytes32"
-            },
-            {
                 "internalType": "bytes",
                 "name": "data",
                 "type": "bytes"
@@ -312,6 +327,50 @@
                 "internalType": "bytes32",
                 "name": "",
                 "type": "bytes32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "requestChainId",
+                "type": "uint256"
+            },
+            {
+                "internalType": "string",
+                "name": "requestProtocol",
+                "type": "string"
+            },
+            {
+                "internalType": "bytes",
+                "name": "requestMarketId",
+                "type": "bytes"
+            },
+            {
+                "internalType": "uint256",
+                "name": "currentDepositChainId",
+                "type": "uint256"
+            },
+            {
+                "internalType": "string",
+                "name": "currentPositionProtocol",
+                "type": "string"
+            },
+            {
+                "internalType": "bytes",
+                "name": "currentPositionMarketId",
+                "type": "bytes"
+            }
+        ],
+        "name": "generateClaim",
+        "outputs": [
+            {
+                "internalType": "bytes",
+                "name": "",
+                "type": "bytes"
             }
         ],
         "stateMutability": "view",
@@ -403,47 +462,32 @@
         "inputs": [
             {
                 "internalType": "address",
-                "name": "sender",
+                "name": "_sender",
                 "type": "address"
             },
             {
-                "internalType": "uint256",
-                "name": "requestChainId",
-                "type": "uint256"
-            },
-            {
-                "internalType": "string",
-                "name": "requestProtocol",
-                "type": "string"
-            },
-            {
                 "internalType": "bytes",
-                "name": "requestMarketId",
+                "name": "_claim",
                 "type": "bytes"
             },
             {
-                "internalType": "uint256",
-                "name": "currentDepositChainId",
-                "type": "uint256"
-            },
-            {
-                "internalType": "string",
-                "name": "currentPositionProtocol",
-                "type": "string"
-            },
-            {
                 "internalType": "bytes",
-                "name": "currentPositionMarketId",
+                "name": "_requestMarketId",
                 "type": "bytes"
             },
             {
+                "internalType": "string",
+                "name": "_requestProtocol",
+                "type": "string"
+            },
+            {
                 "internalType": "uint256",
-                "name": "bond",
+                "name": "_requestChainId",
                 "type": "uint256"
             },
             {
                 "internalType": "uint256",
-                "name": "strategyIndex",
+                "name": "_bond",
                 "type": "uint256"
             }
         ],
@@ -456,6 +500,40 @@
             }
         ],
         "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "assertionId",
+                "type": "bytes32"
+            }
+        ],
+        "name": "readAssertionRequestedPosition",
+        "outputs": [
+            {
+                "internalType": "bytes",
+                "name": "",
+                "type": "bytes"
+            },
+            {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
         "type": "function"
     },
     {

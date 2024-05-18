@@ -84,12 +84,11 @@ a {
 }
 
 .root {
-  width: 100%;
+  width: 100vw;
   height: 100vh;
-  background-color: #1f2c33;
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-position: center center;
+  background-size: auto;
+  background-position: bottom 130px right 0px;
+
 }
 
 .header {

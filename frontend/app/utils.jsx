@@ -106,8 +106,8 @@ export const userLastWithdraw = async (poolAddress, userAddress) => {
     return await findCcipMessageFromTxHash(userWithdraw.transactionHash, process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID)
 }
 
-export const decodePoolPivot = async (poolAddress) => {
-    const URI = "https://api-sepolia.etherscan.io/api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + poolAddress + "&topic0=0xad71167b35ad58b7606cb5f5fda8b03a5799113db8f0a73939d152ac29d023a0"
+export const decodePoolPivot = async (poolAddress, pivotNonce) => {
+    const URI = "https://api-sepolia.etherscan.io/api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + poolAddress + "&topic0=0x9a217dcd98ee95ec445f2f45c6cff75f2e3a236ee69e5486f42b27884c12836f"
 
     const event = await fetch(URI, {
         method: "get",
@@ -118,7 +118,8 @@ export const decodePoolPivot = async (poolAddress) => {
 
     const pivotEvent = await event.json()
     console.log(pivotEvent.result)
-    let log = sortDesc(pivotEvent.result)[0]
+    let log = sortDesc(pivotEvent.result)?.[0]
+    if (!log) return null
     const hash = log.transactionHash
     const args = decodeEventLog({
         abi: PoolABI,
@@ -127,6 +128,10 @@ export const decodePoolPivot = async (poolAddress) => {
     }).args
 
     console.log(args, log)
+    // check if args 
+    if (args[1].toString() !== pivotNonce) {
+        return null
+    }
 
     let medium = ""
     if (args[0].toString() === process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID) {
@@ -214,7 +219,6 @@ export const findCcipMessageFromTxHash = async (txHash, chainId) => {
     console.log(messageLogEvents)
     if (!messageLogEvents) return { messageId: null, success: false }
     const log = (messageLogEvents?.result?.find(x => x.transactionHash === txHash)) || null
-    console.log('fleeg', log, txHash)
     if (!log) return { messageId: null, success: false }
 
 

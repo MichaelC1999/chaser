@@ -50,6 +50,13 @@ function DepositStatus({ provider, depositId, poolData, fetchPoolData, poolAddre
     }, [])
 
     useEffect(() => {
+        if (ccip1Loaded) {
+            setTimeout(() => fetchPoolData(), 30000)
+        }
+    }, [ccip1Loaded])
+
+
+    useEffect(() => {
         if (acrossDepositId && !acrossLoaded) {
             fetchAcrossTx()
         }

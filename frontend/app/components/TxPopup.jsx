@@ -9,7 +9,7 @@ const TxPopup = ({ popupData, clearPopupData }) => {
     return (
         <div className="popup-container">
             <div className="popup">
-                <div className="popup-title" style={{ fontSize: "21px" }} onClick={() => router.push("https://sepolia.basescan.org/tx/" + popupData?.hash)}>TX: {popupData?.hash}</div>
+                <div className="popup-title" style={{ fontSize: "21px" }} onClick={() => router.push("https://sepolia.etherscan.io/tx/" + popupData?.hash)}>TX: {popupData?.hash}</div>
                 <div className="popup-message" style={{ cursor: "pointer" }} onClick={() => router.push(popupData?.URI?.[0] ?? "/")}>
                     {popupData?.message}
                 </div>
@@ -17,7 +17,7 @@ const TxPopup = ({ popupData, clearPopupData }) => {
                     {popupData?.URI.map((x, idx) => {
                         let text = x
                         if (x.includes('basescan') && x.includes('tx/')) {
-                            text = "View this Transaction on BaseScan"
+                            text = "View this Transaction on Etherscan"
                         }
                         return <><a key={idx} href={x} target="_blank"><span><u>{text}</u></span></a><br /><br /></>
                     })}

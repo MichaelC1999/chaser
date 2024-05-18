@@ -6,17 +6,21 @@ import { ethers } from 'ethers';
 import PoolABI from '../../ABI/PoolABI.json'; // Adjust the path as needed
 import PoolTokenABI from '../../ABI/PoolTokenABI.json'; // Adjust the path as needed
 import PoolCalculationsABI from '../../ABI/PoolCalculationsABI.json'; // Adjust the path as needed
+import InvestmentStrategyABI from '../../ABI/InvestmentStrategyABI.json'; // Adjust the path as needed
 
 import BridgeLogicABI from '../../ABI/BridgeLogicABI.json'; // Adjust the path as needed
 import { createPublicClient, getContract, http, formatEther, zeroAddress } from 'viem'
 import protocolHashes from '../../JSON/protocolHashes.json'
 import networks from '../../JSON/networks.json'
+import strategies from '../../JSON/strategies.json'
+
 import { sepolia, baseSepolia } from 'viem/chains'
 import UserPoolSection from '@/app/components/UserPoolSection';
 import contractAddresses from '../../JSON/contractAddresses.json'
 import ErrorPopup from '@/app/components/ErrorPopup.jsx';
 import TxPopup from '@/app/components/TxPopup';
 import Loader from '@/app/components/Loader';
+import StrategyPopup from '@/app/components/StrategyPopup';
 
 export default function Page() {
 
@@ -24,7 +28,7 @@ export default function Page() {
     const [errorMessage, setErrorMessage] = useState("");
     const [txData, setTxData] = useState({})
     const [showPivotSuccess, setShowPivotSuccess] = useState(false)
-
+    const [viewStrategy, setViewStrategy] = useState(false)
     const pathname = usePathname()
 
     const poolId = pathname?.split('/')?.[2]
@@ -57,6 +61,7 @@ export default function Page() {
         const returnObject = {}
         const pool = new ethers.Contract(address || "0x0", PoolABI, provider);
         const poolCalc = new ethers.Contract(contractAddresses["sepolia"].poolCalculationsAddress || "0x0", PoolCalculationsABI, provider);
+        const stratContact = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, provider)
 
         const metaData = await pool.poolMetaData()
         returnObject.poolTokenAddress = metaData["0"]
@@ -78,9 +83,10 @@ export default function Page() {
         returnObject.isPivoting = transactionStatus["2"]
         returnObject.openAssertion = transactionStatus["3"]
 
+        returnObject.strategyIndex = await pool.strategyIndex()
+        returnObject.strategyName = await stratContact.strategyName(returnObject.strategyIndex)
+
         console.log(returnObject)
-
-
 
         try {
             if (returnObject.poolTokenAddress) {
@@ -132,7 +138,7 @@ export default function Page() {
                 abi: BridgeLogicABI,
                 client: publicClient,
             })
-            const tvl = await bridgeLogic.read.getNonPendingPositionBalance([address, 1, data.withdrawNonce])
+            const tvl = await bridgeLogic.read.getNonPendingPositionBalance([address, data.depoNonce, data.withdrawNonce])
             let userDepositValue = 0
             if (Number(tvl.toString()) > 0) {
                 const maxWithdraw = await bridgeLogic.read.getUserMaxWithdraw([tvl, data.user.userRatio])
@@ -232,6 +238,7 @@ export default function Page() {
         <span className="infoSpan">{poolData?.name}</span>
         <span className="infoSpan">{poolData?.protocol ?? "Protocol"} - {networks?.[poolData?.currentChain?.toString()] ?? "Chain"}</span>
         <span className="infoSpan"><b>{poolData?.poolAssetSymbol}</b></span>
+        {poolData?.strategyName ? <span className="infoSpan" style={{ cursor: "pointer" }} onClick={() => setViewStrategy(true)}><u>{poolData?.strategyName}</u></span> : null}
     </div>)
 
     if (poolData === null) {
@@ -261,8 +268,14 @@ export default function Page() {
         </div>)
     }
 
+    let strategyPopup = null
+    if (viewStrategy) {
+        strategyPopup = <StrategyPopup provider={provider} setShowStrategyPopup={(x) => setViewStrategy(x)} strategyIndex={poolData?.strategyIndex?.toString()} strategyIndexOnPool={poolData?.strategyIndex?.toString()} setStrategyIndex={() => null} strategies={strategies} />
+    }
+
     return (<>
         {pivotPopup}
+        {strategyPopup}
         <ErrorPopup errorMessage={errorMessage} clearErrorMessage={() => setErrorMessage("")} />
         {txPopup}
         <div style={{ overflow: "auto", color: "white", width: "100%", padding: "0", margin: 0 }}>
@@ -300,19 +313,19 @@ function calculateAPY(baseDepositValue, currentDepositValue, recordTimestamp) {
     // This determines how much yield was made between each nonce recorded 
     // Get the position value recorded on the bridge logic at the nonce, minus the deposit amount/plus the withdraw amount if the bridge nonce  
     if (!currentDepositValue) return 0
-    const timeElapsed = Date.now() / 1000 - Number(recordTimestamp)
+    const minsElapsed = (Date.now() / 1000 - Number(recordTimestamp)) / 60
     // Constants
-    const secondsInYear = 365 * 24 * 60 * 60;
+    const minPerYear = 365 * 24 * 60;
 
     // Calculate profit made on the investment
     const profit = currentDepositValue - baseDepositValue;
 
     // Calculate profit per second
-    const profitPerSecond = profit / timeElapsed;
+    const profitPerMin = profit / minsElapsed;
 
     // Extrapolate profit per second to APY
     // Note: Assuming compounding once per year for simplicity
-    let apy = Math.pow((profitPerSecond * secondsInYear) / baseDepositValue + 1, 1) - 1;
+    let apy = Math.pow((profitPerMin * minPerYear) / baseDepositValue + 1, 1) - 1;
     console.log(apy)
     // Convert APY to a percentage
     apy = apy * 100;

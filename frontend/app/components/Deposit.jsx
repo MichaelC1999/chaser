@@ -18,7 +18,7 @@ import TxPopup from './TxPopup';
 import { decodeAcrossDepositEvent, userLastDeposit } from '../utils';
 
 
-const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessage, txData, setTxData }) => {
+const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessage }) => {
     const [assetAmount, setAssetAmount] = useState(0.0001);
     const [initialMarket, setInitialMarket] = useState("0x2943ac1216979aD8dB76D9147F64E61adc126e96E4aB69C077896252FAFBD49EFD26B5D171A32410")
     const [chainId, setChainId] = useState(11155111)
@@ -29,6 +29,9 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
     useEffect(() => {
         if (poolData) {
             getBalanceOf()
+            if (!poolData.userIsDepositing) {
+                setDepositId("")
+            }
         }
     }, [poolData])
 
@@ -104,6 +107,10 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
                 setTimeout(() => fetchPoolData(), 60000)
 
             }
+            setTimeout(() => {
+                fetchPoolData()
+            }, 20000)
+
 
         } catch (err) {
             console.log('HIT?', err?.hash, err?.error, err)
@@ -145,6 +152,9 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
                 setDepositId(eventData.depositId);
                 setTimeout(() => fetchPoolData(), 60000)
             }
+            setTimeout(() => {
+                fetchPoolData()
+            }, 20000)
 
             // setTxData({ hash: tx.hash, URI: ["https://sepolia.basescan.org/tx/" + tx.hash], poolAddress, message: `Chaser is processing your pool configuration and deposit. ${txAcrossMessage}` })
 
