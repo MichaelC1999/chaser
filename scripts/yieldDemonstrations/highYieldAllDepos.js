@@ -19,6 +19,8 @@ const strategyCalculation = async () => {
         }
     })
 
+    console.log(typeof (process.argv[3]), process.argv[3], Number(process.argv[3]))
+
 
     const highestRateByDay = {}
     const highestRateMarketByDay = {}
@@ -55,7 +57,6 @@ const strategyCalculation = async () => {
                 query: makeQuery(marketId)
             })
         });
-        console.log(req)
         return await req.json();
     }
 

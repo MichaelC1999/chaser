@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 contract InvestmentStrategy {
-    uint256 strategyCount = 0;
+    uint256 public strategyCount = 0;
 
     mapping(uint256 => bytes) public strategyCode;
     mapping(uint256 => string) public strategyName;

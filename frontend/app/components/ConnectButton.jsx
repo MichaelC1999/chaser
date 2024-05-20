@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { ethers } from 'ethers';
-import { sepolia, baseSepolia } from 'viem/chains';
+import { useWeb3Modal } from '@web3modal/ethers/react';
 
-const ConnectButton = ({ connected, setErrorMessage }) => {
+const ConnectButton = ({ connected, address, setErrorMessage }) => {
     const windowOverride = typeof window !== 'undefined' ? window : null;
 
     // Instantiate the provider, if the window object remains the same no need to recalculate
@@ -10,16 +10,18 @@ const ConnectButton = ({ connected, setErrorMessage }) => {
         return new ethers.JsonRpcProvider("https://rpc.sepolia.org");
     }, [windowOverride]);
 
-    const connect = async () => {
-        if (!connected) {
-            // If the user is not signed into metamask, execute this logic
-            try {
-                await provider.send("eth_requestAccounts", []);
-                await provider.getSigner();
+    const { open } = useWeb3Modal()
 
-            } catch (err) {
-                setErrorMessage("Connection Error: " + err?.info?.error?.message ?? err?.message);
+    const connect = async () => {
+        console.log('connect', connected)
+        try {
+            if (connected) {
+                open({ view: 'Account' })
+            } else {
+                open({})
             }
+        } catch (err) {
+            setErrorMessage("Connection Error: " + err?.info?.error?.message ?? err?.message);
         }
     }
     let classes = 'button'
@@ -28,7 +30,7 @@ const ConnectButton = ({ connected, setErrorMessage }) => {
     }
     return (
         connected !== null ? <button className={classes} onClick={connect}>
-            {connected ? '0x...' + (windowOverride?.ethereum?.selectedAddress?.slice(36) ?? "0000") : "Connect"}
+            {connected ? '0x' + address?.slice(2, 6) + '...' + (address?.slice(36) ?? "0000") : "Connect"}
         </button> : null
     );
 };

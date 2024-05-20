@@ -375,16 +375,21 @@ contract PoolControl {
             !pivotPending,
             "Cannot propose new move while pivot is pending"
         );
-        openAssertion = arbitrationContract.queryMovePosition(
-            msg.sender,
+        bytes memory claim = arbitrationContract.generateClaim(
             _requestChainId,
             _requestProtocol,
             _requestMarketId,
             currentPositionChain,
             currentPositionProtocol,
-            currentPositionMarketId,
-            bond,
-            strategyIndex
+            currentPositionMarketId
+        );
+        openAssertion = arbitrationContract.queryMovePosition(
+            msg.sender,
+            claim,
+            _requestMarketId,
+            _requestProtocol,
+            _requestChainId,
+            bond
         );
     }
 
@@ -406,13 +411,15 @@ contract PoolControl {
             "Transactions still pending on this pool, try to resolve the pivot again soon"
         );
 
-        emit ExecutePivot(currentPositionChain, _targetPositionChain);
-
         poolCalculations.openSetPosition(
             _targetPositionMarketId,
             _targetPositionProtocol,
             _targetPositionChain
         );
+
+        uint256 pivotNonce = poolCalculations.poolPivotNonce(address(this));
+
+        emit ExecutePivot(currentPositionChain, pivotNonce);
 
         address destinationBridgeReceiver = registry.chainIdToBridgeReceiver(
             _targetPositionChain
@@ -459,10 +466,10 @@ contract PoolControl {
         address marketAddress,
         uint256 positionAmount
     ) internal {
-        currentPositionChain = poolCalculations.pivotCompleted(
-            marketAddress,
-            positionAmount
+        currentPositionChain = poolCalculations.targetPositionChain(
+            address(this)
         );
+        poolCalculations.pivotCompleted(marketAddress, positionAmount);
     }
 
     function handleUndoPositionInitializer(
@@ -488,10 +495,6 @@ contract PoolControl {
     function handleUndoPivot(uint256 _positionAmount) external callerSource {
         currentPositionChain = localChain;
         poolCalculations.undoPivot(_positionAmount);
-    }
-
-    function handleClearPivotTarget() external callerSource {
-        poolCalculations.clearPivotTarget();
     }
 
     /**
@@ -567,13 +570,23 @@ contract PoolControl {
     function readPoolCurrentPositionData()
         external
         view
-        returns (address, bytes32, uint256, uint256, uint256)
+        returns (
+            address,
+            bytes32,
+            uint256,
+            uint256,
+            uint256,
+            string memory,
+            bytes memory
+        )
     {
         (
             address currentPositionAddress,
             bytes32 currentPositionProtocolHash,
             uint256 currentRecordPositionValue,
-            uint256 currentPositionValueTimestamp
+            uint256 currentPositionValueTimestamp,
+            string memory currentPositionProtocol,
+            bytes memory currentPositionMarketId
         ) = poolCalculations.readCurrentPositionData(address(this));
 
         return (
@@ -581,7 +594,28 @@ contract PoolControl {
             currentPositionProtocolHash,
             currentRecordPositionValue,
             currentPositionValueTimestamp,
-            currentPositionChain
+            currentPositionChain,
+            currentPositionProtocol,
+            currentPositionMarketId
+        );
+    }
+
+    function readAssertionRequestedPosition()
+        external
+        view
+        returns (bytes memory, string memory, uint256, uint256)
+    {
+        (
+            bytes memory requestedMarketId,
+            string memory requestedProtocol,
+            uint256 requestedChainId,
+            uint256 openingTime
+        ) = arbitrationContract.readAssertionRequestedPosition(openAssertion);
+        return (
+            requestedMarketId,
+            requestedProtocol,
+            requestedChainId,
+            openingTime
         );
     }
 

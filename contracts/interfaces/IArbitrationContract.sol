@@ -6,23 +6,27 @@ interface IArbitrationContract {
 
     function queryMovePosition(
         address,
-        uint256,
-        string memory,
         bytes memory,
-        uint256,
-        string memory,
         bytes memory,
+        string memory,
         uint256,
         uint256
     ) external returns (bytes32);
 
-    function assertDataFor(
+    function generateClaim(
+        uint256,
+        string memory,
         bytes memory,
-        address,
-        uint256
-    ) external returns (bytes32);
+        uint256,
+        string memory,
+        bytes memory
+    ) external view returns (bytes memory);
 
     function assertionResolvedCallback(bytes32, bool) external;
 
     function assertionDisputedCallback(bytes32) external;
+
+    function readAssertionRequestedPosition(
+        bytes32
+    ) external view returns (bytes memory, string memory, uint256, uint256);
 }

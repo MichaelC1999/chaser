@@ -22,56 +22,30 @@ contract ArbitrationContract is OwnableUpgradeable {
     mapping(bytes32 => address) public assertionToPoolAddress;
     mapping(bytes32 => uint256) public assertionToBlockTime;
     mapping(bytes32 => uint256) public assertionToSettleTime;
+    mapping(bytes32 => uint256) public assertionToOpeningTime;
     mapping(address => bool) public poolHasAssertionOpen;
     mapping(uint256 => string) public chainIdToName;
     mapping(bytes32 => DataAssertion) public assertionsData;
 
     struct DataAssertion {
-        bytes32 dataId; // The dataId that was asserted.
         bytes data; // This could be an arbitrary data type.
         address asserter; // The address that made the assertion.
         bool resolved; // Whether the assertion has been resolved.
     }
 
+    event TestBytes(bytes);
+
     event DataAsserted(
-        bytes32 indexed dataId,
         bytes data,
         address indexed asserter,
         bytes32 indexed assertionId
     );
 
     event DataAssertionResolved(
-        bytes32 indexed dataId,
         bytes data,
         address indexed asserter,
         bytes32 indexed assertionId
     );
-
-    // WHO MAY PROPOSE A PIVOT?
-    // -Someone with a stake in the pool
-    //-Pools may have very few users who are monitoring vrious yeilds
-    //-Gives incentive for correct proposals
-    // -Any user that is willing to put up the bond
-    //-Needs a high bond value to prevent spam blocking  bridge proposals
-    //-Needs a high reward to incentivize users to put up the bond and watch for pivots
-    //-Hard to convince users to put up high bond right after launch
-    // -Chaser bot that is responsible with putting up funds to make proposals
-    //Central actor bringing execution on chain
-    //Prevents spam from blocking withdraws on pools at crucial moments
-    //May be good to start with
-    // DO SUCCESSFUL PROPOSALS GET REWARDED?
-    // WHAT HAPPENS IF THEIR IS A DISPUTE?
-    //-How long does this take to resolve?
-    //-Should a proposal cancel if there is a dispute? What happens for proposer if the assertion was valid but had been disputed unsuccessfully?
-    // WHAT ARE THE ASSERTION PARAMETERS?
-    // -7200 liveness
-    // -1000 bond
-    // -Variable bond amount depending on TVL, for greater asserter willingness on low TVL pools
-    // -Variable bond so that larger pools do not need to worry about outsiders constantly freezing deposits/withdraws for a small bond amount
-    // SHOULD DEPOS/WITHDRAWS BE BLOCKED UPON ASSERTION OR PIVOT EXECUTION?
-    // -If the assertion bond is high, could be blocked upon assertion
-    // -Could leave depos/withdraws open until assertion is settled. If there are pending transactions while assertion settles, the depos/withs are blocked and a bool on pool is set to true
-    // -This true bool value allows anyone to call sendPositionChange on pool, which checks if there are still pending transactions before executing the pivot
 
     function initialize(
         address _registry,
@@ -98,15 +72,12 @@ contract ArbitrationContract is OwnableUpgradeable {
     }
 
     function queryMovePosition(
-        address sender,
-        uint256 requestChainId,
-        string memory requestProtocol,
-        bytes memory requestMarketId,
-        uint256 currentDepositChainId,
-        string memory currentPositionProtocol,
-        bytes memory currentPositionMarketId,
-        uint256 bond,
-        uint256 strategyIndex
+        address _sender,
+        bytes memory _claim,
+        bytes memory _requestMarketId,
+        string memory _requestProtocol,
+        uint256 _requestChainId,
+        uint256 _bond
     ) external returns (bytes32) {
         require(
             registry.poolEnabled(msg.sender),
@@ -116,41 +87,23 @@ contract ArbitrationContract is OwnableUpgradeable {
             !poolHasAssertionOpen[msg.sender],
             "Assertion is already open on pool"
         );
-        //IMPORTANT - FOR DEVELOPMENT, ANYONE CAN PROPOSE A POOL TO MOVE TO IF THEY PUT UP THE BOND
-        // In production, this could be just users with a stake in the pool
 
-        bool protocolEnabled = registry.protocolEnabled(requestProtocol);
         require(
-            protocolEnabled,
+            registry.protocolEnabled(_requestProtocol),
             "Protocol slug must be enabled to make proposal"
         );
-        address bridgeReceiver = registry.chainIdToBridgeReceiver(
-            requestChainId
-        );
         require(
-            bridgeReceiver != address(0),
+            registry.chainIdToBridgeReceiver(_requestChainId) != address(0),
             "Chain must have a bridge receiver to request a pivot"
         );
 
-        bytes memory data = abi.encode(
-            "By accessing and executing the startegy script with the following instructions, the script returned a value of true. ",
-            "Call 'readStrategyCode()' on pool at ",
-            address(msg.sender),
-            " and save the string as a .js file locally. ",
-            "In the 'mainExecution()' function call, insert an array with the following values: ",
-            chainIdToName[requestChainId],
-            requestProtocol,
-            requestMarketId,
-            chainIdToName[currentDepositChainId],
-            currentPositionProtocol,
-            currentPositionMarketId
-        );
-
-        bytes32 assertionId = assertDataFor(data, sender, msg.sender, bond);
-
-        assertionToRequestedMarketId[assertionId] = requestMarketId;
-        assertionToRequestedProtocol[assertionId] = requestProtocol;
-        assertionToRequestedChainId[assertionId] = requestChainId;
+        bool success = umaCurrency.transferFrom(_sender, address(this), _bond);
+        require(success, "Failed token transfer");
+        umaCurrency.approve(address(oo), _bond);
+        bytes32 assertionId = openProposal(_claim, _sender, _bond);
+        assertionToRequestedMarketId[assertionId] = _requestMarketId;
+        assertionToRequestedProtocol[assertionId] = _requestProtocol;
+        assertionToRequestedChainId[assertionId] = _requestChainId;
         assertionToPoolAddress[assertionId] = msg.sender;
         assertionToBlockTime[assertionId] =
             block.timestamp +
@@ -158,56 +111,9 @@ contract ArbitrationContract is OwnableUpgradeable {
         assertionToSettleTime[assertionId] =
             block.timestamp +
             assertionLiveness;
+        assertionToOpeningTime[assertionId] = block.timestamp;
         poolHasAssertionOpen[msg.sender] = true;
-
         return assertionId;
-    }
-
-    ///  @dev assertDataFor Opens the UMA assertion that must be verified using the strategy script provided
-    function assertDataFor(
-        bytes memory data,
-        address asserter,
-        address poolAddress,
-        uint256 bond
-    ) internal returns (bytes32 assertionId) {
-        bytes32 dataId = bytes32(abi.encode(asserter));
-
-        bool success = umaCurrency.transferFrom(asserter, address(this), bond);
-        require(success, "Failed token transfer");
-        umaCurrency.approve(address(oo), bond);
-
-        //SHOULD THE TEXT IN assertTruth FOLLOW TEMPLATE?
-        assertionId = oo.assertTruth(
-            abi.encodePacked(
-                "Data asserted: ",
-                data,
-                " for using the startegy logic located at: ",
-                AncillaryData.toUtf8Bytes(dataId),
-                " and asserter: 0x",
-                AncillaryData.toUtf8BytesAddress(asserter),
-                " at timestamp: ",
-                AncillaryData.toUtf8BytesUint(block.timestamp),
-                " in the DataAsserter contract at 0x",
-                AncillaryData.toUtf8BytesAddress(address(this)),
-                " is valid."
-            ),
-            asserter,
-            address(this),
-            address(0), // No sovereign security.
-            assertionLiveness,
-            umaCurrency,
-            bond,
-            defaultIdentifier,
-            bytes32(0) // No domain.
-        );
-        assertionsData[assertionId] = DataAssertion(
-            dataId,
-            data,
-            asserter,
-            false
-        );
-
-        emit DataAsserted(dataId, data, asserter, assertionId);
     }
 
     // OptimisticOracleV3 resolve callback.
@@ -231,14 +137,12 @@ contract ArbitrationContract is OwnableUpgradeable {
             uint256 requestChainId = assertionToRequestedChainId[assertionId];
 
             DataAssertion memory dataAssertion = DataAssertion(
-                assertionsData[assertionId].dataId,
                 assertionsData[assertionId].data,
                 assertionsData[assertionId].asserter,
                 true
             );
 
             emit DataAssertionResolved(
-                dataAssertion.dataId,
                 dataAssertion.data,
                 dataAssertion.asserter,
                 assertionId
@@ -252,25 +156,93 @@ contract ArbitrationContract is OwnableUpgradeable {
                 requestChainId
             );
         } else {
-            address poolAddress = assertionToPoolAddress[assertionId];
-            delete assertionsData[assertionId];
-            delete assertionToRequestedMarketId[assertionId];
-            delete assertionToRequestedProtocol[assertionId];
-            delete assertionToRequestedChainId[assertionId];
-            delete assertionToPoolAddress[assertionId];
-            delete assertionToBlockTime[assertionId];
-            delete assertionToSettleTime[assertionId];
-            delete poolHasAssertionOpen[poolAddress];
-            poolControl.handleClearPivotTarget();
+            cancelAssertion(assertionId);
         }
     }
 
+    function openProposal(
+        bytes memory claim,
+        address sender,
+        uint256 bond
+    ) internal returns (bytes32) {
+        bytes32 assertionId = oo.assertTruth(
+            claim,
+            sender,
+            address(this),
+            address(0), // No sovereign security.
+            assertionLiveness,
+            umaCurrency,
+            bond,
+            defaultIdentifier,
+            bytes32(0) // No domain.
+        );
+        assertionsData[assertionId] = DataAssertion(claim, sender, false);
+
+        emit DataAsserted(claim, sender, assertionId);
+
+        return assertionId;
+    }
+
     // If assertion is disputed, do nothing and wait for resolution.
-    // This OptimisticOracleV3 callback function needs to be defined so the OOv3 doesn't revert when it tries to call it.
+    // If the assertion is disputed, cancel the proposal for the pool pivot
     function assertionDisputedCallback(bytes32 assertionId) public {
-        //Clear up proposal
-        //Even if the dispute was invalid, the proposal is cancelled
-        //IMPORTANT - Close the proposal
+        cancelAssertion(assertionId);
+    }
+
+    function cancelAssertion(bytes32 assertionId) internal {
+        address poolAddress = assertionToPoolAddress[assertionId];
+        delete assertionsData[assertionId];
+        delete assertionToRequestedMarketId[assertionId];
+        delete assertionToRequestedProtocol[assertionId];
+        delete assertionToRequestedChainId[assertionId];
+        delete assertionToPoolAddress[assertionId];
+        delete assertionToBlockTime[assertionId];
+        delete assertionToSettleTime[assertionId];
+        delete assertionToOpeningTime[assertionId];
+        delete poolHasAssertionOpen[poolAddress];
+    }
+
+    function readAssertionRequestedPosition(
+        bytes32 assertionId
+    ) external view returns (bytes memory, string memory, uint256, uint256) {
+        return (
+            assertionToRequestedMarketId[assertionId],
+            assertionToRequestedProtocol[assertionId],
+            assertionToRequestedChainId[assertionId],
+            assertionToOpeningTime[assertionId]
+        );
+    }
+
+    function generateClaim(
+        uint256 requestChainId,
+        string memory requestProtocol,
+        bytes memory requestMarketId,
+        uint256 currentDepositChainId,
+        string memory currentPositionProtocol,
+        bytes memory currentPositionMarketId
+    ) public view returns (bytes memory) {
+        return
+            abi.encodePacked(
+                "The market proposed in this assertion is currently a better investment than the market where pool 0x",
+                AncillaryData.toUtf8BytesAddress(address(msg.sender)),
+                " currently has deposits, as defined by the output of its strategy code. By accessing and executing the startegy script with the following instructions, ",
+                "the script confirms this claim by returning true. 1) Call 'readStrategyCode()' on the pool contract. 2) Save the string output as `strategyScript.js` locally. 3) Confirm that the output of executing this script is `true` by running the following command: "
+                "`node strategyScript.js ",
+                abi.encodePacked(
+                    AncillaryData.toUtf8BytesUint(currentDepositChainId),
+                    " ",
+                    AncillaryData.toUtf8BytesUint(requestChainId),
+                    " ",
+                    AncillaryData.toUtf8Bytes(bytes32(currentPositionMarketId)),
+                    " ",
+                    AncillaryData.toUtf8Bytes(bytes32(requestMarketId)),
+                    " ",
+                    currentPositionProtocol,
+                    " ",
+                    requestProtocol,
+                    "`"
+                )
+            );
     }
 
     function inAssertionBlockWindow(

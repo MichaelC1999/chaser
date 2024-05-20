@@ -17,7 +17,6 @@ interface IPoolControl {
     function handleUndoPositionInitializer(bytes32, uint256) external;
     function handleUndoDeposit(bytes32, uint256) external;
     function handleUndoPivot(uint256) external;
-    function handleClearPivotTarget() external;
     function queryMovePosition(string memory, bytes memory, uint256) external;
     function sendPositionChange(bytes memory, string memory, uint256) external;
     function pivotCompleted(address, uint256) external;
@@ -28,6 +27,24 @@ interface IPoolControl {
         uint256,
         uint256
     ) external;
+    function readPoolCurrentPositionData()
+        external
+        view
+        returns (
+            address,
+            bytes32,
+            uint256,
+            uint256,
+            uint256,
+            string memory,
+            bytes memory
+        );
+
+    function readAssertionRequestedPosition()
+        external
+        view
+        returns (bytes memory, string memory, uint256, uint256);
+
     function readStrategyCode() external view returns (string memory);
 
     // External/Public State Variable Accessors

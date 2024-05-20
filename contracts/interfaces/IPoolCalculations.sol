@@ -18,6 +18,8 @@ interface IPoolCalculations {
 
     function poolWithdrawNonce(address) external view returns (uint256);
 
+    function poolPivotNonce(address) external view returns (uint256);
+
     function poolToPendingDeposits(address) external view returns (uint256);
 
     function poolToPendingWithdraws(address) external view returns (uint256);
@@ -44,8 +46,6 @@ interface IPoolCalculations {
     function undoDeposit(bytes32) external returns (address);
 
     function undoPivot(uint256) external;
-
-    function clearPivotTarget() external;
 
     function createDepositOrder(
         address,
@@ -80,14 +80,24 @@ interface IPoolCalculations {
     function createPivotExitMessage(
         address
     ) external view returns (bytes memory);
-    function pivotCompleted(address, uint256) external returns (uint256);
+    function pivotCompleted(address, uint256) external;
     function calculatePoolTokensToMint(
         bytes32,
         uint256
     ) external view returns (uint256, address);
     function readCurrentPositionData(
         address
-    ) external view returns (address, bytes32, uint256, uint256);
+    )
+        external
+        view
+        returns (
+            address,
+            bytes32,
+            uint256,
+            uint256,
+            string memory,
+            bytes memory
+        );
     function poolTransactionStatus(
         address
     ) external view returns (uint256, uint256, bool);

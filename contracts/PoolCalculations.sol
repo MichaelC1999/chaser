@@ -21,6 +21,7 @@ contract PoolCalculations is OwnableUpgradeable {
 
     mapping(address => uint256) public poolDepositNonce;
     mapping(address => uint256) public poolWithdrawNonce;
+    mapping(address => uint256) public poolPivotNonce;
     mapping(address => bool) public poolToPivotPending;
 
     mapping(address => mapping(address => bool))
@@ -42,6 +43,7 @@ contract PoolCalculations is OwnableUpgradeable {
 
     event DepositRecorded(bytes32, uint256);
     event WithdrawRecorded(bytes32, uint256);
+    event HandleUndo(string);
 
     IChaserRegistry public registry;
 
@@ -161,6 +163,7 @@ contract PoolCalculations is OwnableUpgradeable {
         uint256 _targetChainId
     ) external onlyValidPool returns (address) {
         poolToPivotPending[msg.sender] = true;
+        poolPivotNonce[msg.sender] += 1;
         targetPositionMarketId[msg.sender] = _targetPositionMarketId;
         targetPositionProtocolHash[msg.sender] = keccak256(
             abi.encode(_targetProtocol)
@@ -235,7 +238,7 @@ contract PoolCalculations is OwnableUpgradeable {
     function pivotCompleted(
         address marketAddress,
         uint256 positionAmount
-    ) external onlyValidPool returns (uint256) {
+    ) external onlyValidPool {
         currentPositionMarketId[msg.sender] = targetPositionMarketId[
             msg.sender
         ];
@@ -246,18 +249,17 @@ contract PoolCalculations is OwnableUpgradeable {
             msg.sender
         ];
 
-        uint256 currentPositionChain = targetPositionChain[msg.sender];
         clearPivotTarget();
 
         currentPositionAddress[msg.sender] = marketAddress;
         currentRecordPositionValue[msg.sender] = positionAmount;
         currentPositionValueTimestamp[msg.sender] = block.timestamp;
-        return currentPositionChain;
     }
 
     function undoPositionInitializer(
         bytes32 _depositId
     ) external onlyValidPool returns (address) {
+        emit HandleUndo("HandleUndo - Initialize");
         address originalSender = depositIdToDepositor[_depositId];
         poolToUserPendingDeposit[msg.sender][originalSender] = false;
         targetPositionMarketId[msg.sender] = abi.encode(0);
@@ -275,6 +277,7 @@ contract PoolCalculations is OwnableUpgradeable {
     function undoDeposit(
         bytes32 _depositId
     ) external onlyValidPool returns (address) {
+        emit HandleUndo("HandleUndo - Deposit");
         address originalSender = depositIdToDepositor[_depositId];
         poolToUserPendingDeposit[msg.sender][originalSender] = false;
         depositIdToDepositor[_depositId] = address(0);
@@ -283,6 +286,7 @@ contract PoolCalculations is OwnableUpgradeable {
     }
 
     function undoPivot(uint256 _positionAmount) external onlyValidPool {
+        emit HandleUndo("HandleUndo - Pivot");
         currentPositionAddress[msg.sender] = msg.sender;
         currentPositionMarketId[msg.sender] = abi.encode(0);
         currentPositionProtocol[msg.sender] = "";
@@ -292,7 +296,7 @@ contract PoolCalculations is OwnableUpgradeable {
         clearPivotTarget();
     }
 
-    function clearPivotTarget() public onlyValidPool {
+    function clearPivotTarget() internal {
         targetPositionMarketId[msg.sender] = abi.encode(0);
         targetPositionChain[msg.sender] = 0;
         targetPositionProtocol[msg.sender] = "";
@@ -430,12 +434,25 @@ contract PoolCalculations is OwnableUpgradeable {
 
     function readCurrentPositionData(
         address _poolAddress
-    ) external view returns (address, bytes32, uint256, uint256) {
+    )
+        external
+        view
+        returns (
+            address,
+            bytes32,
+            uint256,
+            uint256,
+            string memory,
+            bytes memory
+        )
+    {
         return (
             currentPositionAddress[_poolAddress],
             currentPositionProtocolHash[_poolAddress],
             currentRecordPositionValue[_poolAddress],
-            currentPositionValueTimestamp[_poolAddress]
+            currentPositionValueTimestamp[_poolAddress],
+            currentPositionProtocol[_poolAddress],
+            currentPositionMarketId[_poolAddress]
         );
     }
 

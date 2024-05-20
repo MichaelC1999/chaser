@@ -94,7 +94,7 @@ const PoolRow = ({ poolNumber, provider, registry, setErrorMessage }) => {
 
     return (
         <tr className="pool-row" style={{ height: '22px', cursor: "pointer" }} onClick={() => router.push('/pool/' + poolData.address)}>
-            <td>{poolData?.name} - 0x...{poolData.address.slice(22, 42)}</td>
+            <td className="pool-row-name">{poolData?.name} - 0x...{poolData.address.slice(22, 42)}</td>
             <td>{(formatEther(poolData?.tvl?.toString())).slice(0, 10)}</td>
             <td>{networks[poolData?.currentChain?.toString()]} - {poolData?.currentProtocol}</td>
         </tr>
