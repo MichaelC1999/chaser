@@ -21,10 +21,6 @@ function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, 
     const [strategyCode, setStrategyCode] = useState("")
 
     useEffect(() => {
-        console.log('reached strategy popup', strategyIndexOnPool, strategyToView, strategyToView || strategyToView === "0", !!strategyToView, strategyToView === 0, strategyToView.toString() === "0")
-    }, [])
-
-    useEffect(() => {
         // Fetch code from strategy contract
         if (strategyToView || strategyToView === "0") {
             getStrategyLogic()

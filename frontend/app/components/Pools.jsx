@@ -10,7 +10,7 @@ import TxPopup from "./TxPopup.jsx";
 import contractAddresses from '../JSON/contractAddresses.json'
 
 
-export default function Pools({ setErrorMessage }) {
+export default function Pools({ setErrorMessage, isCreatePool, setIsCreatePool }) {
     // const router = useRouter()
     const [newPool, toggleNewPool] = useState(false)
 
@@ -62,7 +62,7 @@ export default function Pools({ setErrorMessage }) {
     let inputs = null;
 
 
-    if (newPool) {
+    if (isCreatePool) {
         inputs = <NewPoolInputs provider={provider} setTxPopupData={setTxPopupData} setErrorMessage={(x) => setErrorMessage(x)} />
     } else {
         inputs = (<>
@@ -76,7 +76,7 @@ export default function Pools({ setErrorMessage }) {
     }
 
     return (<>
-        <button onClick={() => toggleNewPool(!newPool)} className="button">{newPool ? "View Pool List" : "Create New Pool"}</button>
+        <button onClick={() => setIsCreatePool(!isCreatePool)} className="button">{isCreatePool ? "View Pool List" : "Create New Pool"}</button>
         {inputs}
         {txPopup}
     </>
