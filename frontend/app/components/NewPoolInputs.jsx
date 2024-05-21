@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import SubmitButton from './SubmitButton.jsx';
 import ManagerABI from '../ABI/ManagerABI.json'; // Adjust the path as needed
+import InvestmentStrategyABI from '../ABI/InvestmentStrategyABI.json'; // Adjust the path as needed
 import { ethers } from 'ethers';
 import networks from '../JSON/networks.json'
-import strategies from '../JSON/strategies.json'
-
 import contractAddresses from '../JSON/contractAddresses.json'
 import LoadingPopup from './LoadingPopup.jsx';
 import StrategyPopup from './StrategyPopup.jsx'
+import StrategyFetch from './StrategyFetch.jsx'
 import { useRouter } from 'next/navigation';
 
 const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
@@ -20,20 +20,19 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
     const [supportedNetworks, setSupportedNetworks] = useState([]);
     const [submitting, setSubmitting] = useState(false)
     const [showStrategyPopup, setShowStrategyPopup] = useState(false)
+    const [strategyCount, setStrategyCount] = useState(0)
+    const [strategyNames, setStrategyNames] = useState([])
 
 
     useEffect(() => {
-        console.log(strategyIndex)
-    }, [strategyIndex])
+        getStrategyCount()
+    }, [])
 
-    useEffect(() => {
-        console.log('showStrat', showStrategyPopup)
-    }, [showStrategyPopup])
-
-    const check = async () => {
-        // const uri = ("https://ccip.chain.link/api/query/MESSAGE_DETAILS_QUERY?variables=%7B%22messageId%22%3A%220xd00748dd14742ecafc4802182ec92d086db92852efb138554b63564f63f76f6b%22%7D")
-        // const res = (await fetch(uri))
-        // console.log(res.json())
+    const getStrategyCount = async () => {
+        const investmentStrategyContract = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, provider);
+        const count = Number(await investmentStrategyContract.strategyCount() || 0)
+        console.log(count)
+        setStrategyCount(count)
     }
 
     const submitLogic = async () => {
@@ -83,11 +82,16 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
     if (submitting) {
         submittingLoader = <LoadingPopup loadingMessage={"Please wait for your transactions to fill"} />
     }
-
+    let strategyExecution = null
+    if (strategyCount > 0) {
+        strategyExecution = Array.from({ length: strategyCount }, (_, index) => {
+            return <StrategyFetch key={"strat" + index} provider={provider} stratNumber={index} setStrategyNames={setStrategyNames} />
+        })
+    }
     return (<div style={{ display: "flex" }}>
         {submittingLoader}
-
-        <div className="new-pool-inputs" style={{ flex: 5 }}>
+        {strategyExecution}
+        <div key={'top-new-pool-inputs'} className="new-pool-inputs" style={{ flex: 5 }}>
             <label key={1} onMouseEnter={() => setInstructionBox("Give your pool a name to make it more identifiable")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
                 Pool Name:
                 <input type="text" value={poolName} onChange={(e) => setPoolName(e.target.value)} />
@@ -97,10 +101,10 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
                 <input type="text" value={assetAddress} onChange={() => null} />
             </label>
             <label key={3} onMouseEnter={() => setInstructionBox("You select one strategy for a pool, this strategy determines where and how to move funds in order to make the best ROI while following custom risk parameters. Each strategy contains code that helps the UMA OO objectively determine where to move deposits.\nView details about approved strategies or create your own (COMING SOON)")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
-                Strategy: {strategies[strategyIndex]}
+                Strategy: {strategyNames[strategyIndex]}
 
                 <div className="button" style={{ textAlign: "center", border: "white 1px solid" }} onClick={() => setShowStrategyPopup(true)}>Strategy Selection</div>
-                {showStrategyPopup ? <StrategyPopup setErrorMessage={(x) => setErrorMessage(x)} provider={provider} strategyIndexOnPool={null} strategyIndex={strategyIndex} setStrategyIndex={setStrategyIndex} strategies={strategies} setShowStrategyPopup={(x) => setShowStrategyPopup(x)} /> : null}
+                {showStrategyPopup ? <StrategyPopup setErrorMessage={(x) => setErrorMessage(x)} provider={provider} strategyIndexOnPool={null} strategyIndex={strategyIndex} setStrategyIndex={setStrategyIndex} strategies={strategyNames} setShowStrategyPopup={(x) => setShowStrategyPopup(x)} /> : null}
 
             </label>
             <label key={4} onMouseEnter={() => setInstructionBox("Network selection will allow the deploying user to select what chains they want enabled for deposits.\nCurrently the pool does not take in this input, but will be supported at a later date.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
@@ -116,9 +120,9 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
 
             </div>
         </div>
-        <div className="new-pool-inputs" style={{ border: "white 1px solid", flex: 2, margin: "43px 20px 32px 20px", padding: "20px" }}>
+        <div key={'bottom-new-pool-inputs'} className="new-pool-inputs" style={{ border: "white 1px solid", flex: 2, margin: "43px 20px 32px 20px", padding: "20px" }}>
             {instructionBox.split("\n").map((x, idx) => {
-                return <><span key={idx} style={{ display: "inline-block", lineHeight: "25px" }}>{x}</span><br /></>
+                return <div key={"div" + idx}><span key={idx} style={{ display: "inline-block", lineHeight: "25px", paddingBottom: "10px" }}>{x}</span></div>
             })}
         </div>
     </div>

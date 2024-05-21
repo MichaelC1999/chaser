@@ -1,14 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { hexToString, numberToHex, stringToBytes, zeroAddress } from 'viem';
-import PoolABI from '../ABI/PoolABI.json'; // Adjust the path as needed
-import networks from '../JSON/networks.json'
-import protocolHashes from '../JSON/protocolHashes.json'
 import contractAddresses from '../JSON/contractAddresses.json'
 import InvestmentStrategyABI from '../ABI/InvestmentStrategyABI.json'; // Adjust the path as needed
 import Loader from './Loader.jsx';
-import { decodePoolPivot, fetchAcrossRelayFillTx, findAcrossDepositFromTxHash, findCcipMessageFromTxHash, userLastDeposit } from "../utils.jsx"
-
-import PoolCalculationABI from '../ABI/PoolCalculationsABI.json'; // Adjust the path as needed
 import { ethers, parseEther, solidityPackedKeccak256 } from 'ethers';
 
 
@@ -19,6 +13,15 @@ function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, 
 
     const [strategyToView, setStrategyToView] = useState(strategyIndexOnPool)
     const [strategyCode, setStrategyCode] = useState("")
+    const [strategyName, setStrategyName] = useState('')
+
+    useEffect(() => {
+        if (strategies.length > 0) {
+            setNewStrategyName(strategies[strategyIndex])
+        } else {
+            getStrategyName()
+        }
+    }, [strategies])
 
     useEffect(() => {
         // Fetch code from strategy contract
@@ -26,6 +29,12 @@ function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, 
             getStrategyLogic()
         }
     }, [strategyToView])
+
+    const getStrategyName = async () => {
+        const investmentStrategyContract = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, provider);
+        const name = Number(await investmentStrategyContract.strategyName(strategyIndex))
+        setStrategyName(name)
+    }
 
     const getStrategyLogic = async () => {
 
@@ -108,7 +117,7 @@ function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, 
                         <b>Back</b>
                     </div>}
             </div>
-            <div className="popup-title">{strategies[strategyToView]}</div>
+            <div className="popup-title">{strategyName}</div>
             {display}
             <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
                 <div style={{ backgroundColor: "#374d59", marginRight: "30px", width: "134px", textAlign: "center", border: "white 1px solid" }} onClick={() => setShowStrategyPopup(false)} className={'demoButton button'}>

@@ -280,29 +280,29 @@ const baseSimulateCCIPReceive = async (messageDataCCIP) => {
 
 const setPivotConfigs = async () => {
   const registryContract = await hre.ethers.getContractAt("Registry", deployments.sepolia["registryAddress"]);
-  const ArbitrationContract = await hre.ethers.getContractFactory("ArbitrationContract");
-  const arbitrationContract = await hre.upgrades.deployProxy(ArbitrationContract, [deployments.sepolia["registryAddress"], 11155111]);
-  await arbitrationContract.waitForDeployment();
-  const arbitrationAddress = await arbitrationContract.getAddress()
-  console.log("Arb", arbitrationAddress)
-  deployments.sepolia["arbitrationContract"] = arbitrationAddress
+  // const ArbitrationContract = await hre.ethers.getContractFactory("ArbitrationContract");
+  // const arbitrationContract = await hre.upgrades.deployProxy(ArbitrationContract, [deployments.sepolia["registryAddress"], 11155111]);
+  // await arbitrationContract.waitForDeployment();
+  // const arbitrationAddress = await arbitrationContract.getAddress()
+  // console.log("Arb", arbitrationAddress)
+  // deployments.sepolia["arbitrationContract"] = arbitrationAddress
 
-  writeAddressesToFile(deployments)
+  // writeAddressesToFile(deployments)
 
 
   //NO NEED TO REDEPLOY INVESTMENTSTRATEGY CONTRACT
-  // const investmentStrategyContract = await (await hre.ethers.deployContract("InvestmentStrategy", [], {
-  //   gasLimit: 7000000,
-  //   value: 0
-  // })).waitForDeployment();
+  const investmentStrategyContract = await (await hre.ethers.deployContract("InvestmentStrategy", [], {
+    gasLimit: 7000000,
+    value: 0
+  })).waitForDeployment();
 
-  // const investmentStrategyAddress = investmentStrategyContract.target
+  const investmentStrategyAddress = investmentStrategyContract.target
 
-  // deployments.sepolia["investmentStrategy"] = investmentStrategyAddress
+  deployments.sepolia["investmentStrategy"] = investmentStrategyAddress
   await (await registryContract.addInvestmentStrategyContract(deployments.sepolia["investmentStrategy"])).wait();
-  await (await registryContract.addArbitrationContract(deployments.sepolia["arbitrationContract"])).wait()
+  // await (await registryContract.addArbitrationContract(deployments.sepolia["arbitrationContract"])).wait()
 
-  // writeAddressesToFile(deployments)
+  writeAddressesToFile(deployments)
 }
 
 const addStrategyCode = async () => {
@@ -698,7 +698,7 @@ async function mainExecution() {
     // --------------------------------------------------------------------------------------------
     // IF YOU EXECUTED THE PRIOR SECTION AND/OR WOULD LIKE TO DEPLOY YOUR POOL FOR TESTING - EXECUTE THE FOLLOWING FUNCTION
     // This function also sends the initial deposit funds through the bridge into the investment as the position is set on base
-    // await setPivotConfigs()
+    await setPivotConfigs()
     // await upgradeCalc()
     // await sepoliaPoolDeploy()
     // await sepoliaPositionSetDeposit()

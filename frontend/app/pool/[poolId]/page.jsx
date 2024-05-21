@@ -12,7 +12,6 @@ import BridgeLogicABI from '../../ABI/BridgeLogicABI.json'; // Adjust the path a
 import { createPublicClient, getContract, http, formatEther, zeroAddress } from 'viem'
 import protocolHashes from '../../JSON/protocolHashes.json'
 import networks from '../../JSON/networks.json'
-import strategies from '../../JSON/strategies.json'
 
 import { sepolia, baseSepolia } from 'viem/chains'
 import UserPoolSection from '@/app/components/UserPoolSection';
@@ -270,7 +269,7 @@ export default function Page() {
 
     let strategyPopup = null
     if (viewStrategy) {
-        strategyPopup = <StrategyPopup provider={provider} setShowStrategyPopup={(x) => setViewStrategy(x)} strategyIndex={poolData?.strategyIndex?.toString()} strategyIndexOnPool={poolData?.strategyIndex?.toString()} setStrategyIndex={() => null} strategies={strategies} />
+        strategyPopup = <StrategyPopup provider={provider} setShowStrategyPopup={(x) => setViewStrategy(x)} strategyIndex={poolData?.strategyIndex?.toString()} strategyIndexOnPool={poolData?.strategyIndex?.toString()} setStrategyIndex={() => null} strategies={[]} />
     }
 
     return (<>

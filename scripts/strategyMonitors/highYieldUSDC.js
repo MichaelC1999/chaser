@@ -1,11 +1,3 @@
-const hre = require("hardhat");
-const ethers = require("ethers");
-const fs = require('fs');
-const { stringToBytes, bytesToString, hexToString, decodeEventLog } = require('viem')
-
-
-const deployments = require('./../contractAddresses.json');
-const { strategyCalculation } = require("../yieldDemonstrations/highYieldAllDepos");
 
 const networks = {
   "11155111": "ethereum",
