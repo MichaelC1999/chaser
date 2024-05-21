@@ -10,7 +10,7 @@ const StrategyFetch = ({ stratNumber, setStrategyNames, provider }) => {
             try {
                 const investmentStrategyContract = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, provider);
                 const name = (await investmentStrategyContract.strategyName(stratNumber))
-                setStrategyNames(prev => ([...prev, name]))
+                setStrategyNames(prev => ({ ...prev, [stratNumber]: name }))
             } catch (err) {
                 setErrorMessage('Error Loading Pool: ' + err.message)
             }

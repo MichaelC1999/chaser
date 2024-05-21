@@ -6,7 +6,7 @@ import Loader from './Loader.jsx';
 import { ethers, parseEther, solidityPackedKeccak256 } from 'ethers';
 
 
-function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, setShowStrategyPopup, strategyIndexOnPool }) {
+function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyIndex, strategies, setShowStrategyPopup, strategyIndexOnPool }) {
     const [newStrategy, setNewStrategy] = useState(false)
     const [newStrategyName, setNewStrategyName] = useState("")
     const [newStrategyCode, setNewStrategyCode] = useState("")
@@ -17,7 +17,7 @@ function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, 
 
     useEffect(() => {
         if (strategies.length > 0) {
-            setNewStrategyName(strategies[strategyIndex])
+            setStrategyName(strategies[strategyIndex])
         } else {
             getStrategyName()
         }
@@ -32,7 +32,7 @@ function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, 
 
     const getStrategyName = async () => {
         const investmentStrategyContract = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, provider);
-        const name = Number(await investmentStrategyContract.strategyName(strategyIndex))
+        const name = await investmentStrategyContract.strategyName(strategyIndex)
         setStrategyName(name)
     }
 
@@ -66,15 +66,15 @@ function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, 
                     gasLimit: 8000000
                 }
             )).wait();
-
             const hash = stratTx.hash
-            setStrategyIndex(strategies.length)
-            setShowStrategyPopup(false)
         } catch (err) {
             // console.log('test! ', err)
-            setErrorMessage(err?.info?.error?.message ?? "This transaction has failed\n\n" + (err?.receipt ? "TX: " + err.receipt.hash : ""))
+            console.log(err?.info?.error?.message ?? "This transaction has failed\n\n" + (err?.receipt ? "TX: " + err.receipt.hash : ""))
             // setErrorMessage(err?.info?.error?.message)
         }
+        setStrategyIndex(strategies.length)
+        getStrategyCount()
+        setShowStrategyPopup(false)
     }
 
 
@@ -83,7 +83,7 @@ function StrategyPopup({ provider, strategyIndex, setStrategyIndex, strategies, 
     let display = (<>
         <select value={strategyIndex} onChange={(e) => setStrategyIndex(e.target.value)}>
             {(strategies).map((name, idx) => (
-                <option key={name} value={idx}>{name}</option>
+                <option key={name + idx} value={idx}>{name}</option>
             ))}
         </select>
         <div style={{ backgroundColor: "#374d59", marginRight: "30px", width: "100%", textAlign: "center", border: "white 1px solid" }} className={'demoButton button'} onClick={() => setStrategyToView(strategyIndex)}>View Strategy Logic</div>

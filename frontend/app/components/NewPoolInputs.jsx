@@ -21,7 +21,7 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
     const [submitting, setSubmitting] = useState(false)
     const [showStrategyPopup, setShowStrategyPopup] = useState(false)
     const [strategyCount, setStrategyCount] = useState(0)
-    const [strategyNames, setStrategyNames] = useState([])
+    const [strategyNames, setStrategyNames] = useState({})
 
 
     useEffect(() => {
@@ -101,10 +101,10 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
                 <input type="text" value={assetAddress} onChange={() => null} />
             </label>
             <label key={3} onMouseEnter={() => setInstructionBox("You select one strategy for a pool, this strategy determines where and how to move funds in order to make the best ROI while following custom risk parameters. Each strategy contains code that helps the UMA OO objectively determine where to move deposits.\nView details about approved strategies or create your own (COMING SOON)")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
-                Strategy: {strategyNames[strategyIndex]}
+                Strategy: {strategyNames[strategyIndex] ?? ""}
 
                 <div className="button" style={{ textAlign: "center", border: "white 1px solid" }} onClick={() => setShowStrategyPopup(true)}>Strategy Selection</div>
-                {showStrategyPopup ? <StrategyPopup setErrorMessage={(x) => setErrorMessage(x)} provider={provider} strategyIndexOnPool={null} strategyIndex={strategyIndex} setStrategyIndex={setStrategyIndex} strategies={strategyNames} setShowStrategyPopup={(x) => setShowStrategyPopup(x)} /> : null}
+                {showStrategyPopup ? <StrategyPopup getStrategyCount={getStrategyCount} setErrorMessage={(x) => setErrorMessage(x)} provider={provider} strategyIndexOnPool={null} strategyIndex={strategyIndex} setStrategyIndex={setStrategyIndex} strategies={Object.values(strategyNames)} setShowStrategyPopup={(x) => setShowStrategyPopup(x)} /> : null}
 
             </label>
             <label key={4} onMouseEnter={() => setInstructionBox("Network selection will allow the deploying user to select what chains they want enabled for deposits.\nCurrently the pool does not take in this input, but will be supported at a later date.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>

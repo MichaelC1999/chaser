@@ -269,7 +269,7 @@ export default function Page() {
 
     let strategyPopup = null
     if (viewStrategy) {
-        strategyPopup = <StrategyPopup provider={provider} setShowStrategyPopup={(x) => setViewStrategy(x)} strategyIndex={poolData?.strategyIndex?.toString()} strategyIndexOnPool={poolData?.strategyIndex?.toString()} setStrategyIndex={() => null} strategies={[]} />
+        strategyPopup = <StrategyPopup provider={provider} getStrategyCount={() => null} setShowStrategyPopup={(x) => setViewStrategy(x)} strategyIndex={poolData?.strategyIndex?.toString()} strategyIndexOnPool={poolData?.strategyIndex?.toString()} setStrategyIndex={() => null} strategies={[]} />
     }
 
     return (<>
