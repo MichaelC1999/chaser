@@ -20,8 +20,11 @@ import ErrorPopup from '@/app/components/ErrorPopup.jsx';
 import TxPopup from '@/app/components/TxPopup';
 import Loader from '@/app/components/Loader';
 import StrategyPopup from '@/app/components/StrategyPopup';
+import { useWeb3Modal, useWeb3ModalAccount } from '@web3modal/ethers/react';
 
 export default function Page() {
+    const { open } = useWeb3Modal()
+    const { address } = useWeb3ModalAccount()
 
     const [poolData, setPoolData] = useState(null);
     const [errorMessage, setErrorMessage] = useState("");
@@ -41,20 +44,10 @@ export default function Page() {
     ), [windowOverride]);
 
     useEffect(() => {
-        if (!ethers.isAddress(windowOverride?.ethereum?.selectedAddress)) {
-            connect()
+        if (!ethers.isAddress(address)) {
+            open({})
         }
-    }, [])
-
-    const connect = async () => {
-        // If the user is not signed into metamask, execute this logic
-        try {
-            await provider.send("eth_requestAccounts", []);
-            await provider.getSigner();
-        } catch (err) {
-            setErrorMessage("Connection Error: " + err?.info?.error?.message ?? err?.message);
-        }
-    }
+    }, [address])
 
     const getPoolData = async (address) => {
         const returnObject = {}
@@ -75,9 +68,8 @@ export default function Page() {
         returnObject.depoNonce = transactionStatus["0"]
         returnObject.withdrawNonce = transactionStatus["1"]
         returnObject.nonce = returnObject.depoNonce + returnObject.withdrawNonce
-
-        returnObject.userIsDepositing = await poolCalc.poolToUserPendingDeposit(address, windowOverride?.ethereum?.selectedAddress)
-        returnObject.userIsWithdrawing = await poolCalc.poolToUserPendingWithdraw(address, windowOverride?.ethereum?.selectedAddress)
+        returnObject.userIsDepositing = await poolCalc.poolToUserPendingDeposit(address, windowOverride?.ethereum?.selectedAddress || zeroAddress)
+        returnObject.userIsWithdrawing = await poolCalc.poolToUserPendingWithdraw(address, windowOverride?.ethereum?.selectedAddress || zeroAddress)
 
         returnObject.isPivoting = transactionStatus["2"]
         returnObject.openAssertion = transactionStatus["3"]
@@ -105,14 +97,14 @@ export default function Page() {
 
         try {
             if (returnObject?.nonce > 0) {
-                returnObject.userRatio = await poolCalc.getScaledRatio(returnObject.poolTokenAddress, windowOverride?.ethereum?.selectedAddress)
+                returnObject.userRatio = await poolCalc.getScaledRatio(returnObject.poolTokenAddress, windowOverride?.ethereum?.selectedAddress || zeroAddress)
             }
         } catch (err) {
             console.log(err)
         }
 
         // Have json with mapping of protocol hashes to the protocol name, read slug/protocolname from this list. No need to be on chain
-        return { address, name, user: { userRatio: returnObject.userRatio, address: windowOverride?.ethereum?.selectedAddress }, ...returnObject }
+        return { address, name, user: { userRatio: returnObject.userRatio, address: windowOverride?.ethereum?.selectedAddress || zeroAddress }, ...returnObject }
     }
 
     const getBridgePoolData = async (address, hash, chainId, data) => {
@@ -160,7 +152,7 @@ export default function Page() {
 
         return () => clearInterval(interval); // Clean up the interval on component unmount
 
-    }, [txData])
+    }, [txData, address])
 
     const fetchPoolData = async () => {
         try {
@@ -176,7 +168,7 @@ export default function Page() {
             setPoolData({ ...poolDataReturn, ...bridgedPoolData })
 
         } catch (err) {
-            console.log(err)
+            console.log(err, provider)
             setErrorMessage("Error fetching pool data: " + (err?.info?.error?.message ?? "Try reloading"))
         }
     }

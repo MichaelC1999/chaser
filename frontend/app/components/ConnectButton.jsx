@@ -5,11 +5,6 @@ import { useWeb3Modal } from '@web3modal/ethers/react';
 const ConnectButton = ({ connected, address, setErrorMessage }) => {
     const windowOverride = typeof window !== 'undefined' ? window : null;
 
-    // Instantiate the provider, if the window object remains the same no need to recalculate
-    const provider = useMemo(() => {
-        return new ethers.JsonRpcProvider("https://rpc.sepolia.org");
-    }, [windowOverride]);
-
     const { open } = useWeb3Modal()
 
     const connect = async () => {

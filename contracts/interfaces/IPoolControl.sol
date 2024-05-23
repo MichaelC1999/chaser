@@ -59,18 +59,5 @@ interface IPoolControl {
     function poolCalculations() external view returns (address);
     function arbitrationContract() external view returns (address);
     function asset() external view returns (address);
-    function targetPositionMarketId() external view returns (bytes memory);
-    function targetPositionChain() external view returns (uint256);
-    function targetPositionProtocolHash() external view returns (bytes32);
-    function currentPositionAddress() external view returns (address);
-    function currentPositionMarketId() external view returns (bytes memory);
     function currentPositionChain() external view returns (uint256);
-    function currentPositionProtocolHash() external view returns (bytes32);
-    function currentRecordPositionValue() external view returns (uint256);
-    function currentPositionValueTimestamp() external view returns (uint256);
-    function lastPositionAddress() external view returns (address);
-    function lastPositionChain() external view returns (uint256);
-    function lastPositionProtocolHash() external view returns (bytes32);
-    function userHasPendingWithdraw(address) external view returns (bool);
-    function userHasPendingDeposit(address) external view returns (bool);
 }

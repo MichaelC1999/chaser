@@ -53,12 +53,6 @@ contract BridgeReceiver is OwnableUpgradeable {
         }
 
         if (
-            tokenSent != poolToAsset[poolAddress] &&
-            poolToAsset[poolAddress] != address(0)
-        ) {
-            // IMPORTANT - HANDLE ERROR FOR WRONG ASSET BRIDGED, UNLESS METHOD IS "positionInitializer"
-        }
-        if (
             method == bytes4(keccak256(abi.encode("BbPivotBridgeMovePosition")))
         ) {
             enterPivot(method, tokenSent, amount, poolAddress, data);

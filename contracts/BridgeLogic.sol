@@ -420,6 +420,7 @@ contract BridgeLogic is OwnableUpgradeable {
 
         userWithdraw(
             amountToWithdraw,
+            currentPositionValue,
             userMaxWithdraw,
             _poolAddress,
             withdrawId
@@ -436,6 +437,7 @@ contract BridgeLogic is OwnableUpgradeable {
      */
     function userWithdraw(
         uint256 _amount,
+        uint256 _currentPositionValue,
         uint256 _userMaxWithdraw,
         address _poolAddress,
         bytes32 _withdrawId
@@ -449,9 +451,9 @@ contract BridgeLogic is OwnableUpgradeable {
         );
 
         integratorWithdraw(_poolAddress, _amount);
-
         setNonceCumulative(_poolAddress, _amount, false);
-        uint256 positionBalance = getPositionBalance(_poolAddress);
+
+        uint256 positionBalance = _currentPositionValue - _amount;
 
         bytes memory message = abi.encode(
             method,

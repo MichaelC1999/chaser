@@ -186,21 +186,6 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         return messageId;
     }
 
-    function ccipReceiveManual(
-        bytes32 messageId, // MessageId corresponding to ccipSend on source.
-        bytes memory data
-    ) external {
-        Client.Any2EVMMessage memory any2EvmMessage = Client.Any2EVMMessage({
-            messageId: messageId,
-            sourceChainSelector: 0,
-            sender: abi.encode(msg.sender),
-            data: data,
-            destTokenAmounts: new Client.EVMTokenAmount[](0)
-        });
-        //IMPORTANT - REMOVE TESTING
-        _ccipReceive(any2EvmMessage);
-    }
-
     function ccipDecodeReceive(
         bytes32 messageId, // MessageId corresponding to ccipSend on source.
         bytes memory data
