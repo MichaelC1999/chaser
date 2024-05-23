@@ -221,6 +221,11 @@ contract ArbitrationContract is OwnableUpgradeable {
         string memory currentPositionProtocol,
         bytes memory currentPositionMarketId
     ) public view returns (bytes memory) {
+        (bytes memory curMarket, bytes memory reqMarket) = getMarketBytes(
+            currentPositionMarketId,
+            requestMarketId
+        );
+
         return
             abi.encodePacked(
                 "The market proposed in this assertion is currently a better investment than the market where pool 0x",
@@ -232,10 +237,10 @@ contract ArbitrationContract is OwnableUpgradeable {
                     AncillaryData.toUtf8BytesUint(currentDepositChainId),
                     " ",
                     AncillaryData.toUtf8BytesUint(requestChainId),
-                    " ",
-                    AncillaryData.toUtf8Bytes(bytes32(currentPositionMarketId)),
-                    " ",
-                    AncillaryData.toUtf8Bytes(bytes32(requestMarketId)),
+                    " 0x",
+                    curMarket,
+                    " 0x",
+                    reqMarket,
                     " ",
                     currentPositionProtocol,
                     " ",
@@ -243,6 +248,52 @@ contract ArbitrationContract is OwnableUpgradeable {
                     "`"
                 )
             );
+    }
+
+    function getMarketBytes(
+        bytes memory currentPositionMarketId,
+        bytes memory requestMarketId
+    ) public view returns (bytes memory, bytes memory) {
+        (address curAddr1, address curAddr2) = extractAddressesFromBytes(
+            currentPositionMarketId
+        );
+        (address reqAddr1, address reqAddr2) = extractAddressesFromBytes(
+            requestMarketId
+        );
+
+        bytes memory curMarket = AncillaryData.toUtf8BytesAddress(curAddr1);
+        if (curAddr2 != address(0)) {
+            curMarket = abi.encodePacked(
+                curMarket,
+                AncillaryData.toUtf8BytesAddress(curAddr2)
+            );
+        }
+
+        bytes memory reqMarket = AncillaryData.toUtf8BytesAddress(reqAddr1);
+        if (reqAddr2 != address(0)) {
+            reqMarket = abi.encodePacked(
+                reqMarket,
+                AncillaryData.toUtf8BytesAddress(reqAddr2)
+            );
+        }
+
+        return (curMarket, reqMarket);
+    }
+
+    function extractAddressesFromBytes(
+        bytes memory input
+    ) public pure returns (address addr1, address addr2) {
+        assembly {
+            addr1 := mload(add(input, 20))
+        }
+
+        if (input.length == 40) {
+            assembly {
+                addr2 := mload(add(input, 40))
+            }
+        } else {
+            addr2 = address(0);
+        }
     }
 
     function inAssertionBlockWindow(

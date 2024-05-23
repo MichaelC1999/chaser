@@ -16,6 +16,7 @@ import DepositStatus from './DepositStatus.jsx';
 
 import TxPopup from './TxPopup';
 import { decodeAcrossDepositEvent, userLastDeposit } from '../utils';
+import { useWeb3Modal, useWeb3ModalAccount } from '@web3modal/ethers/react';
 
 
 const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessage }) => {
@@ -26,6 +27,9 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
     const [depoInitialized, setDepoInitialized] = useState(false);
     const [userAssetBalance, setUserAssetBalance] = useState(0)
     const [depositId, setDepositId] = useState("")
+    const { open } = useWeb3Modal()
+    const { isConnected } = useWeb3ModalAccount()
+
     useEffect(() => {
         if (poolData) {
             getBalanceOf()
@@ -51,14 +55,17 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
     useEffect(() => {
         // Depo flow starts with clearing input errors detected on last depo attempt
         if (depoInitialized) {
-            if (poolData?.nonce?.toString() === "0" || !poolData?.nonce) {
-                handleSetPositionDeposit()
+            if (isConnected) {
+                if (poolData?.nonce?.toString() === "0" || !poolData?.nonce) {
+                    handleSetPositionDeposit()
+                } else {
+                    handleDeposit();
+                }
             } else {
-                handleDeposit();
-
+                open({})
             }
         }
-    }, [depoInitialized])
+    }, [depoInitialized, isConnected])
 
 
     const windowOverride = useMemo(() => (
@@ -254,7 +261,7 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
     }
 
     let depoLoader = null;
-    if (depoInitialized) {
+    if (depoInitialized && isConnected) {
         depoLoader = <LoadingPopup loadingMessage={"Please wait for your transactions to fill"} />
     }
 
@@ -271,8 +278,7 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
 
                 {input}
             </div>
-            <button className="button" onClick={() => {
-
+            <button className="button" onClick={async () => {
                 if (!assetAmount) {
                     setErrorMessage("Enter an amount to deposit");
                     return

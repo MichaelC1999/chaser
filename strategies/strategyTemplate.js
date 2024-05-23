@@ -133,26 +133,9 @@ market(id:"'+ marketId + '") {\
         // BEGIN CUSTOMIZABLE SECTION - THIS IS WHERE YOU WRITE YOUR CUSTOM STRATEGY LOGIC
         // Read the Chaser docs for requirements and instructions for writing a custom strategy
 
-        let curROR = [];
-        if (curPositionData) curROR = curPositionData.marketDailySnapshots.map(ins => (Number(ins.dailySupplySideRevenueUSD) * 365) / Number(ins.totalDepositBalanceUSD) || 0);
-        const curMeanROR = curROR.reduce((acc, curr) => acc + curr, 0) / curROR.length;
 
-        const curVariance = curROR.reduce((acc, curr) => acc + Math.pow(curr - curMeanROR, 2), 0) / curROR.length;
-        const curStandardDeviation = Math.sqrt(curVariance);
-
-        const curSharpeRatio = (curMeanROR / curStandardDeviation) || -1;
-
-        let desROR = [];
-        if (desPositionData) desROR = desPositionData.marketDailySnapshots.map(ins => (ins.dailySupplySideRevenueUSD * 365) / ins.totalDepositBalanceUSD);
-        const desMeanROR = desROR.reduce((acc, curr) => acc + curr, 0) / desROR.length;
-
-        const desVariance = desROR.reduce((acc, curr) => acc + Math.pow(curr - desMeanROR, 2), 0) / desROR.length;
-        const desStandardDeviation = Math.sqrt(desVariance);
-
-        const desSharpeRatio = desMeanROR / desStandardDeviation;
-        console.log(desMeanROR, desStandardDeviation, curMeanROR, curStandardDeviation, desSharpeRatio, curSharpeRatio, desPositionData.market.inputToken.id)
-        return (desSharpeRatio > curSharpeRatio);
-
+        console.log(curPositionData.marketDailySnapshots.length, desPositionData.marketDailySnapshots.length)
+        return true
         // END CUSTOMIZABLE SECTION
     } catch (err) {
         console.log("Error caught - ", err.message);

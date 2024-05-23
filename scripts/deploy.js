@@ -323,7 +323,7 @@ const addStrategyCode = async () => {
 const poolStatRead = async () => {
   // "0xec9a7d48230bec7a8b7cc88a8d4edff45d7da01f"
   // const poolAddress = deployments.sepolia['poolAddress']
-  const poolAddress = "0x1f73597fd37c24ecf1c8573eb2f1bda5aa335391"
+  const poolAddress = "0xdf64b40da4880aab6251b223f51fdee1823c588e"
   const pool = await hre.ethers.getContractAt("PoolControl", poolAddress)
   const tokenContract = await (hre.ethers.getContractAt("IPoolToken", await pool.poolToken()))
   const calcContract = await hre.ethers.getContractAt("PoolCalculations", await pool.poolCalculations())
@@ -356,18 +356,25 @@ const poolStatRead = async () => {
     await calcContract.getScaledRatio(await pool.poolToken(), "0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E"),
   )
 
-  // const arbContract = await hre.ethers.getContractAt("ArbitrationContract", deployments.sepolia["arbitrationContract"]);
+  const arbContract = await hre.ethers.getContractAt("ArbitrationContract", "0x8863f59656cACc441f97D5e4c00C8B5d6775b60B");
 
-  // const claimBytes = await arbContract.generateClaim(
-  //   "11155111",
-  //   "compound-v3",
-  //   deployments.sepolia.compoundMarketId,
-  //   "84532",
-  //   "aave-v3",
-  //   deployments.base.aaveMarketId
-  // )
+  const claimBytes = await arbContract.generateClaim(
+    "11155111",
+    "compound-v3",
+    deployments.sepolia.compoundMarketId,
+    "84532",
+    "aave-v3",
+    deployments.base.aaveMarketId
+  )
 
-  // console.log(claimBytes)
+  console.log(claimBytes)
+
+  console.log(await arbContract.extractAddressesFromBytes(deployments.sepolia.compoundMarketId))
+
+  console.log(await arbContract.getMarketBytes(
+    deployments.sepolia.compoundMarketId,
+    deployments.base.aaveMarketId
+  ))
 
   // const RequestedMarketId = await arbContract.assertionToRequestedMarketId(assertionId)
   // const RequestedProtocol = await arbContract.assertionToRequestedProtocol(assertionId)
@@ -698,7 +705,7 @@ async function mainExecution() {
     // --------------------------------------------------------------------------------------------
     // IF YOU EXECUTED THE PRIOR SECTION AND/OR WOULD LIKE TO DEPLOY YOUR POOL FOR TESTING - EXECUTE THE FOLLOWING FUNCTION
     // This function also sends the initial deposit funds through the bridge into the investment as the position is set on base
-    await setPivotConfigs()
+    // await setPivotConfigs()
     // await upgradeCalc()
     // await sepoliaPoolDeploy()
     // await sepoliaPositionSetDeposit()
@@ -719,7 +726,7 @@ async function mainExecution() {
     // await upgradeContract()
     // await poolStatRead()
     // await sepoliaWithdraw()
-    // await poolStatRead()
+    await poolStatRead()
     // await sendTokens()
     // 
 

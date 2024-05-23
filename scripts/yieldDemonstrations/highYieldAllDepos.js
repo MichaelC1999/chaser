@@ -19,7 +19,6 @@ const strategyCalculation = async () => {
         }
     })
 
-    console.log(typeof (process.argv[3]), process.argv[3], Number(process.argv[3]))
 
 
     const highestRateByDay = {}
@@ -35,7 +34,7 @@ const strategyCalculation = async () => {
     const aavev2 = {}
     const makeQuery = (marketId) => {
         return '{                                                                                                               \
-                marketDailySnapshots(first: 90, orderBy: timestamp, orderDirection: desc, where: { market:"'+ marketId + '"}) {   \                                                                                                            \
+                marketDailySnapshots(first: 35, skip: 1, orderBy: timestamp, orderDirection: desc, where: { market:"'+ marketId + '"}) {   \                                                                                                            \
                     market {                                                                                                        \
                         id                                                                                                          \
                     }                                                                                                                \
@@ -57,7 +56,12 @@ const strategyCalculation = async () => {
                 query: makeQuery(marketId)
             })
         });
-        return await req.json();
+        try {
+            const ret = await req.json();
+            return ret
+        } catch {
+            return {}
+        }
     }
 
     aavev3["arbitrum"] = { usdc: null, dai: null, usdt: null }

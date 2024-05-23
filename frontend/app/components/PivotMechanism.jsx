@@ -7,6 +7,7 @@ import protocolHashes from '../JSON/protocolHashes.json'
 import contractAddresses from '../JSON/contractAddresses.json'
 import PivotPopup from './PivotPopup.jsx';
 import { decodeAcrossDepositEvent, decodeCCIPSendMessageEvent } from '../utils';
+import { useWeb3Modal, useWeb3ModalAccount } from '@web3modal/ethers/react';
 
 
 const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) => {
@@ -15,6 +16,11 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
     const [pivotInitialized, setPivotInitialized] = useState(false);
     const [initialMarket, setInitialMarket] = useState("0x29598b72eb5CeBd806C5dCD549490FdA35B13cD8")
     const [pivotTx, setPivotTx] = useState("")
+
+    const { open } = useWeb3Modal()
+    const { isConnected } = useWeb3ModalAccount()
+
+
     useEffect(() => {
         if ((poolData?.openAssertion && poolData?.openAssertion !== "0x0000000000000000000000000000000000000000000000000000000000000000") || poolData?.isPivoting) {
             setPivotInitialized(true)
@@ -24,6 +30,12 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
     const windowOverride = useMemo(() => (
         typeof window !== 'undefined' ? window : null
     ), []);
+
+    useEffect(() => {
+        if (!isConnected && pivotInitialized) {
+            open({})
+        }
+    }, [pivotInitialized])
 
     const executePivot = async () => {
         let signer = null;
@@ -87,7 +99,7 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
 
 
     let pivotPopup = null
-    if (pivotInitialized || pivotTx) {
+    if ((pivotInitialized || pivotTx) && isConnected) {
         pivotPopup = <PivotPopup isPivoting={poolData?.isPivoting} pivotTx={pivotTx} poolData={poolData} tvl={poolData?.TVL} provider={provider} fetchPoolData={fetchPoolData} poolAddress={poolData.address} pivotTarget={protocolName + " " + networks[targetChain]} openAssertion={poolData?.openAssertion} closePopup={() => {
             setPivotInitialized(false)
             setPivotTx("")
@@ -151,7 +163,6 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
 
             </div>
             <div style={{ marginRight: "30px", width: "100%", textAlign: "center", border: "white 1px solid" }} className='demoButton button' onClick={() => {
-
                 if (!networks[targetChain]) {
                     setErrorMessage("The chain you have entered is not supported at this time.")
                     return

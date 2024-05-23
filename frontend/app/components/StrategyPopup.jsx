@@ -4,6 +4,7 @@ import contractAddresses from '../JSON/contractAddresses.json'
 import InvestmentStrategyABI from '../ABI/InvestmentStrategyABI.json'; // Adjust the path as needed
 import Loader from './Loader.jsx';
 import { ethers, parseEther, solidityPackedKeccak256 } from 'ethers';
+import { useWeb3Modal, useWeb3ModalAccount } from '@web3modal/ethers/react';
 
 
 function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyIndex, strategies, setShowStrategyPopup, strategyIndexOnPool }) {
@@ -15,6 +16,10 @@ function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyI
     const [strategyCode, setStrategyCode] = useState("")
     const [strategyName, setStrategyName] = useState('')
 
+    const [submitting, setSubmitting] = useState(false)
+
+    const { open } = useWeb3Modal()
+    const { isConnected } = useWeb3ModalAccount()
     useEffect(() => {
         if (strategies.length > 0) {
             setStrategyName(strategies[strategyIndex])
@@ -22,6 +27,16 @@ function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyI
             getStrategyName()
         }
     }, [strategies])
+
+    useEffect(() => {
+        if (submitting) {
+            if (isConnected) {
+                submitNewStrategy()
+            } else {
+                open({})
+            }
+        }
+    }, [submitting, isConnected])
 
     useEffect(() => {
         // Fetch code from strategy contract
@@ -52,6 +67,7 @@ function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyI
         } catch (err) {
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
             // setErrorMessage("Connection Error: " + err?.info?.error?.message)
+            setSubmitting(false)
             return
         }
         const stratContact = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, signer)
@@ -72,6 +88,7 @@ function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyI
             console.log(err?.info?.error?.message ?? "This transaction has failed\n\n" + (err?.receipt ? "TX: " + err.receipt.hash : ""))
             // setErrorMessage(err?.info?.error?.message)
         }
+        setSubmitting(false)
         setStrategyIndex(strategies.length)
         getStrategyCount()
         setShowStrategyPopup(false)
@@ -96,16 +113,19 @@ function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyI
                 <b>Close</b>
             </div>
         </div>
-        <div className="popup-title">Strategy Selection</div>
+        <div className="popup-title" >Strategy Selection</div>
         <div className="popup-message">
             {display}
         </div></>
 
     if (strategyToView) {
         if (strategyCode) {
-            display = (<div style={{ fontFamily: "Courier New", fontSize: "14px", fontWeight: "lighter", width: "100%", overflow: "scroll", backgroundColor: "black", color: "white", whiteSpace: "pre-wrap" }}>
-                {strategyCode}
-            </div>)
+            display = (<>
+                <span style={{ display: "block" }}><b>This code gets executed by UMA Oracle verifiers to determine if a proposal to move funds is a better investment or not.</b></span>
+                <div style={{ fontFamily: "Courier New", fontSize: "14px", fontWeight: "lighter", width: "100%", overflow: "scroll", backgroundColor: "black", color: "white", whiteSpace: "pre-wrap" }}>
+
+                    {strategyCode}
+                </div></>)
             popupStyle = { height: "620px", width: "1100px" }
         } else {
             display = <Loader />
@@ -117,7 +137,7 @@ function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyI
                         <b>Back</b>
                     </div>}
             </div>
-            <div className="popup-title">{strategyName}</div>
+            <div className="popup-title" style={{ fontSize: "36px" }}>{strategyName}</div>
             {display}
             <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
                 <div style={{ backgroundColor: "#374d59", marginRight: "30px", width: "134px", textAlign: "center", border: "white 1px solid" }} onClick={() => setShowStrategyPopup(false)} className={'demoButton button'}>
@@ -144,7 +164,7 @@ function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyI
             <div className="popup-title">New Strategy</div>
             {display}
             <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
-                <div style={{ backgroundColor: "#374d59", marginRight: "30px", width: "134px", textAlign: "center", border: "white 1px solid" }} onClick={() => submitNewStrategy()} className={'demoButton button'}>
+                <div style={{ backgroundColor: "#374d59", marginRight: "30px", width: "134px", textAlign: "center", border: "white 1px solid" }} onClick={() => setSubmitting(true)} className={'demoButton button'}>
                     <b>Submit New Strategy</b>
                 </div>
             </div>

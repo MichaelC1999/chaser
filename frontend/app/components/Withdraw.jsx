@@ -7,9 +7,12 @@ import networks from '../JSON/networks.json'
 import { decodeCCIPSendMessageEvent, userLastWithdraw } from '../utils';
 import WithdrawStatus from './WithdrawStatus'
 import LoadingPopup from './LoadingPopup';
+import { useWeb3Modal, useWeb3ModalAccount } from '@web3modal/ethers/react';
 
 
 const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, fetchPoolData }) => {
+    const { open } = useWeb3Modal()
+    const { isConnected } = useWeb3ModalAccount()
     const [assetAmount, setAssetAmount] = useState('');
     const [buyInputError, setBuyInputError] = useState(false);
     const [withdrawInitialized, setWithdrawInitialized] = useState(false);
@@ -39,16 +42,25 @@ const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, fetchPoolD
     useEffect(() => {
         // Buy flow starts with clearing input errors detected on last buy attempt
         if (withdrawInitialized) {
-            setBuyInputError(false);
-            handleWithdraw();
+            if (isConnected) {
+                setBuyInputError(false);
+                handleWithdraw();
+            } else {
+                open({})
+            }
         }
-    }, [withdrawInitialized])
+    }, [withdrawInitialized, isConnected])
 
     const windowOverride = useMemo(() => (
         typeof window !== 'undefined' ? window : null
     ), []);
 
     const handleWithdraw = async () => {
+        if (!assetAmount) {
+            setWithdrawInitialized(false)
+            setErrorMessage("You need to set a valid amount to withdraw.")
+            return
+        }
         let signer = null;
         try {
             await provider.send("eth_requestAccounts", []);
@@ -86,7 +98,7 @@ const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, fetchPoolD
 
 
     let withdrawLoader = null;
-    if (withdrawInitialized) {
+    if (withdrawInitialized && isConnected) {
         withdrawLoader = <LoadingPopup loadingMessage={"Please wait for your transactions to fill"} />
     }
 

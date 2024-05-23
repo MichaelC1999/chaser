@@ -9,9 +9,13 @@ import LoadingPopup from './LoadingPopup.jsx';
 import StrategyPopup from './StrategyPopup.jsx'
 import StrategyFetch from './StrategyFetch.jsx'
 import { useRouter } from 'next/navigation';
+import { useWeb3Modal, useWeb3ModalAccount } from '@web3modal/ethers/react';
 
 const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
     const router = useRouter()
+    const { open } = useWeb3Modal()
+    const { isConnected } = useWeb3ModalAccount()
+
     const instructionBoxDefault = 'Hover over an input for more instruction...'
     const [poolName, setPoolName] = useState('');
     const [assetAddress, setAssetAddress] = useState('0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14');
@@ -69,9 +73,14 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
 
     useEffect(() => {
         if (submitting) {
-            submitLogic()
+            if (isConnected) {
+
+                submitLogic()
+            } else {
+                open({})
+            }
         }
-    }, [submitting])
+    }, [submitting, isConnected])
 
     const setNetworkSelection = (event) => {
         const selectedNetworks = Array.from(event.target.selectedOptions, option => option.value);
@@ -79,7 +88,7 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
     };
 
     let submittingLoader = null;
-    if (submitting) {
+    if (submitting && isConnected) {
         submittingLoader = <LoadingPopup loadingMessage={"Please wait for your transactions to fill"} />
     }
     let strategyExecution = null

@@ -43,35 +43,54 @@ But if you were to deposit your funds into a Chaser pool using a strategy that s
 ## How does Chaser investing work?
 
 Chaser's architecture uses a pool system. Each pool defines a strategy on how and when funds should be moved (see more on this below).
-Beyond depositing and withdrawing funds, Chaser handles all of the complexities of entering and exiting investment positions behind the scenes. 
-Regardless of where the pool currently is investing the funds, you will always withdraw from pool contract on the network you deposited to.
+Beyond depositing and withdrawing funds, Chaser handles all of the complexities of entering and exiting investment positions on external protocols behind the scenes. 
 
-It is important to keep in mind that when a pool has an investment position on a different network, there are delays when finalizing your interactions. Specifically, deposits to other chains need to bridge and send a callback message before minting pool tokens. Also, withdraws from positions on other chains face similar delays. The current idea of the Chaser token is to facilitate instant liquidity for pools with positions on other chains.
-If there is an open proposal to move the pools funds, there is a block on deposits and withdraws to prevent funds lost when bridging gets executed.
+It is important to keep in mind that when a pool has an investment position on a different network, there are delays when finalizing your interactions. Specifically, deposits to other chains need to bridge and send a callback message before minting pool tokens. Also, withdraws from positions on other chains face similar delays. The current idea of the Chaser token is to facilitate instant liquidity for pools with positions on other chains. If there is an open proposal to move the pools funds, there is a block on deposits and withdraws to prevent funds lost when bridging gets executed.
 
 ## Tutorials
 
-The Chaser demo is live: 
-
-### Making a Deposit
-
-### Making a Withdraw
+Chaser is live on Sepolia: [chaser.finance](https://chaser.finance/) 
 
 ### Moving Pool Funds
 
-### Creating a Strategy
+### Strategies
 
-#### Investigating Transaction Failures
+Chaser strategies are based on custom written Javascript logic that query subgraph data and analyze metrics on a market. Each proposal to move deposits on a Chaser pool requires a user submit a protocol name, network and market ID that points to a market entity on the Messari subgraph for that protocol. The proposal generates a node command that UMA Oracle disputers execute in order to verify that this proposal would be a better investment for the defined strategy. This is determined by executing the Javascript logic and receiving `true` as the return value. When a pool is deployed, the strategy is set and unchangeable.
 
-As Chaser is still in development using newer technologies, the contracts are still prone to bugs. Before the production stage, the contracts will have rescue mechanisms in the event of failure on a cross chain transaction. While failures on the user-signed transaction on the PoolControl contract would be bugs that indicate errors in the contract logic, there can be failures on the bridged transaction that are not visible on the front end. Most failures can be linked to:
+It is best to write a strategy using the template in `strategyTemplate.js`. Here are some of the rules for creating Chaser strategies:
 
-- Low test token balances on Chaser contracts (Compound Test WETH, Link, etc)
-- Across relayer transaction fails on the destination chain
-- Lost CCIP/Across message where the function call on thedestination chain doesnt seem to execute
-- Gas issues
+- The maximum file size is 24kb
+- Declare each supported chain and asset addresses supported on each chain in the `supportedChainsAssets` object.
+- Perform your numerical analysis/comparison on any metric listed in the subgraph query. Any metric you do not end up using for your strategy's analysis, feel free to remove from the query
+- In the custom logic section, write any sorts of validations and checks you want to perform to prevent a pool from pivoting deposits
+- In the case of an error querying or executing logic, return false and do not let the pool pivot
+- After processing the subgraph data, make some sort of condition to return true and declare that the pool should pivot deposits to the proposed market
+- The query pulls data snapshots of the given market every day for the last year and a market entity that gets the current state of these metrics.
 
-Give up to 30 minutes total for a transaction to finalize. If after this time your deposit/withdraw/pivot is not reflected on the frontend, you can assume something went wrong. Of course, reach out to the Chaser team to notify us in these cases. If you would like to debug this yourself, there are many ways to get some insights into issues.
+Soon, these strategies will be based off of executing logic held in a Github repo. This will allow for a larger logic file size, external libraries and deeper analysis in general. Also, there will be support for positional data for analyzing markets with granular deposit and borrow data points. 
 
+#### Add a strategy
+
+After writing your strategy logic and testing it with various markets, do the following to add your custom strategy to Chaser when deploying a pool
+
+
+<b>Click on "Strategy Selection" to open the strategy popup</b>
+<br>
+<img src="./media/strat1.png" width="600px"/>
+
+<b>Click on "Add New Strategy"</b>
+<br>
+<img src="./media/strat2.png" width="600px"/>
+
+<b>Add the title and paste your code in</b>
+<br>
+<img src="./media/strat3.png" width="600px"/>
+
+<b>Submit the transaction, and continue deploying your pool</b>
+<br>
+<img src="./media/strat4.png" width="600px"/>
+
+### Verifying Pivot Proposals
 
 ## Technical
 
@@ -79,7 +98,7 @@ Here are the essential tools that make Chaser work
 - Across Bridge, for facilitating investments between different networks.
 - Chainlink CCIP, for interacting and managing state between different networks
 - UMA Oracle, for the system of proposing/moving deposits between markets
-- The Graph, for access to decentralized, trusted data on DeFi protocols
+- The Graph, for access to decentralized, trusted data on DeFi protocols. Specifically Messari Standardized Subgraphs for providing decentralized, indexable DeFi data
 
 ### Investment Process
 
@@ -91,8 +110,8 @@ Strategy contracts help UMA OO disputers make an objective, data-based determina
 
 - A user proposes that a given market is a better investment than the market where funds are currently deposited into, according to the current strategy (example: The Compound-Mainnet ETH market returns a higher yield with lower 30 day volatility than the current market on AAVE-V3-Optimism WETH) 
 - This proposal opens up an UMA assertion with a combination of the target protocol + network + market address and a hardcoded proposal template complete with instructions on how disputers can verify the proposal.
-- UMA disputers verify that this proposal is true by reading the Javascript code saved on the strategy contract and executing it locally.
-- This code does two things; queries the subgraphs of the lending markets in question and analyzes their data.
+- UMA disputers verify that this proposal is true by reading the Javascript code saved on the strategy contract and executing it locally with a provided command.
+- This code queries the subgraphs of the lending markets in question and analyzes their data.
 - This code returns `true` if the proposed investment is currently better for your strategy than the current market the pool is invested into, and should therefore move funds to the new market.
 - If the code returns `false`, the proposed market is not a better investment and is not worth moving funds. Disputers will  
 - When a proposal is successful, Chaser unwinds the current position and sends the funds through the Across bridge to whatever network the new, better investment is on. This function also sends a CCIP message to the destination network with instructions on how and where to deposit the funds
@@ -104,9 +123,9 @@ See the strategy contract creation tutorial above to make your own strategy.
 
 - A DAO/user makes a deposit into a Chaser Pool
 - The PoolControl calls the 'depositV3' function on the local Across V3 SpokePool to send these funds and data to the chain where this pool currently invests its position
-- The BridgedReceiver contract handles the bridged funds and data. This gets forwarded to the BridgedLogic contract which then uses the Integrator contract to connect with the external protocol 
+- The BridgeReceiver contract handles the bridged funds and data. This gets forwarded to the BridgeLogic contract which then uses the Integrator contract to connect with the external protocol 
 - The Integrator contract standardizes connections to external protocols like Aave and Compound. This routes deposits to the appropriate market, performs reads to get the current value of the position, and facilitates withdraws from the protocol
-- After the Integrator and BridgedReceiver finish processing the deposit, a CCIP message is sent through the ChaserMessenger contract back to the origin chain
+- After the Integrator and BridgeReceiver finish processing the deposit, a CCIP message is sent through the ChaserMessenger contract back to the origin chain
 - The ChaserMessenger *on the origin chain* receives this CCIP message and calls functions on the PoolControl contract in order to finalize the deposit
 - The PoolControl updates the pool state and mints the user tokens to denominate their position
 
@@ -117,10 +136,10 @@ As deposits are usually being invested in other protocols on other chains, liqui
 - DAO/user interacts with the PoolControl contract to request a withdraw
 - If the deposits are in a protocol on a different chain, the ChaserMessenger sends a CCIP to the appropriate chain requesting a withdraw
 - This withdraw request includes the user's proportion of out of all the Pool's position tokens. As the origin chain does not have access to the investment's current value including interest, this is necessary to determine how much a user is actually entitled to.
-- The ChaserMessenger *on the destination chain* processes this message and routes the function through the BridgedLogic contract
-- BridgedLogic makes the withdraw using the Integrator contract to interact with the protocol that the funds are currently invested into
-- The withdrawn funds are sent by BridgedLogic back to the origin chain by using the Across bridge
-- The BridgedReceiver forwards the funds and data to the Pool which then updates state and sends the funds to the user
+- The ChaserMessenger *on the destination chain* processes this message and routes the function through the BridgeLogic contract
+- BridgeLogic makes the withdraw using the Integrator contract to interact with the protocol that the funds are currently invested into
+- The withdrawn funds are sent by BridgeLogic back to the origin chain by using the Across bridge
+- The BridgeReceiver forwards the funds and data to the Pool which then updates state and sends the funds to the user
 
 #### Mechanics of pivoting investment
 
@@ -143,8 +162,6 @@ If a pivot proposal is deemed successful by the UMA OO, Chaser will then withdra
 - The Chaser contracts on the destination chain handle the state updates and connections necessary to initialize the investment
 - On a pool's first pivot to a chain, the registry deploys a PoolBroker contract to hold the position for this pool separated from the funds of other pools.  
 
-
-
 ### External Protocol Integration
 
 - In order to enable Chaser access to other protocols such as Compound or Spark, the Integration contract needs to be upgraded with interfaces and logic to execute the following operations on the protocol's smart contracts
@@ -157,13 +174,3 @@ If a pivot proposal is deemed successful by the UMA OO, Chaser will then withdra
 - Deposits are credited to the PoolBroker contract for the sake of keeping revenues, balances, and data separated and individual for each pool
 - All withdraw requests have the PoolBroker receive the deposits, then pass them through the Integration contract to wherever the funds reach their destination (pool, other protocol, bridging, etc)
 - NOTE: During development, the Integration contract logic has sections where assetAddresses are changed to hardcoded values. This is because the testnet versions of some assets are different by protocol. The WETH used by Across is different than the WETH used by Aave, for example. 
-
-## Glossary
-
-- Strategy
-- Pool
-- Market
-- 
-
-
-
