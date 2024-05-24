@@ -113,10 +113,6 @@ market(id:"'+ marketId + '") {\
     }
 
     try {
-        const curPositionData = await prepareData(curProtocol, curChain, curMarketId);
-        const desPositionData = await prepareData(reqProtocol, reqChain, reqMarketId);
-
-        console.log(curPositionData, desPositionData)
 
         // EDIT THIS OBJECT TO HAVE THE ADDRESSES OF THE ASSETS THAT YOUR STRATEGY SUPPORTS ON EACH CHAIN. 
         // example - if your strategy is only for stable coins on Base and Arbitrum, make the "arbitrum" value an array of USDC, DAI, USDT addresses on Arbitrum 
@@ -125,14 +121,21 @@ market(id:"'+ marketId + '") {\
             "base": ["0x4200000000000000000000000000000000000006"]
         }
 
+        const supportedProtocols = ["aave-v3", "aave-v2", "compound-v3"]
+
+        if (!supportedProtocols.includes(reqProtocol)) {
+            return false
+        }
+
+        const curPositionData = await prepareData(curProtocol, curChain, curMarketId);
+        const desPositionData = await prepareData(reqProtocol, reqChain, reqMarketId);
+
         if (!supportedChainsAssets[reqChain].includes(desPositionData.market.inputToken.id)) {
             return false
         }
 
-
         // BEGIN CUSTOMIZABLE SECTION - THIS IS WHERE YOU WRITE YOUR CUSTOM STRATEGY LOGIC
         // Read the Chaser docs for requirements and instructions for writing a custom strategy
-
 
         let curROR = 0;
         if (curPositionData) {

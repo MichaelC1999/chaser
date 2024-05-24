@@ -317,10 +317,9 @@ function calculateAPY(baseDepositValue, currentDepositValue, recordTimestamp) {
     // Extrapolate profit per second to APY
     // Note: Assuming compounding once per year for simplicity
     let apy = Math.pow((profitPerMin * minPerYear) / baseDepositValue + 1, 1) - 1;
-    console.log(apy)
     // Convert APY to a percentage
     apy = apy * 100;
-    if (!apy) {
+    if (!apy || apy > 1 || apy < -0.1) {
         return 0
     }
 

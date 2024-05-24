@@ -1,6 +1,6 @@
 # Chaser
 
-Chaser is live on Sepolia! [chaser.finance](https://chaser.finance/) 
+<b>Chaser is live on Sepolia! [chaser.finance](https://chaser.finance/) </b>
 
 Chaser revolutionizes DeFi investing by empowering users to create data based investment strategies on chain. With granular subgraph data on various DeFi protocols, Chaser pools generate optimal yield while gaining deep control over risk. Factoring in historical and positional subgraph data, Chaser opens up impossible investment strategies like:  
 
@@ -25,22 +25,31 @@ Without this kind of data, DeFi investment strategies are very limited. Only cur
 
 Chaser makes it possible to factor all of this in into your DAOs liquidity management. By deploying a pool and defining a strategy script, Chaser moves your funds efficiently while following your desired risk parameters. 
 
-### Example: USDC yields directly in Aave/Compound vs Chaser 
+### Example: USDC yields directly in Chaser vs Aave and Compound 
 
-As an example, here are the 90 day APYs for USDC deposits on 8 different Aave and Compound deployments. 
+On a Chaser pool with a USDC high yield strategy, we can move funds between Aave and Compound on different networks to the market with the highest USDC yield at that given moment. 
 
-- Aave Arbitrum: 9.85%
-- Aave Base: 6.03%
-- Aave Ethereum: 8.85%
-- Aave Optimism: 9.44%
-- Aave Polygon: 10.23%
-- Compound Ethereum: 9.39%
-- Compound Arbitrum: 8.04%
-- Compound Polygon: 10.19%
+As an example, here are the 90 day APYs for USDC deposits on 8 different Aave and Compound deployments between Feb 1 2024 and May 1 2024. 
 
-But if you were to deposit your funds into a Chaser pool using a strategy that seeks the highest yield at that given moment, your 90 day APY would be:
+- Compound Ethereum: 9.77%
+- Compound Arbitrum: 8.00%
+- Compound Polygon: 10.28%
+- Aave Arbitrum: 9.75%
+- Aave Base: 5.90%
+- Aave Ethereum: 8.75%
+- Aave Optimism: 9.67%
+- Aave Polygon: 10.41%
 
-- Chaser: 13.53%
+<br>
+<br>
+<b>CHASER USDC: 14.06%</b>
+<br>
+<br>
+
+During that same time period, Chaser increases yield significantly by moving funds to the highest market for each day. With 14% APY, it is nearly 4% more than the single market with the best revenues during that same period. No interactions or bridging required by the depositor, as Chaser handles all of that.
+
+
+<a href="https://raw.githubusercontent.com/MichaelC1999/chaser/master/media/chaser.png" target="_blank" ><img src="./media/chaser.png" width="900px"/></a>
 
 ## How does Chaser investing work?
 

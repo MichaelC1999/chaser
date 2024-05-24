@@ -21,7 +21,6 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
     const [assetAddress, setAssetAddress] = useState('0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14');
     const [strategyIndex, setStrategyIndex] = useState('0');
     const [instructionBox, setInstructionBox] = useState(instructionBoxDefault)
-    const [supportedNetworks, setSupportedNetworks] = useState([]);
     const [submitting, setSubmitting] = useState(false)
     const [showStrategyPopup, setShowStrategyPopup] = useState(false)
     const [strategyCount, setStrategyCount] = useState(0)
@@ -82,11 +81,6 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
         }
     }, [submitting, isConnected])
 
-    const setNetworkSelection = (event) => {
-        const selectedNetworks = Array.from(event.target.selectedOptions, option => option.value);
-        setSupportedNetworks(selectedNetworks);
-    };
-
     let submittingLoader = null;
     if (submitting && isConnected) {
         submittingLoader = <LoadingPopup loadingMessage={"Please wait for your transactions to fill"} />
@@ -117,8 +111,8 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
 
             </label>
             <label key={4} onMouseEnter={() => setInstructionBox("Network selection will allow the deploying user to select what chains they want enabled for deposits.\nCurrently the pool does not take in this input, but will be supported at a later date.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
-                Networks:
-                <select onChange={() => null} multiple value={supportedNetworks} >
+                Networks Enabled:
+                <select onChange={() => null} multiple >
                     {Object.keys(networks).map(network => (
                         <option key={networks[network]} value={networks[network]}>{networks[network]}</option>
                     ))}
@@ -126,7 +120,6 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
             </label>
             <div onMouseEnter={() => setInstructionBox("Click submit to deploy the pool.\nAfter deployment, you can specify the first position to invest into and make the initial deposit.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
                 <SubmitButton submitMethod={() => setSubmitting(true)} />
-
             </div>
         </div>
         <div key={'bottom-new-pool-inputs'} className="new-pool-inputs" style={{ border: "white 1px solid", flex: 2, margin: "43px 20px 32px 20px", padding: "20px" }}>
