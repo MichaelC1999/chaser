@@ -29,6 +29,7 @@ contract BridgeLogic is OwnableUpgradeable {
     mapping(bytes32 => uint256) public userCumulativeDeposits;
     mapping(address => uint256) public poolAddressToDepositNonce;
     mapping(address => uint256) public poolAddressToWithdrawNonce;
+    mapping(address => bool) public poolInitialized;
     mapping(address => mapping(uint256 => uint256))
         public poolToNonceToCumulativeDeposits;
     mapping(address => mapping(uint256 => uint256))
@@ -55,6 +56,8 @@ contract BridgeLogic is OwnableUpgradeable {
         integratorAddress = _integratorAddress;
     }
 
+    // IMPORTANT - Need CCIP handler function to reset poolInitialized, poolToAsset on a pool where fraud has sent dummy data to BridgeLogic that has not been initialized yet
+
     function handlePositionInitializer(
         uint256 _amount,
         address _poolAddress,
@@ -69,9 +72,15 @@ contract BridgeLogic is OwnableUpgradeable {
                 registry.poolEnabled(msg.sender),
             "Only callable by the BridgeReceiver or a valid pool"
         );
-        bytes32 currentNonceHash = keccak256(abi.encode(_poolAddress, 0));
-        poolToCurrentPositionMarket[_poolAddress] = _marketAddress;
+
+        require(
+            poolInitialized[_poolAddress] == false,
+            "Pool can only be initialized once"
+        );
+
+        poolInitialized[_poolAddress] = true;
         poolToAsset[_poolAddress] = _tokenSent;
+        poolToCurrentPositionMarket[_poolAddress] = _marketAddress;
 
         updatePositionState(_poolAddress, _protocolHash, _marketAddress);
 
@@ -98,7 +107,10 @@ contract BridgeLogic is OwnableUpgradeable {
             "Only callable by the BridgeReceiver"
         );
 
-        poolToAsset[_poolAddress] = _tokenSent;
+        if (poolToAsset[_poolAddress] == address(0)) {
+            poolInitialized[_poolAddress] = true;
+            poolToAsset[_poolAddress] = _tokenSent;
+        }
 
         updatePositionState(_poolAddress, _protocolHash, _marketAddress);
 
@@ -597,7 +609,7 @@ contract BridgeLogic is OwnableUpgradeable {
         uint256 cumulativeDeposAtPoolNonce = poolToNonceToCumulativeDeposits[
             _poolAddress
         ][_poolDepoNonce];
-        uint256 cumualtiveWithsAtPoolNonce = poolToNonceToCumulativeWithdraw[
+        uint256 cumulativeWithsAtPoolNonce = poolToNonceToCumulativeWithdraw[
             _poolAddress
         ][_poolWithNonce];
         uint256 cumulativeDeposAtBridgeNonce = poolToNonceToCumulativeDeposits[
@@ -617,9 +629,10 @@ contract BridgeLogic is OwnableUpgradeable {
         }
 
         if (bridgeWithNonce > _poolWithNonce) {
+            //IMPORTANT! - Test to attempt to enter condition. This would mean withdraw order made after deposit opened, but withdraw reached bridge logic first
             pendingWithdraws =
                 cumulativeWithsAtBridgeNonce -
-                cumualtiveWithsAtPoolNonce;
+                cumulativeWithsAtPoolNonce;
         }
 
         uint256 currentBalance = getPositionBalance(_poolAddress);

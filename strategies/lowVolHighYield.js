@@ -1,4 +1,4 @@
-const strategyCalculation = async () => {
+export const strategyCalculation = async () => {
     // This object converts Sepolia/Base testnet markets to their mainnet addresses for the subgraph query
     const TESTNET_ANALOG_MARKETS = {
         '0x61490650abaa31393464c3f34e8b29cd1c44118ee4ab69c077896252fafbd49efd26b5d171a32410': "0x46e6b214b524310239732d51387075e0e70970bf4200000000000000000000000000000000000006",
@@ -14,8 +14,8 @@ const strategyCalculation = async () => {
 
     const curChain = networks[process.argv[2]]
     const reqChain = networks[process.argv[3]]
-    const curMarketId = TESTNET_ANALOG_MARKETS[process.argv[4]]
-    const reqMarketId = TESTNET_ANALOG_MARKETS[process.argv[5]]
+    const curMarketId = TESTNET_ANALOG_MARKETS[process.argv[4]] || process.argv[4]
+    const reqMarketId = TESTNET_ANALOG_MARKETS[process.argv[5]] || process.argv[5]
     const curProtocol = process.argv[6]
     const reqProtocol = process.argv[7]
 

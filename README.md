@@ -66,7 +66,9 @@ The current idea of the Chaser token is to facilitate instant liquidity for pool
 
 This is the pool that a user/DAO will deploy in order to invest according to their own strategy. Each pool is deployed factory style from the ChaserManager contract. Most state for each pool is stored on the PoolCalculations contract. On the PoolControl, there is a mix of functions for users to call as well as callbacks from inter-chain actions to finalize state changes and fund transfers between chains. The PoolControl is the only contract where users will directly interact with for depositing/withdrawing funds and handling pivots.
 
-#### Pool Tokens
+#### PoolToken
+
+Upon finalizing the first deposit and position entrance on a pool, the PoolControl will automatically deploy a "PVT" pool token. These tokens are accounting tokens to record depositor balances. They do not represent shares/stake of a pool, as there are no sorts of decisions made on the pool based on what proportion of a pool's token a depositor has. These tokens are non transferable, only allow minting upon deposit and burning upon withdraw.   
 
 #### Functions
 
@@ -124,6 +126,13 @@ For CCIP messaging, the contract handles message reception between chains and ge
 
 For executing opening proposals and initiating pivot execution, the Arbitration contract connects to the UMA protocol. It reads current pool state and generates an UMA claim. Disputers active on UMA will see this claim, and execute the pool's strategy script to determine whether or not the pivot proposal actually points to a better investment for your strategy than the current position.
 
+<br>
+
+### Funds and State Flow
+Here is a flow chart of how deposits and state are sent between contracts on chaser:
+<br>
+
+<a href="https://raw.githubusercontent.com/MichaelC1999/chaser/master/media/chaserFlowchart.png" target="_blank" ><img src="./media/chaserFlowchart.png" width="600px"/></a>
 
 ## Tutorials
 
@@ -210,8 +219,6 @@ After writing your strategy logic and testing it with various markets, do the fo
 <a href="https://raw.githubusercontent.com/MichaelC1999/chaser/master/media/strat4.png" target="_blank" ><img src="./media/strat4.png" width="600px"/></a>
 <br>
 
-### Verifying Pivot Proposals
-
 ## Technical
 
 Here are the essential tools that make Chaser work
@@ -265,11 +272,20 @@ As deposits are usually being invested in other protocols on other chains, liqui
 
 Chaser pivots based off of comparison. We optimistically assume that the current market where deposits are currently invested in is the best investment at the moment for the pool's strategy. When someone proposes that a different market is better than the current market according to the strategy logic, they put up a bond in order to assert this on the UMA oracle. Pools can be configured to reward these assertions in order to incentivize monitoring the investment for he best possible strategy.
 
-Any entity can propose to the UMA Oracle a new market for your pool to invest in based on your strategy. Strategies have a measureable, numeric determination of which market is a better investment.
-
-As strategies determine when to move funds based off of querying subgraphs, proposing pivots are easily automateable. Soon there will be an official Chaser pivot bot for download
+Any entity can propose to the UMA Oracle a new market for your pool to invest in based on your strategy. Strategies have a measureable, numeric determination of which market is a better investment. As strategies determine when to move funds based off of querying subgraphs, proposing pivots are easily automateable (See Strategy Pivot Bot below)
 
 If a pivot proposal is deemed successful by the UMA OO, Chaser will then withdraw the funds from the current position and move deposits into the new, proposed market. If the current position and or the proposed position sit on a different chain than the pool, Chaser will use CCIP and Across to send funds and manage state while changing positions.
+
+##### Strategy Pivot Bot
+
+Note: This bot is not functional yet.
+
+As Chaser strategies are based on data, automating the process of proposing new markets to move funds to is simple. In the Chaser repo, there is a directory called `strategyPivotBot`. This directory holds a customizable node.js bot for monitoring potential pivots for your pool and opening pivot proposals. There are 4 files:
+
+- BotExecution.js is for running the entire bot logic on an interval and reading the yield of the pool's current position. Aside from configuring your preferences, this works out of the box for all strategies.
+- BestMarketForStrategy.js loops through all potential markets, queries their subgraphs, and processes their data in the same way the strategy does. It returns an object of the best market for the strategy
+- highYield3Month.js is the actual strategy logic that your pool uses. REPLACE THIS FILE WITH YOUR STRATEGY LOGIC. Add `module.exports = { strategyCalculation }` to the bottom of this file. After detecting a potential pivot, BotExecution confirms that the strategy logic will actually return true when executed with the proposed market inputs.
+- package.json contains all of the dependencies for the bot.
 
 #### Mechanics of deploying a pool
 

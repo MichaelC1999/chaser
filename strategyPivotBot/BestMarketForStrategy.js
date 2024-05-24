@@ -1,16 +1,6 @@
+const bestYieldOnStrategy = async () => {
 
-const strategyCalculation = async () => {
-
-    const url = "https://raw.githubusercontent.com/messari/subgraphs/master/deployment/deployment.json";
-
-    const depos = await fetch(url, {
-        method: "get",
-        headers: {
-            "Content-Type": "application/json",
-        }
-    })
-
-
+    console.log(process.argv)
 
     const highestRateByDay = {}
     const highestRateMarketByDay = {}
@@ -220,7 +210,6 @@ const strategyCalculation = async () => {
     return best;
 }
 
-const res = strategyCalculation();
-res.then(x => console.log(x))
+module.exports = { bestYieldOnStrategy }
 
 

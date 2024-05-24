@@ -1,4 +1,4 @@
-export const strategyCalculation = async () => {
+const strategyCalculation = async () => {
     // This object converts Sepolia/Base testnet markets to their mainnet addresses for the subgraph query
     const TESTNET_ANALOG_MARKETS = {
         '0x61490650abaa31393464c3f34e8b29cd1c44118ee4ab69c077896252fafbd49efd26b5d171a32410': "0x46e6b214b524310239732d51387075e0e70970bf4200000000000000000000000000000000000006",
@@ -113,6 +113,7 @@ market(id:"'+ marketId + '") {\
     }
 
     try {
+
         // EDIT THIS OBJECT TO HAVE THE ADDRESSES OF THE ASSETS THAT YOUR STRATEGY SUPPORTS ON EACH CHAIN. 
         // example - if your strategy is only for stable coins on Base and Arbitrum, make the "arbitrum" value an array of USDC, DAI, USDT addresses on Arbitrum 
         const supportedChainsAssets = {
@@ -120,7 +121,7 @@ market(id:"'+ marketId + '") {\
             "base": ["0x4200000000000000000000000000000000000006"]
         }
 
-        const supportedProtocols = ["aave-v3", "compound-v3"]
+        const supportedProtocols = ["aave-v3", "aave-v2", "compound-v3"]
 
         if (!supportedProtocols.includes(reqProtocol)) {
             return false
@@ -129,15 +130,32 @@ market(id:"'+ marketId + '") {\
         const curPositionData = await prepareData(curProtocol, curChain, curMarketId);
         const desPositionData = await prepareData(reqProtocol, reqChain, reqMarketId);
 
-        if (!supportedChainsAssets[reqChain].includes(desPositionData.market.inputToken.id)) {
+        if (!supportedChainsAssets[reqChain]?.includes(desPositionData.market.inputToken.id)) {
             return false
         }
 
         // BEGIN CUSTOMIZABLE SECTION - THIS IS WHERE YOU WRITE YOUR CUSTOM STRATEGY LOGIC
+        // Read the Chaser docs for requirements and instructions for writing a custom strategy
 
-        console.log(curPositionData.marketDailySnapshots.length, desPositionData.marketDailySnapshots.length)
-        return true
+        let curROR = 0;
+        if (curPositionData) {
+            curPositionData.marketDailySnapshots.forEach(ins => {
+                curROR += (Number(ins.rates[0].rate))
+            });
+        }
+        const curMeanROR = curROR / curPositionData.marketDailySnapshots.length;
 
+        let desROR = 0;
+        if (desPositionData) {
+            desPositionData.marketDailySnapshots.forEach(ins => {
+                desROR += (Number(ins.rates[0].rate))
+            });
+        }
+        const desMeanROR = desROR / desPositionData.marketDailySnapshots.length;
+
+        console.log(curMeanROR, desMeanROR)
+
+        return (desMeanROR > curMeanROR);
         // END CUSTOMIZABLE SECTION
     } catch (err) {
         console.log("Error caught - ", err.message);
@@ -146,3 +164,5 @@ market(id:"'+ marketId + '") {\
 }
 
 strategyCalculation().then(x => console.log(x));
+
+module.exports = { strategyCalculation }
