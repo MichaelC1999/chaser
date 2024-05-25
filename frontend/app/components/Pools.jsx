@@ -31,22 +31,6 @@ export default function Pools({ setErrorMessage, isCreatePool, setIsCreatePool }
     ), [provider]);
 
     useEffect(() => {
-        if (!ethers.isAddress(windowOverride?.ethereum?.selectedAddress)) {
-            connect()
-        }
-    }, [])
-
-    const connect = async () => {
-        // If the user is not signed into metamask, execute this logic
-        try {
-            await provider.send("eth_requestAccounts", []);
-            await provider.getSigner();
-        } catch (err) {
-            setErrorMessage("Connection Error: " + err?.info?.error?.message ?? err?.message);
-        }
-    }
-
-    useEffect(() => {
         const fetchPoolCount = async () => {
             if (!registry) {
                 return;

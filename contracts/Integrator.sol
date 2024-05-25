@@ -10,6 +10,8 @@ import {DataTypes} from "./libraries/AaveDataTypes.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
+/// @title Integrator Contract
+/// @dev Handles protocol-specific operations like deposits and withdrawals
 contract Integrator is Initializable {
     address public bridgeLogicAddress;
     address public registryAddress;
@@ -17,6 +19,9 @@ contract Integrator is Initializable {
 
     event ExecutionMessage(string);
 
+    /// @notice Initializes the Integrator contract, replacing the constructor
+    /// @param _bridgeLogicAddress Address of the BridgeLogic contract
+    /// @param _registryAddress Address of the ChaserRegistry contract
     function initialize(
         address _bridgeLogicAddress,
         address _registryAddress
@@ -27,6 +32,14 @@ contract Integrator is Initializable {
         chainId = IChaserRegistry(registryAddress).currentChainId();
     }
 
+    /// @notice Handles the interaction with the Aave protocol for deposit or withdrawal
+    /// @dev Directly calls Aave's deposit or withdrawal functions via the Aave pool interface
+    /// @dev Currently changes the asset to deposit because of testnet compatibility constraints
+    /// @param _operation Type of operation to perform ('deposit' or 'withdraw')
+    /// @param _amount Amount of the asset to be deposited or withdrawn
+    /// @param _assetAddress Address of the asset involved in the transaction (on the local chain, not necessarily the address on the pool chain)
+    /// @param _marketAddress Address of the Aave market (lending pool)
+    /// @param _poolBroker Address of the PoolBroker that will hold the aTokens
     function aaveConnection(
         bytes32 _operation,
         uint256 _amount,
@@ -70,6 +83,13 @@ contract Integrator is Initializable {
         }
     }
 
+    /// @notice Manages interactions with the Compound protocol
+    /// @dev Uses the Comet contract interface to deposit to or withdraw from a Compound market
+    /// @param _operation Type of operation ('deposit' or 'withdraw')
+    /// @param _amount Amount of the asset to transact
+    /// @param _assetAddress Address of the asset involved
+    /// @param _marketAddress Address of the Compound market
+    /// @param _poolBroker Address of the PoolBroker that will have access to the position
     function compoundConnection(
         bytes32 _operation,
         uint256 _amount,
@@ -117,9 +137,7 @@ contract Integrator is Initializable {
         address _assetAddress,
         address _marketAddress,
         address _poolBroker
-    ) internal {
-        // From subgraph market id, how can we get the address of the contract to call functions on?
-    }
+    ) internal {}
 
     function acrossConnection(
         bytes32 _operation,
@@ -127,10 +145,14 @@ contract Integrator is Initializable {
         address _assetAddress,
         address _marketAddress,
         address _poolBroker
-    ) internal {
-        // From subgraph market id, how can we get the address of the contract to call functions on?
-    }
+    ) internal {}
 
+    /// @notice Retrieves the current position of a pool in a specific DeFi protocol
+    /// @param _poolAddress Address of the pool querying its position
+    /// @param _assetAddress Address of the asset for which the position is being queried
+    /// @param _marketAddress Address of the market where the asset is deployed
+    /// @param _protocolHash Hash of the protocol name
+    /// @return uint256 Current balance or position amount in the protocol
     function getCurrentPosition(
         address _poolAddress,
         address _assetAddress,
@@ -155,7 +177,6 @@ contract Integrator is Initializable {
                 .getReserveData(_assetAddress);
             address aTokenAddress = Reserve.aTokenAddress;
 
-            //-measure integrator's balance of aTokens before depo
             return IERC20(aTokenAddress).balanceOf(brokerAddress);
         }
 
@@ -164,10 +185,22 @@ contract Integrator is Initializable {
         }
     }
 
+    /// @notice Generates a keccak256 hash of the provided string
+    /// @dev Utility function to convert string to bytes32 hash, used for comparing protocol identifiers
+    /// @param strToHash String to hash
+    /// @return bytes32 Resulting keccak256 hash
     function hasher(string memory strToHash) public view returns (bytes32) {
         return keccak256(abi.encode(strToHash));
     }
 
+    /// @notice Routes an external protocol interaction based on the specified operation and protocol
+    /// @dev Dynamically calls the appropriate connection function based on the protocol hash
+    /// @param _protocolHash Hash identifying the protocol to interact with
+    /// @param _operation Operation type ('deposit', 'withdraw', etc.)
+    /// @param _amount Amount of the transaction
+    /// @param _poolAddress Address of the pool initiating the transaction
+    /// @param _assetAddress Address of the asset involved
+    /// @param _marketAddress Address of the market or protocol endpoint
     function routeExternalProtocolInteraction(
         bytes32 _protocolHash,
         bytes32 _operation,

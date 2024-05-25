@@ -54,11 +54,7 @@ interface IPoolCalculations {
         bytes32
     ) external returns (bytes32, uint256);
 
-    function updateDepositReceived(
-        bytes32,
-        uint256,
-        uint256
-    ) external returns (address);
+    function updateDepositReceived(bytes32, uint256, uint256) external;
 
     function depositIdMinted(bytes32) external;
     function openSetPosition(

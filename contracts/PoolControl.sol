@@ -12,6 +12,10 @@ import {IPoolCalculations} from "./interfaces/IPoolCalculations.sol";
 import {IPoolToken} from "./interfaces/IPoolToken.sol";
 import {IArbitrationContract} from "./interfaces/IArbitrationContract.sol";
 
+/// @title Contract for each Chaser pool deployed
+/// @notice Manages investment pool operations including deposits, withdrawals, and cross-chain asset transfers
+/// @dev All user facing interactions on Chaser are made on this contract
+/// @dev Interfaces with various external contracts for managing pool strategies, calculations, and cross-chain movements
 contract PoolControl {
     address deployingUser;
     uint256 public localChain;
@@ -34,14 +38,14 @@ contract PoolControl {
     event DepositCrossChain(address);
     event WithdrawCrossChain(address);
 
-    /**
-     * @notice Initial pool configurations and address caching
-     * @param _deployingUser The address that called the pool deployment from the manager contract
-     * @param _asset The asset that is being invested in this pool
-     * @param _strategyIndex The index of the strategy for determining investment
-     * @param _poolName The name of the pool
-     * @param _localChain The integer Chain ID of this pool
-     */
+    /// @notice Initializes a new pool control instance with necessary configuration
+    /// @param _deployingUser Address of the user deploying the pool
+    /// @param _asset Address of the asset used in the pool
+    /// @param _strategyIndex Index identifying the investment strategy in the strategy contract
+    /// @param _poolName Descriptive name of the pool
+    /// @param _localChain Chain ID where the pool is deployed to and operates
+    /// @param _registry Address of the registry for accessing other contract addresses and configurations
+    /// @param _poolCalculations Address of the pool calculations contract used for state and other calculations
     constructor(
         address _deployingUser,
         address _asset,
@@ -86,6 +90,9 @@ contract PoolControl {
         _;
     }
 
+    /// @notice Callback to process the initial position data from cross-chain or local transactions
+    /// @dev Decodes and updates the position state based on the data received; initializes the pool token if not already done
+    /// @param _data Encoded data containing position details including the market address and deposit amounts
     function receivePositionInitialized(
         bytes memory _data
     ) external messageSource {
@@ -95,7 +102,6 @@ contract PoolControl {
             address marketAddress,
             bytes32 depositId
         ) = abi.decode(_data, (uint256, uint256, address, bytes32));
-        //Receives the current value of the entire position. Sets this to a contract wide state (or mapping with timestamp => uint balance, and save timestamp to contract wide state)
 
         poolCalculations.updateDepositReceived(
             depositId,
@@ -111,14 +117,14 @@ contract PoolControl {
         }
     }
 
+    /// @notice Updates the current position's valuation based on data received
+    /// @param _data Encoded data detailing the current position value and associated deposit ID
     function receivePositionBalance(bytes memory _data) external messageSource {
-        // Decode the payload data
         (
             uint256 positionAmount,
             uint256 depositAmountReceived,
             bytes32 depositId
         ) = abi.decode(_data, (uint256, uint256, bytes32));
-        //Receives the current value of the entire position. Sets this to a contract wide state (or mapping with timestamp => uint balance, and save timestamp to contract wide state)
         if (depositId != bytes32("")) {
             poolCalculations.updateDepositReceived(
                 depositId,
@@ -129,12 +135,9 @@ contract PoolControl {
         }
     }
 
-    /**
-     * @notice The user-facing function for beginning the withdraw sequence
-     * @dev This function is the "A" of the "A=>B=>A" sequence of withdraws
-     * @dev On this chain we don't have access to the current position value after gains. If the amount specified is over the proportion available with user's pool tokens, withdraw the maximum proportion
-     * @param _amount The amount to withdraw, denominated in the pool asset
-     */
+    /// @notice Initiates a withdrawal order for a user, handling local or cross-chain processes
+    /// @param _amount The amount the user wishes to withdraw, denominated in the pool's asset
+    /// @dev Creates withdrawal data and sends it to the appropriate bridge logic through CCIP
     function userWithdrawOrder(uint256 _amount) external {
         require(
             IPoolToken(poolToken).balanceOf(msg.sender) > 0,
@@ -163,16 +166,12 @@ contract PoolControl {
         }
     }
 
-    /**
-     * @notice Make the first deposit on the pool and set up the first position. This is a function meant to be called from a user/investing entity.
-     * @notice This function simultaneously sets the first position and deposits the first funds
-     * @notice After executing, other functions are called withdata generated in this function, in order to direction the position entrance
-     * @param _amount The amount of the initial deposit
-     * @param _totalFee The Across Bridge relay fee
-     * @param _targetPositionMarketId The market Id to be processed by Logic/Integrator to derive the market address
-     * @param _targetPositionChain The destination chain on which the first position exists
-     * @param _targetPositionProtocol The protocol that the position is made on
-     */
+    /// @notice Allows the deploying user to make an initial deposit and establish the first position of the pool
+    /// @param _amount Amount of the asset to deposit
+    /// @param _totalFee Total fee to cover cross-chain message relaying
+    /// @param _targetPositionProtocol Protocol of the first position
+    /// @param _targetPositionMarketId Market ID targeted for the investment
+    /// @param _targetPositionChain Chain ID of the target position's location
     function userDepositAndSetPosition(
         uint256 _amount,
         uint256 _totalFee,
@@ -180,7 +179,6 @@ contract PoolControl {
         bytes memory _targetPositionMarketId,
         uint256 _targetPositionChain
     ) external {
-        // This is for the initial deposit and position set up after pool creation
         require(
             msg.sender == deployingUser,
             "Only deploying user can set position and deposit"
@@ -203,7 +201,6 @@ contract PoolControl {
             _targetPositionChain
         );
 
-        // Encode the data including position details
         bytes memory data = poolCalculations.createInitialSetPositionMessage(
             depositId,
             msg.sender
@@ -241,12 +238,9 @@ contract PoolControl {
         }
     }
 
-    /**
-     * @notice Make a deposit on the pool
-     * @dev This function creates the deposit data and routes the function call depending on whether or not the position is local or cross chain
-     * @param _amount The amount of the deposit
-     * @param _totalFee The Across Bridge relay fee % (irrelevant if local deposit)
-     */
+    /// @notice Handles user deposits into the pool
+    /// @param _amount Amount of the asset to deposit
+    /// @param _totalFee Across Bridging fee calculated off chain to handle cross-chain transfers, set to 0 if local
     function userDeposit(uint256 _amount, uint256 _totalFee) external {
         require(
             poolCalculations.poolDepositNonce(address(this)) > 0,
@@ -291,13 +285,12 @@ contract PoolControl {
         }
     }
 
-    /**
-     * @notice Complete the process of sending funds to the BridgeReceiver on another chain for entering the position
-     * @dev This function is the first "A" step of the "A=>B=>A" deposit sequence
-     * @param _depositId The id of the deposit, used for data lookup
-     * @param _feeTotal The Across Bridge relay fee %
-     * @param _message Bytes that are passed in the Across "message" parameter, particularly to help set the position
-     */
+    /// @notice Manages the transfer of funds across chains for deposit or position initialization
+    /// @param _depositId Identifier for the deposit transaction
+    /// @param _amount Amount of assets to be transferred
+    /// @param _sender Address of the user making the transaction
+    /// @param _feeTotal Total fee percentage for the cross-chain bridging paid to Across
+    /// @param _message Encoded message details needed by BridgeLogic cross chain
     function enterFundsCrossChain(
         bytes32 _depositId,
         uint256 _amount,
@@ -306,7 +299,6 @@ contract PoolControl {
         bytes memory _message
     ) internal {
         emit DepositCrossChain(_sender);
-        // fund entrance can automatically bridge into position.
         address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
         uint256 receivingChain = currentPositionChain;
         if (receivingChain == 0) {
@@ -320,8 +312,6 @@ contract PoolControl {
             receivingChain
         );
 
-        // Approval made from sender to this contract
-        // spokePoolPreparation makes approval for spokePool
         spokePoolPreparation(_sender, _amount);
 
         crossChainBridge(
@@ -335,6 +325,14 @@ contract PoolControl {
         );
     }
 
+    /// @notice Executes the Across V3 bridging
+    /// @param _sender Address of the user initiating the transfer
+    /// @param _acrossSpokePool Address of the Across spoke pool
+    /// @param _bridgeReceiver Address of the Chaser BridgeReceiver contract on the destination chain
+    /// @param _amount Amount of the asset to transfer
+    /// @param _feeTotal Fee deducted for the bridge service
+    /// @param _receivingChain Chain ID where the assets are being transferred
+    /// @param _message Encoded message containing additional instructions for the BridgeLogic to process the bridged funds
     function crossChainBridge(
         address _sender,
         address _acrossSpokePool,
@@ -360,6 +358,10 @@ contract PoolControl {
         );
     }
 
+    /// @notice Proposes a pivot of the pool position to a new market by generating an UMA claim and opening an assertion through the arbitration contract
+    /// @param _requestProtocol The protocol for the new position
+    /// @param _requestMarketId Market identifier for the new position
+    /// @param _requestChainId Chain ID where the new position will be established
     function queryMovePosition(
         string memory _requestProtocol,
         bytes memory _requestMarketId,
@@ -393,6 +395,11 @@ contract PoolControl {
         );
     }
 
+    /// @notice Executes a change in the pool's position following a successful pivot proposal
+    /// @dev Only callable from the Abritration contract
+    /// @param _targetPositionMarketId Market ID of the new target position
+    /// @param _targetPositionProtocol Protocol of the new target position
+    /// @param _targetPositionChain Chain ID of the new target position
     function sendPositionChange(
         bytes memory _targetPositionMarketId,
         string memory _targetPositionProtocol,
@@ -430,8 +437,6 @@ contract PoolControl {
         );
 
         if (currentPositionChain == localChain) {
-            // IF POSITION NEEDS TO PIVOT *FROM* THIS CHAIN (LOCAL/BRIDGE LOGIC)
-            // THIS IF STATEMENT DETERMINES WHETHER TO ACTION THE EXITPIVOT LOCALLY OR THROUGH CROSS CHAIN
             uint256 amount = asset.balanceOf(address(this));
             if (amount > 0) {
                 bool success = asset.transfer(
@@ -455,6 +460,10 @@ contract PoolControl {
         }
     }
 
+    /// @notice Finalizes the pivot process
+    /// @dev Called externally to execute _pivotCompleted
+    /// @param marketAddress Address of the market where the new position is held
+    /// @param positionAmount The amount involved in the new position
     function pivotCompleted(
         address marketAddress,
         uint256 positionAmount
@@ -462,6 +471,9 @@ contract PoolControl {
         _pivotCompleted(marketAddress, positionAmount);
     }
 
+    /// @dev Internal helper function of common logic for completing a pivot
+    /// @param marketAddress Address of the market where the new position is held
+    /// @param positionAmount The amount involved in the new position
     function _pivotCompleted(
         address marketAddress,
         uint256 positionAmount
@@ -472,6 +484,9 @@ contract PoolControl {
         poolCalculations.pivotCompleted(marketAddress, positionAmount);
     }
 
+    /// @notice Reverts the initialization of a position in case of failures on the target chain
+    /// @param _depositId Identifier of the deposit associated with the position
+    /// @param _amount Amount of the asset to revert
     function handleUndoPositionInitializer(
         bytes32 _depositId,
         uint256 _amount
@@ -483,6 +498,9 @@ contract PoolControl {
         require(success, "Token transfer failure");
     }
 
+    /// @notice Handles the undoing of a deposit operation in case of a failed transaction
+    /// @param _depositId Identifier of the failed deposit
+    /// @param _amount Amount of the deposit to revert
     function handleUndoDeposit(
         bytes32 _depositId,
         uint256 _amount
@@ -492,16 +510,16 @@ contract PoolControl {
         require(success, "Token transfer failure");
     }
 
+    /// @notice Reverts a pivot operation, resetting the position to its original state before the pivot
+    /// @param _positionAmount Amount involved in the pivot to be reverted
     function handleUndoPivot(uint256 _positionAmount) external callerSource {
         currentPositionChain = localChain;
         poolCalculations.undoPivot(_positionAmount);
     }
 
-    /**
-     * @notice Called after receiving communication of successful position entrance on the BridgeLogic, minting tokens for the users proportional stake in the pool
-     * @param _depositId The id of the deposit, for data lookup
-     * @param _poolPositionAmount The amount of assets in the position, read recently from the BridgeLogic in the "B" step of the "A=>B=>A" deposit sequence
-     */
+    /// @notice Mints pool tokens for a user based on their deposit and the current pool position value
+    /// @param _depositId Identifier of the deposit for which tokens are minted
+    /// @param _poolPositionAmount Current value of the pool's position used to calculate the minting amount
     function mintUserPoolTokens(
         bytes32 _depositId,
         uint256 _poolPositionAmount
@@ -511,11 +529,9 @@ contract PoolControl {
         IPoolToken(poolToken).mint(depositor, poolTokensToMint);
     }
 
-    /**
-     * @notice Transfer deposit funds from user to pool, make approval for funds to the spokepool for moving the funds to the destination chain
-     * @param _sender The address of the user who is making the deposit
-     * @param _amount The amount of assets to deposit
-     */
+    /// @notice Prepares and approves the transfer of funds to a spoke pool for cross-chain operations
+    /// @param _sender Address of the user initiating the deposit
+    /// @param _amount Amount of the asset to be transferred and approved
     function spokePoolPreparation(address _sender, uint256 _amount) internal {
         address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
         require(acrossSpokePool != address(0), "SPOKE ADDR");
@@ -530,6 +546,12 @@ contract PoolControl {
         asset.approve(acrossSpokePool, _amount);
     }
 
+    /// @notice Finalizes a withdrawal order, transferring the specified amount to the user and burning the corresponding pool tokens
+    /// @param _withdrawId Identifier of the withdrawal
+    /// @param _amount Amount of assets to transfer to the user. The outputAmount on this side of the bridge
+    /// @param _totalAvailableForUser Maximum amount available for the user to withdraw
+    /// @param _positionValue Current total value of the pool's position
+    /// @param _inputAmount Initial amount requested for withdrawal
     function finalizeWithdrawOrder(
         bytes32 _withdrawId,
         uint256 _amount,
@@ -551,6 +573,8 @@ contract PoolControl {
         require(success, "Token transfer failure");
     }
 
+    /// @notice Reads the strategy code associated with the current investment strategy of the pool
+    /// @return A string representing the executable strategy code
     function readStrategyCode() external view returns (string memory) {
         address strategyAddress = registry.investmentStrategyContract();
         bytes memory strategyBytes = IStrategy(strategyAddress).strategyCode(
@@ -559,6 +583,8 @@ contract PoolControl {
         return string(strategyBytes);
     }
 
+    /// @notice Provides metadata about the pool including the pool token address, asset address, and pool name
+    /// @return Tuple containing the pool token address, asset address, and the pool name
     function poolMetaData()
         external
         view
@@ -567,6 +593,8 @@ contract PoolControl {
         return (poolToken, address(asset), poolName);
     }
 
+    /// @notice Retrieves detailed data about the current position of the pool including market, protocol, and valuation
+    /// @return Comprehensive data set including position address, protocol hash, valuation, and related timestamps
     function readPoolCurrentPositionData()
         external
         view
@@ -600,6 +628,8 @@ contract PoolControl {
         );
     }
 
+    /// @notice Fetches details of a position change requested through the arbitration process
+    /// @return Details including the requested market ID, protocol, chain ID, and the time of request initiation
     function readAssertionRequestedPosition()
         external
         view
@@ -619,6 +649,8 @@ contract PoolControl {
         );
     }
 
+    /// @notice Provides the current transaction status of the pool including nonce for deposits and withdrawals and pivot pending status
+    /// @return Current transaction statuses including nonces for deposits and withdrawals, pivot pending flag, and the current open assertion
     function transactionStatus()
         external
         view

@@ -29,4 +29,8 @@ interface IArbitrationContract {
     function readAssertionRequestedPosition(
         bytes32
     ) external view returns (bytes memory, string memory, uint256, uint256);
+
+    function extractAddressesFromBytes(
+        bytes memory
+    ) external pure returns (address, address);
 }
