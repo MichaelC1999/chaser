@@ -40,7 +40,7 @@ export default function Page() {
     ), []);
 
     const provider = useMemo(() => (
-        windowOverride ? new ethers.BrowserProvider(windowOverride.ethereum) : null
+        windowOverride?.ethereum ? new ethers.BrowserProvider(windowOverride.ethereum) : null
     ), [windowOverride]);
 
     const getPoolData = async (address) => {

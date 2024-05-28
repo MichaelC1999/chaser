@@ -2,7 +2,6 @@ import React from 'react';
 import PoolRow from './PoolRow.jsx'; // Import PoolRow component
 
 const EnabledPools = ({ poolCount, provider, registry, setErrorMessage }) => {
-
     return (
         <div className="enabled-pools">
             <table>
@@ -15,9 +14,9 @@ const EnabledPools = ({ poolCount, provider, registry, setErrorMessage }) => {
                 </thead>
                 <tbody>
                     {
-                        poolCount === 0 ? (<tr>
+                        !poolCount ? (<tr>
                             <th>
-                                No Pools Have Been Deployed on Chaser!
+                                No Chaser Pools Are Available!
                             </th>
                         </tr>) : null
                     }

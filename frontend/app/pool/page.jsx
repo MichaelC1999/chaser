@@ -14,7 +14,7 @@ const PoolPage = () => {
     const [isCreatePool, setIsCreatePool] = useState(false)
 
     const provider = useMemo(() => (
-        windowOverride ? new ethers.BrowserProvider(windowOverride.ethereum) : null
+        windowOverride?.ethereum ? new ethers.BrowserProvider(windowOverride.ethereum) : null
     ), [windowOverride]);
 
     const registry = useMemo(() => (

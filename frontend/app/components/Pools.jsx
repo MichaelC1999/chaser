@@ -23,7 +23,7 @@ export default function Pools({ setErrorMessage, isCreatePool, setIsCreatePool }
     ), []);
 
     const provider = useMemo(() => (
-        windowOverride ? new ethers.BrowserProvider(windowOverride.ethereum) : null
+        windowOverride?.ethereum ? new ethers.BrowserProvider(windowOverride.ethereum) : null
     ), [windowOverride]);
 
     const registry = useMemo(() => (
