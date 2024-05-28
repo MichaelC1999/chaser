@@ -7,7 +7,7 @@ const ErrorPopup = ({ errorMessage, clearErrorMessage }) => {
     let txEle = null
     if (errorMessage.includes('TX: ')) {
         let x = errorMessage.split('TX: ')[1]
-        txEle = <a href={"https://sepolia.etherscan.io/tx/" + x} target="_blank"><span><u>{"View this Transaction on Etherscan"}</u></span></a>
+        txEle = <a href={"https://sepolia.arbiscan.io/tx/" + x} target="_blank"><span><u>{"View this Transaction on Arbiscan"}</u></span></a>
     }
 
     return (

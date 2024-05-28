@@ -1,107 +1,117 @@
 const hre = require("hardhat");
 const ethers = require("ethers");
 const fs = require('fs');
-const { stringToBytes, bytesToString, hexToString, decodeEventLog } = require('viem')
+const { stringToBytes, bytesToString, hexToString, decodeEventLog, zeroAddress } = require('viem')
 
 
 const deployments = require('./contractAddresses.json')
+const mainChain = "arbitrum"
+const secondaryChains = ["sepolia", "optimism"]
+const networks = { "base": 84532, "sepolia": 11155111, "arbitrum": 421614, "optimism": 11155420 }
 
-const sepoliaDeployments = async () => {
+const mainDeployments = async () => {
 
   const [deployer] = await hre.ethers.getSigners();
   const gasPrice = await deployer.provider.getFeeData();
   console.log(gasPrice)
 
   const Manager = await hre.ethers.getContractFactory("ChaserManager");
-  const manager = await hre.upgrades.deployProxy(Manager, [11155111]);
+  const manager = await hre.upgrades.deployProxy(Manager, [networks[mainChain]]);
   await manager.waitForDeployment();
   console.log("Manager deployed to:", await manager.getAddress());
   const managerAddress = await manager.getAddress()
-  deployments.sepolia["managerAddress"] = managerAddress
+  deployments[mainChain]["managerAddress"] = managerAddress
 
   console.log('MANAGER OWNER: ', await manager.owner())
 
   const Registry = await hre.ethers.getContractFactory("Registry");
-  const registry = await hre.upgrades.deployProxy(Registry, [11155111, 11155111, deployments.sepolia["managerAddress"]]);
+  const registry = await hre.upgrades.deployProxy(Registry, [networks[mainChain], networks[mainChain], deployments[mainChain]["managerAddress"]]);
   await registry.waitForDeployment();
   const registryAddress = await registry.getAddress()
-  deployments.sepolia["registryAddress"] = registryAddress
-  await (await manager.addRegistry(deployments.sepolia["registryAddress"])).wait()
-  console.log("REGISTRY: ", deployments.sepolia["registryAddress"])
+  deployments[mainChain]["registryAddress"] = registryAddress
+  await (await manager.addRegistry(deployments[mainChain]["registryAddress"])).wait()
+  console.log("REGISTRY: ", deployments[mainChain]["registryAddress"])
 
   const PoolCalculations = await hre.ethers.getContractFactory("PoolCalculations");
-  const poolCalculationsContract = await hre.upgrades.deployProxy(PoolCalculations, [deployments.sepolia["registryAddress"]]);
+  const poolCalculationsContract = await hre.upgrades.deployProxy(PoolCalculations, [deployments[mainChain]["registryAddress"]]);
   await poolCalculationsContract.waitForDeployment();
   const poolCalculationsAddress = await poolCalculationsContract.getAddress()
   console.log("POOL CALCULATIONS", poolCalculationsAddress)
-  deployments.sepolia["poolCalculationsAddress"] = poolCalculationsAddress
+  deployments[mainChain]["poolCalculationsAddress"] = poolCalculationsAddress
   writeAddressesToFile(deployments)
 
   await manager.addPoolCalculationsAddress(poolCalculationsAddress)
 
   const BridgeLogic = await hre.ethers.getContractFactory("BridgeLogic");
-  const bridgeLogicContract = await hre.upgrades.deployProxy(BridgeLogic, [11155111, 11155111, deployments.sepolia["registryAddress"]]);
+  const bridgeLogicContract = await hre.upgrades.deployProxy(BridgeLogic, [networks[mainChain], networks[mainChain], deployments[mainChain]["registryAddress"]]);
   await bridgeLogicContract.waitForDeployment();
   const bridgeLogicAddress = await bridgeLogicContract.getAddress()
   console.log("BRIDGE LOGIC", bridgeLogicAddress)
-  deployments.sepolia["bridgeLogicAddress"] = bridgeLogicAddress
+  deployments[mainChain]["bridgeLogicAddress"] = bridgeLogicAddress
   writeAddressesToFile(deployments)
 
   const ccip = (await registry.localCcipConfigs())
   console.log(ccip)
-  const messengerContract = await (await hre.ethers.deployContract("ChaserMessenger", [ccip[0], ccip[1], deployments.sepolia["registryAddress"], bridgeLogicAddress, ccip[2]], {
+  const messengerContract = await (await hre.ethers.deployContract("ChaserMessenger", [ccip[0], ccip[1], deployments[mainChain]["registryAddress"], bridgeLogicAddress, ccip[2]], {
     gasLimit: 7000000,
     value: 0
   })).waitForDeployment();
 
   const messengerAddress = messengerContract.target
-  deployments.sepolia["messengerAddress"] = messengerAddress
+  deployments[mainChain]["messengerAddress"] = messengerAddress
   writeAddressesToFile(deployments)
 
-  const linkToken = await hre.ethers.getContractAt("ERC20", deployments.sepolia["linkToken"]);
+  const linkToken = await hre.ethers.getContractAt("ERC20", deployments[mainChain]["linkToken"]);
 
-  const amount = "600000000000000000"
+  const amount = "1500000000000000000"
 
-  console.log("Token Transfer: ", (await (await linkToken.transfer(deployments.sepolia["messengerAddress"], amount)).wait()).hash)
+  console.log("Token Transfer: ", (await (await linkToken.transfer(deployments[mainChain]["messengerAddress"], amount)).wait()).hash)
 
 
   const BridgeReceiver = await hre.ethers.getContractFactory("BridgeReceiver");
-  const bridgeReceiverContract = await hre.upgrades.deployProxy(BridgeReceiver, [bridgeLogicAddress, deployments.sepolia["spokePool"]]);
+  const bridgeReceiverContract = await hre.upgrades.deployProxy(BridgeReceiver, [bridgeLogicAddress, deployments[mainChain]["spokePool"]]);
   await bridgeReceiverContract.waitForDeployment();
   const bridgeReceiverAddress = await bridgeReceiverContract.getAddress()
   console.log("BRIDGE RECEIVER", bridgeReceiverAddress)
-  deployments.sepolia["receiverAddress"] = bridgeReceiverAddress
+  deployments[mainChain]["receiverAddress"] = bridgeReceiverAddress
   writeAddressesToFile(deployments)
 
   const Int = await hre.ethers.getContractFactory("Integrator");
-  const int = await hre.upgrades.deployProxy(Int, [bridgeLogicAddress, deployments.sepolia["registryAddress"]]);
+  const int = await hre.upgrades.deployProxy(Int, [bridgeLogicAddress, deployments[mainChain]["registryAddress"]]);
   await int.waitForDeployment();
   console.log("Integrator deployed to:", await int.getAddress());
   const integratorAddress = await int.getAddress()
-  deployments.sepolia["integratorAddress"] = integratorAddress
+  deployments[mainChain]["integratorAddress"] = integratorAddress
   writeAddressesToFile(deployments)
 
-  const aaveTestToken = await hre.ethers.getContractAt("ERC20", "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357");
-  const aaveAmount = "10000000000000000"
-  console.log("AAVE Token Transfer: ", (await (await aaveTestToken.transfer(deployments.sepolia["integratorAddress"], aaveAmount)).wait()).hash)
+  const WETH = await hre.ethers.getContractAt("ERC20", deployments[mainChain]["WETH"]);
+  const WETHAmount = "10000000000000" // This is the extra amount that accounts for different in interest gains of Aave/Compound
+  console.log("WETH Token Transfer: ", (await (await WETH.transfer(deployments[mainChain]["integratorAddress"], WETHAmount)).wait()).hash)
 
-  const compTestToken = await hre.ethers.getContractAt("ERC20", "0x2D5ee574e710219a521449679A4A7f2B43f046ad");
-  const compAmount = "10000000000000000"
+  const aaveTestToken = await hre.ethers.getContractAt("ERC20", deployments[mainChain]["aaveTestWETH"]);
+  const aaveAmount = "200000000000000" // This amount is for forwarding a dummy balance (needs to be enough for the entire position, not just interest diff)
+  console.log("AAVE Token Transfer: ", (await (await aaveTestToken.transfer(deployments[mainChain]["integratorAddress"], aaveAmount)).wait()).hash)
 
-  console.log("COMPOUND Token Transfer: ", (await (await compTestToken.transfer(deployments.sepolia["integratorAddress"], compAmount)).wait()).hash)
-  // const registryAddress = deployments.sepolia["registryAddress"]
+  if (Object.keys(deployments[mainChain]).includes("compoundTestWETH")) {
+    const compTestToken = await hre.ethers.getContractAt("ERC20", deployments[mainChain]["compoundTestWETH"]);
+    const compAmount = "200000000000000"
+
+    console.log("COMPOUND Token Transfer: ", (await (await compTestToken.transfer(deployments[mainChain]["integratorAddress"], compAmount)).wait()).hash)
+
+  }
+  // const registryAddress = deployments[mainChain]["registryAddress"]
   // const registry = await hre.ethers.getContractAt("Registry", registryAddress);
 
 
-  // const bridgeLogicAddress = deployments.sepolia["bridgeLogicAddress"]
+  // const bridgeLogicAddress = deployments[mainChain]["bridgeLogicAddress"]
   // const bridgeLogicContract = await hre.ethers.getContractAt("BridgeLogic", bridgeLogicAddress);
 
 
-  await (await bridgeLogicContract.addConnections(deployments.sepolia["messengerAddress"], deployments.sepolia["receiverAddress"], deployments.sepolia["integratorAddress"])).wait()
+  await (await bridgeLogicContract.addConnections(deployments[mainChain]["messengerAddress"], deployments[mainChain]["receiverAddress"], deployments[mainChain]["integratorAddress"])).wait()
 
-  await (await registry.addBridgeLogic(deployments.sepolia["bridgeLogicAddress"], deployments.sepolia["messengerAddress"], deployments.sepolia["receiverAddress"])).wait()
+  await (await registry.addBridgeLogic(deployments[mainChain]["bridgeLogicAddress"], deployments[mainChain]["messengerAddress"], deployments[mainChain]["receiverAddress"])).wait()
 
-  console.log('MESSENGER: ', await bridgeLogicContract.messenger(), await registry.chainIdToMessageReceiver(11155111))
+  console.log('MESSENGER: ', await bridgeLogicContract.messenger(), await registry.chainIdToMessageReceiver(networks[mainChain]))
 
   console.log('RECEIVER: ', await bridgeLogicContract.bridgeReceiverAddress(), await registry.receiverAddress())
 
@@ -113,28 +123,28 @@ const sepoliaDeployments = async () => {
     "compound-v3"
   )).wait();
 
-  console.log(deployments.sepolia)
-  console.log("FINISHED SEPOLIA DEPLOYMENTS 1")
+  console.log(deployments[mainChain])
+  console.log("FINISHED MAIN - " + mainChain.toUpperCase() + " DEPLOYMENTS 1")
 }
 
-const baseDeployments = async () => {
+const secondaryDeployments = async (chain) => {
   const [deployer] = await hre.ethers.getSigners();
   const gasPrice = await deployer.provider.getFeeData();
   console.log(gasPrice)
 
   const Registry = await hre.ethers.getContractFactory("Registry");
-  const registry = await hre.upgrades.deployProxy(Registry, [84532, 11155111, "0x0000000000000000000000000000000000000000"]);
+  const registry = await hre.upgrades.deployProxy(Registry, [networks[chain], networks[mainChain], "0x0000000000000000000000000000000000000000"]);
   await registry.waitForDeployment();
   const registryAddress = await registry.getAddress()
-  deployments.base["registryAddress"] = registryAddress
-  console.log("REGISTRY: ", deployments.base["registryAddress"])
+  deployments[chain]["registryAddress"] = registryAddress
+  console.log("REGISTRY: ", deployments[chain]["registryAddress"])
 
   const BridgeLogic = await hre.ethers.getContractFactory("BridgeLogic");
-  const bridgeLogicContract = await hre.upgrades.deployProxy(BridgeLogic, [84532, 11155111, registryAddress]);
+  const bridgeLogicContract = await hre.upgrades.deployProxy(BridgeLogic, [networks[chain], networks[mainChain], registryAddress]);
   await bridgeLogicContract.waitForDeployment();
   const bridgeLogicAddress = await bridgeLogicContract.getAddress()
   console.log("BRIDGE LOGIC", bridgeLogicAddress)
-  deployments.base["bridgeLogicAddress"] = bridgeLogicAddress
+  deployments[chain]["bridgeLogicAddress"] = bridgeLogicAddress
   writeAddressesToFile(deployments)
 
 
@@ -144,70 +154,90 @@ const baseDeployments = async () => {
     value: 0
   })).waitForDeployment();
 
-  deployments.base["messengerAddress"] = messengerContract.target
-  const messengerAddress = deployments.base["messengerAddress"]
+  deployments[chain]["messengerAddress"] = messengerContract.target
+  const messengerAddress = deployments[chain]["messengerAddress"]
   writeAddressesToFile(deployments)
 
-  const linkToken = await hre.ethers.getContractAt("ERC20", deployments.base["linkToken"]);
-  const linkAmount = "7000000000000000000"
-  console.log("Token Transfer: ", (await (await linkToken.transfer(deployments.base["messengerAddress"], linkAmount)).wait()).hash)
+  const linkToken = await hre.ethers.getContractAt("ERC20", deployments[chain]["linkToken"]);
+  const linkAmount = "1500000000000000000"
+  console.log("Token Transfer: ", (await (await linkToken.transfer(deployments[chain]["messengerAddress"], linkAmount)).wait()).hash)
 
   const BridgeReceiver = await hre.ethers.getContractFactory("BridgeReceiver");
-  const bridgeReceiverContract = await hre.upgrades.deployProxy(BridgeReceiver, [bridgeLogicAddress, deployments.base["spokePool"]]);
+  const bridgeReceiverContract = await hre.upgrades.deployProxy(BridgeReceiver, [bridgeLogicAddress, deployments[chain]["spokePool"]]);
   await bridgeReceiverContract.waitForDeployment();
   const bridgeReceiverAddress = await bridgeReceiverContract.getAddress()
   console.log("BRIDGE RECEIVER", bridgeReceiverAddress)
-  deployments.base["receiverAddress"] = bridgeReceiverAddress
+  deployments[chain]["receiverAddress"] = bridgeReceiverAddress
   writeAddressesToFile(deployments)
 
 
   const Int = await hre.ethers.getContractFactory("Integrator");
-  const int = await hre.upgrades.deployProxy(Int, [bridgeLogicAddress, deployments.base["registryAddress"]]);
+  const int = await hre.upgrades.deployProxy(Int, [bridgeLogicAddress, deployments[chain]["registryAddress"]]);
   await int.waitForDeployment();
   console.log("Integrator deployed to:", await int.getAddress());
   const integratorAddress = await int.getAddress()
-  deployments.base["integratorAddress"] = integratorAddress
+  deployments[chain]["integratorAddress"] = integratorAddress
   writeAddressesToFile(deployments)
 
 
 
-  const WETH = await hre.ethers.getContractAt("ERC20", deployments.base["WETH"]);
+  const WETH = await hre.ethers.getContractAt("ERC20", deployments[chain]["WETH"]);
   const WETHAmount = "10000000000000"
-  console.log("WETH Token Transfer: ", (await (await WETH.transfer(deployments.base["integratorAddress"], WETHAmount)).wait()).hash)
+  console.log("WETH Token Transfer: ", (await (await WETH.transfer(deployments[chain]["integratorAddress"], WETHAmount)).wait()).hash)
+
+  if (Object.keys(deployments[chain]).includes("aaveTestWETH")) {
+
+    const aaveTestToken = await hre.ethers.getContractAt("ERC20", deployments[chain]["aaveTestWETH"]);
+    const aaveAmount = "200000000000000"
+    console.log("AAVE Token Transfer: ", (await (await aaveTestToken.transfer(deployments[chain]["integratorAddress"], aaveAmount)).wait()).hash)
+
+  }
+  if (Object.keys(deployments[chain]).includes("compoundTestWETH")) {
+    const compTestToken = await hre.ethers.getContractAt("ERC20", deployments[chain]["compoundTestWETH"]);
+    const compAmount = "200000000000000"
+
+    console.log("COMPOUND Token Transfer: ", (await (await compTestToken.transfer(deployments[chain]["integratorAddress"], compAmount)).wait()).hash)
+
+  }
 
 
-  await (await bridgeLogicContract.addConnections(messengerAddress, deployments.base["receiverAddress"], integratorAddress)).wait()
-  await (await registry.addBridgeLogic(bridgeLogicAddress, messengerAddress, deployments.base["receiverAddress"])).wait()
-  await baseReceivers()
+  await (await bridgeLogicContract.addConnections(messengerAddress, deployments[chain]["receiverAddress"], integratorAddress)).wait()
+  await (await registry.addBridgeLogic(bridgeLogicAddress, messengerAddress, deployments[chain]["receiverAddress"])).wait()
   console.log('MESSENGER: ', await bridgeLogicContract.messenger(), await registry.chainIdToMessageReceiver(84532), 'RECEIVER: ', await bridgeLogicContract.bridgeReceiverAddress())
 
-  console.log(deployments.base)
-  console.log("FINISHED BASE DEPLOYMENTS 1")
+  console.log(deployments[chain])
+  console.log("FINISHED " + chain.toUpperCase() + " DEPLOYMENTS")
 }
 
-const sepoliaSecondConfig = async () => {
-  const registryContract = await hre.ethers.getContractAt("Registry", deployments.sepolia["registryAddress"]);
-  await (await registryContract.addBridgeReceiver(84532, deployments.base["receiverAddress"])).wait()
-  await (await registryContract.addMessageReceiver(84532, deployments.base["messengerAddress"])).wait()
-  console.log("FINISHED SEPOLIA DEPLOYMENTS 2")
-
-}
-
-const baseReceivers = async () => {
-  const registryAddress = deployments.base["registryAddress"]
+const setReceivers = async (currentChain) => {
+  const registryAddress = deployments[currentChain]["registryAddress"]
   const registryContract = await hre.ethers.getContractAt("Registry", registryAddress);
 
-  await (await registryContract.addBridgeReceiver(11155111, deployments.sepolia["receiverAddress"])).wait()
-  await (await registryContract.addMessageReceiver(11155111, deployments.sepolia["messengerAddress"])).wait()
+  if (currentChain !== "arbitrum") {
+    await (await registryContract.addBridgeReceiver(networks["arbitrum"], deployments["arbitrum"]["receiverAddress"])).wait()
+    await (await registryContract.addMessageReceiver(networks["arbitrum"], deployments["arbitrum"]["messengerAddress"])).wait()
+  }
 
+  if (currentChain !== "sepolia") {
+    await (await registryContract.addBridgeReceiver(networks["sepolia"], deployments["sepolia"]["receiverAddress"])).wait()
+    await (await registryContract.addMessageReceiver(networks["sepolia"], deployments["sepolia"]["messengerAddress"])).wait()
+  }
+
+  if (currentChain !== "optimism") {
+    await registryContract.addBridgeReceiver(networks["optimism"], deployments["optimism"]["receiverAddress"])
+    await registryContract.addMessageReceiver(networks["optimism"], deployments["optimism"]["messengerAddress"])
+
+  }
+
+  const messengerContract = await hre.ethers.getContractAt("ChaserMessenger", deployments[currentChain]["messengerAddress"]);
 }
 
-const sepoliaPoolDeploy = async () => {
+const poolDeploy = async () => {
 
-  const manager = await hre.ethers.getContractAt("ChaserManager", deployments.sepolia["managerAddress"]);
+  const manager = await hre.ethers.getContractAt("ChaserManager", deployments[mainChain]["managerAddress"]);
 
   const poolTx = await (await manager.createNewPool(
-    deployments.sepolia["WETH"],
+    deployments[mainChain]["WETH"],
     "0",
     "PoolName",
     {
@@ -215,77 +245,41 @@ const sepoliaPoolDeploy = async () => {
     }
   )).wait();
   const poolAddress = '0x' + poolTx.logs[0].topics[1].slice(-40);
-  deployments.sepolia["poolAddress"] = poolAddress
+  deployments[mainChain]["poolAddress"] = poolAddress
   writeAddressesToFile(deployments)
 
   console.log("Pool Address: ", poolAddress);
 
 }
 
-const sepoliaPositionSetDeposit = async () => {
+const positionSetDeposit = async () => {
   //This function executes the first deposit on a pool and sets the position (The external protocol/chain/pool that this pool will invest assets in)
-  const pool = await hre.ethers.getContractAt("PoolControl", deployments.sepolia["poolAddress"])
+  const pool = await hre.ethers.getContractAt("PoolControl", deployments[mainChain]["poolAddress"])
 
-  const WETH = await hre.ethers.getContractAt("ERC20", deployments.sepolia["WETH"]);
-  const amount = "1500000000000000"
-  await WETH.approve(deployments.sepolia["poolAddress"], amount)
+  const WETH = await hre.ethers.getContractAt("ERC20", deployments[mainChain]["WETH"]);
+  const amount = "150000000000000"
+  await WETH.approve(deployments[mainChain]["poolAddress"], amount)
 
   const tx = await pool.userDepositAndSetPosition(
     amount,
     totalFeeCalc(amount),
     "aave-v3",
-    deployments.sepolia["aaveMarketId"],
+    deployments["sepolia"]["aaveMarketId"],
     11155111,
     { gasLimit: 8000000 }
   )
 
-  console.log(`Pool 0x...${deployments.sepolia["poolAddress"].slice(34)} position set and initial deposit tx hash: `, (await tx.wait()).hash)
-}
-
-const sepoliaSimulateCCIPReceive = async (messageDataCCIP) => {
-
-
-  const trimMessageData = messageDataCCIP.split("000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000e0").join("").split("00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000100").join("")
-
-  console.log(trimMessageData)
-  const pool = await hre.ethers.getContractAt("PoolControl", deployments.sepolia["poolAddress"])
-  const registryContract = await hre.ethers.getContractAt("Registry", deployments.sepolia["registryAddress"]);
-  const messengerContract = await hre.ethers.getContractAt("ChaserMessenger", deployments.sepolia["messengerAddress"])
-
-  // console.log(await messengerContract.ccipDecodeReceive("0x4d1c4fe3f27639b363f9d52e4dcadc62a2d95f9e9730c8b79fbb437d4e7ab563", trimMessageData))
-
-  console.log("Deposit fulfillment tx hash: ", (await (await messengerContract.ccipReceiveManual("0x4d1c4fe3f27639b363f9d52e4dcadc62a2d95f9e9730c8b79fbb437d4e7ab563", trimMessageData)).wait()).hash)
-  const tokenContract = await (hre.ethers.getContractAt("IPoolToken", await pool.poolToken()))
-  console.log(await tokenContract.totalSupply())
-
-}
-
-const baseSimulateCCIPReceive = async (messageDataCCIP) => {
-  // message should be from event on the sepolia tx (the tx that the user makes with withdraw req) with topics 0,1 as:
-  // From this event take the entirety of the hex bytes and pass as message
-  const trimMessageData = messageDataCCIP.split("000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000e0").join("").split("00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000100").join("")
-
-  const messengerContract = await (hre.ethers.getContractAt("ChaserMessenger", deployments.base["messengerAddress"]))
-  console.log(trimMessageData)
-  console.log(await messengerContract.ccipDecodeReceive("0x4d1c4fe3f27639b363f9d52e4dcadc62a2d95f9e9730c8b79fbb437d4e7ab563", trimMessageData))
-  const bridgeLogicContract = await (hre.ethers.getContractAt("BridgeLogic", deployments.base["bridgeLogicAddress"]))
-  const WETH = await hre.ethers.getContractAt("ERC20", deployments.base["WETH"]);
-  const contractWethBal = await WETH.balanceOf(deployments.base["bridgeLogicAddress"])
-
-  // console.log(await bridgeLogicContract.getUserMaxWithdraw(contractWethBal, "100000000000000000", deployments.sepolia["poolAddress"], 1))
-
-
-  console.log("Transaction Hash: ", (await (await messengerContract.ccipReceiveManual("0x4d1c4fe3f27639b363f9d52e4dcadc62a2d95f9e9730c8b79fbb437d4e7ab563", trimMessageData)).wait()).hash)
+  console.log(`Pool 0x...${deployments[mainChain]["poolAddress"].slice(34)} position set and initial deposit tx hash: `, (await tx.wait()).hash)
 }
 
 const setPivotConfigs = async () => {
-  const registryContract = await hre.ethers.getContractAt("Registry", deployments.sepolia["registryAddress"]);
+  const registryContract = await hre.ethers.getContractAt("Registry", deployments[mainChain]["registryAddress"]);
   // const ArbitrationContract = await hre.ethers.getContractFactory("ArbitrationContract");
-  // const arbitrationContract = await hre.upgrades.deployProxy(ArbitrationContract, [deployments.sepolia["registryAddress"], 11155111]);
+  // const arbitrationContract = await hre.upgrades.deployProxy(ArbitrationContract, [deployments[mainChain]["registryAddress"], networks[mainChain]]);
   // await arbitrationContract.waitForDeployment();
   // const arbitrationAddress = await arbitrationContract.getAddress()
   // console.log("Arb", arbitrationAddress)
-  // deployments.sepolia["arbitrationContract"] = arbitrationAddress
+  // deployments[mainChain]["arbitrationContract"] = arbitrationAddress
 
   // writeAddressesToFile(deployments)
 
@@ -298,38 +292,55 @@ const setPivotConfigs = async () => {
 
   const investmentStrategyAddress = investmentStrategyContract.target
 
-  deployments.sepolia["investmentStrategy"] = investmentStrategyAddress
-  await (await registryContract.addInvestmentStrategyContract(deployments.sepolia["investmentStrategy"])).wait();
-  // await (await registryContract.addArbitrationContract(deployments.sepolia["arbitrationContract"])).wait()
+  deployments[mainChain]["investmentStrategy"] = investmentStrategyAddress
+  await (await registryContract.addInvestmentStrategyContract(deployments[mainChain]["investmentStrategy"])).wait();
+  // await (await registryContract.addArbitrationContract(deployments[mainChain]["arbitrationContract"])).wait()
 
   writeAddressesToFile(deployments)
 }
 
 const addStrategyCode = async () => {
-  let sourceString = `gfp8eyiwgfosaydufg iUSD FAISUDGF8 IWAEPF98WHEF9UOCabha SDV gfp8eyiwgfosaydufg iUSD FAISUDGF8 IWAEPF98WHEF9UOCabha SDVgfp8eyiwgfosaydufg iUSD FAISUDGF8 IWAEPF98WHEF9UOCabha SDVgfp8eyiwgfosaydufg iUSD FAISUDGF8 IWAEPF98WHEF9UOCabha SDVgfp8eyiwgfosaydufg iUSD FAISUDGF8 IWAEPF98WHEF9UOCabha SDVgfp8eyiwgfosaydufg iUSD FAISUDGF8 IWAEPF98WHEF9UOCabha SDV`
+  let sourceString = `export const strategyCalculation = async () => {
+    // This object converts Sepolia/Base testnet markets to their mainnet addresses for the subgraph query
+    const TESTNET_ANALOG_MARKETS = {
+        '0x61490650abaa31393464c3f34e8b29cd1c44118ee4ab69c077896252fafbd49efd26b5d171a32410': "0x46e6b214b524310239732d51387075e0e70970bf4200000000000000000000000000000000000006",
+        '0x2943ac1216979ad8db76d9147f64e61adc126e96e4ab69c077896252fafbd49efd26b5d171a32410': "0xa17581a9e3356d9a858b789d68b4d866e593ae94c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        '0x96e32de4b1d1617b8c2ae13a88b9cc287239b13f': "0xd4a0e0b9149bcee3c920d2e00b5de09138fd8bb7",
+        '0x29598b72eb5cebd806c5dcd549490fda35b13cd8': "0x4d5f47fa6a74757f35c14fd3a6ef8e3c9bc514e8",
+        "0xf5f17EbE81E516Dc7cB38D61908EC252F150CE60": "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8",
+        "0x23e4E76D01B2002BE436CE8d6044b0aA2f68B68a": "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8"
+    }
+
+        return false;
+  }
+strategyCalculation().then(x => console.log(x));
+`
 
   const sourceCode = stringToBytes(sourceString)
 
-  const investmentStrategyContract = await hre.ethers.getContractAt("InvestmentStrategy", deployments.sepolia["investmentStrategy"]);
+  const investmentStrategyContract = await hre.ethers.getContractAt("InvestmentStrategy", deployments[mainChain]["investmentStrategy"]);
 
-  console.log(sourceCode)
-  const transactionResponse = await investmentStrategyContract.addStrategy(sourceCode, "highYield3Month", { gasLimit: 7000000 });
+  console.log(sourceCode.length)
+  const transactionResponse = await investmentStrategyContract.addStrategy(sourceCode, "WETH High Yield 90 days", { gasLimit: 30000000 });
   const receipt = await transactionResponse.wait();
-  Console.LOG(receipt)
-  console.log(hexToString(await investmentStrategyContract.strategyCode(1)))
+  console.log(receipt.hash)
+  // console.log(hexToString(await investmentStrategyContract.strategyCode(1)))
 }
 
 
 const poolStatRead = async () => {
-  // "0xec9a7d48230bec7a8b7cc88a8d4edff45d7da01f"
-  // const poolAddress = deployments.sepolia['poolAddress']
-  const poolAddress = "0xdf64b40da4880aab6251b223f51fdee1823c588e"
+  const poolAddress = deployments[mainChain]['poolAddress']
   const pool = await hre.ethers.getContractAt("PoolControl", poolAddress)
+  const assertionId = await pool.openAssertion()
   const tokenContract = await (hre.ethers.getContractAt("IPoolToken", await pool.poolToken()))
   const calcContract = await hre.ethers.getContractAt("PoolCalculations", await pool.poolCalculations())
+  const registryContract = await hre.ethers.getContractAt("Registry", deployments[mainChain]["registryAddress"]);
+  const Manager = await hre.ethers.getContractAt("ChaserManager", deployments.arbitrum.managerAddress);
 
-  const assertionId = await pool.openAssertion()
+  console.log(await pool.registry(), await registryContract.poolEnabled("0xE512fec32aD1645Ae650Bb8AD0fd26D1CFC6C4cc"), await Manager.registry())
   console.log(
+    "ASSERTION: ",
+    assertionId,
     "TARGETS: ",
     await calcContract.targetPositionMarketId(poolAddress),
     await calcContract.targetPositionChain(poolAddress),
@@ -356,58 +367,28 @@ const poolStatRead = async () => {
     await calcContract.getScaledRatio(await pool.poolToken(), "0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E"),
   )
 
-  const arbContract = await hre.ethers.getContractAt("ArbitrationContract", "0x8863f59656cACc441f97D5e4c00C8B5d6775b60B");
+  const arbContract = await hre.ethers.getContractAt("ArbitrationContract", deployments[mainChain]["arbitrationContract"]);
 
-  const claimBytes = await arbContract.generateClaim(
-    "11155111",
-    "compound-v3",
-    deployments.sepolia.compoundMarketId,
-    "84532",
-    "aave-v3",
-    deployments.base.aaveMarketId
-  )
+  const RequestedMarketId = await arbContract.assertionToRequestedMarketId(assertionId)
+  const RequestedProtocol = await arbContract.assertionToRequestedProtocol(assertionId)
+  const RequestedChainId = await arbContract.assertionToRequestedChainId(assertionId)
+  const assertionBlock = await arbContract.inAssertionBlockWindow(assertionId)
+  const assertionToBlockTime = await arbContract.assertionToBlockTime(assertionId)
+  const assertionToSettleTime = await arbContract.assertionToSettleTime(assertionId)
 
-  console.log(claimBytes)
-
-  console.log(await arbContract.extractAddressesFromBytes(deployments.sepolia.compoundMarketId))
-
-  console.log(await arbContract.getMarketBytes(
-    deployments.sepolia.compoundMarketId,
-    deployments.base.aaveMarketId
-  ))
-
-  // const RequestedMarketId = await arbContract.assertionToRequestedMarketId(assertionId)
-  // const RequestedProtocol = await arbContract.assertionToRequestedProtocol(assertionId)
-  // const RequestedChainId = await arbContract.assertionToRequestedChainId(assertionId)
-  // await arbContract.inAssertionBlockWindow(assertionId)
+  console.log(RequestedMarketId,
+    RequestedProtocol,
+    RequestedChainId,
+    assertionBlock,
+    assertionToBlockTime,
+    assertionToSettleTime, Date.now() / 1000)
 
 
-  // console.log(RequestedMarketId, RequestedProtocol, RequestedChainId, await arbContract.inAssertionBlockWindow(assertionId))
   // const bridgeLogicAddress = deployments.base["bridgeLogicAddress"]
   // const bridgeLogic = await hre.ethers.getContractAt("BridgeLogic", bridgeLogicAddress);
 
 
   // const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.base["integratorAddress"]);
-  // console.log(await integratorContract.getCurrentPosition(
-  //   poolAddress,
-  //   "0x4200000000000000000000000000000000000006",
-  //   "0x07eA79F68B2B3df564D0A34F8e19D9B1e339814b",
-  //   "0x465a559e4de536e9b6feec6cb09331bad8f94c75e1f63a0b1a8e46bbc990c476"
-  // ));
-  // }
-
-  // console.log(await bridgeLogic.getNonPendingPositionBalance(
-  //   poolAddress,
-  //   2,
-  //   0
-  // ))
-  // // // Get hash of protocol
-  // // const protocolHash = await integratorContract.hasher("aave-v3")
-  // console.log(await bridgeLogic.poolToAsset(poolAddress),
-  //   await bridgeLogic.poolToCurrentPositionMarket(poolAddress),
-  //   await bridgeLogic.poolToCurrentProtocolHash(poolAddress),
-  //   await bridgeLogic.poolAddressToDepositNonce(poolAddress),
-  //   await bridgeLogic.poolAddressToWithdrawNonce(poolAddress))
 
   // const curPos = await bridgeLogic.getPositionBalance(poolAddress)
 
@@ -415,14 +396,14 @@ const poolStatRead = async () => {
   // console.log('CURRENT POSITION VALUE + INTEREST: ', curPos)
 }
 
-const sepoliaDeposit = async () => {
-  const pool = await hre.ethers.getContractAt("PoolControl", deployments.sepolia["poolAddress"])
+const poolDeposit = async () => {
+  const pool = await hre.ethers.getContractAt("PoolControl", deployments[mainChain]["poolAddress"])
 
-  const amount = "672000505322453"
-  // const arbContract = await hre.ethers.getContractAt("ArbitrationContract", deployments.sepolia["arbitrationContract"]);
+  const amount = "49026502049296"
+  // const arbContract = await hre.ethers.getContractAt("ArbitrationContract", deployments[mainChain]["arbitrationContract"]);
 
-  const WETH = await hre.ethers.getContractAt("ERC20", deployments.sepolia["WETH"]);
-  await (await WETH.approve(deployments.sepolia["poolAddress"], amount)).wait()
+  const WETH = await hre.ethers.getContractAt("ERC20", deployments[mainChain]["WETH"]);
+  await (await WETH.approve(deployments[mainChain]["poolAddress"], amount)).wait()
   const tx = await pool.userDeposit(
     amount,
     totalFeeCalc(amount),
@@ -433,20 +414,20 @@ const sepoliaDeposit = async () => {
 }
 
 const sendTokens = async () => {
-  const linkToken = await hre.ethers.getContractAt("ERC20", deployments.base["linkToken"]);
-  const amount = "3000000000000000000"
-  console.log("Token Transfer: ", (await (await linkToken.transfer(deployments.base["messengerAddress"], amount)).wait()).hash)
+  const linkToken = await hre.ethers.getContractAt("ERC20", deployments.sepolia["linkToken"]);
+  const amount = "9000000000000000000"
+  console.log("Token Transfer: ", (await (await linkToken.transfer(deployments.sepolia["messengerAddress"], amount)).wait()).hash)
 
-  // const aaveTestToken = await hre.ethers.getContractAt("ERC20", "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357");
-  // const aaveAmount = "10000000000000000"
-  // console.log("AAVE Token Transfer: ", (await (await aaveTestToken.transfer(deployments.sepolia["integratorAddress"], aaveAmount)).wait()).hash)
+  const aaveTestToken = await hre.ethers.getContractAt("ERC20", deployments.sepolia["aaveTestWETH"]);
+  const aaveAmount = "1000000000000000000"
+  console.log("AAVE Token Transfer: ", (await (await aaveTestToken.transfer(deployments.sepolia["integratorAddress"], aaveAmount)).wait()).hash)
 
-  // const compTestToken = await hre.ethers.getContractAt("ERC20", "0x2D5ee574e710219a521449679A4A7f2B43f046ad");
-  // const compAmount = "100000000000000"
+  // const compTestToken = await hre.ethers.getContractAt("ERC20", deployments.sepolia["compoundTestWETH"]);
+  // const compAmount = "1000000000000000000"
   // console.log("COMPOUND Token Transfer: ", (await (await compTestToken.transfer(deployments.sepolia["integratorAddress"], compAmount)).wait()).hash)
 
-  // const WETH = await hre.ethers.getContractAt("ERC20", deployments["sepolia"]["WETH"]);
-  // await (await WETH.transfer(deployments["sepolia"]["integratorAddress"], "1000000000", { gasLimit: "8000000", nonce: 3575 })).wait()
+  const WETH = await hre.ethers.getContractAt("ERC20", deployments["sepolia"]["WETH"]);
+  await (await WETH.transfer(deployments["sepolia"]["integratorAddress"], "100000000000", { gasLimit: "8000000" })).wait()
 
   // const USDC = await hre.ethers.getContractAt("ERC20", "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238");
   // await (await USDC.approve(deployments[chainName]["arbitrationContract"], 500000)).wait()
@@ -454,157 +435,144 @@ const sendTokens = async () => {
 
 }
 
-const sepoliaWithdraw = async () => {
+const poolWithdraw = async () => {
   // Creates CCIP message, manually executed on the sepolia messenger contact, which sends withdraw through across and finalizes on base
   // "0xec9a7d48230bec7a8b7cc88a8d4edff45d7da01f"
-  const pool = await hre.ethers.getContractAt("PoolControl", deployments.sepolia["poolAddress"])
-  const amount = "224437505322453"
+  const pool = await hre.ethers.getContractAt("PoolControl", deployments[mainChain]["poolAddress"])
+  const amount = "100000000000000"
   const tx = await pool.userWithdrawOrder(amount, { gasLimit: 8000000 })
   console.log((await tx.wait()).hash)
 }
 
-const sepoliaCallPivot = async () => {
-  // const pool = await hre.ethers.getContractAt("PoolControl", deployments.sepolia["poolAddress"])
-  // const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.sepolia["integratorAddress"]);
-  // const registryContract = await hre.ethers.getContractAt("Registry", deployments.sepolia["registryAddress"]);
-  // const protocolName = "compound"
-  // const chainToName = { 84532: "base", 11155111: "sepolia" }
-  // const targetChain = 84532
-  // const chainName = chainToName[targetChain]
+const callPivot = async () => {
+  const pool = await hre.ethers.getContractAt("PoolControl", deployments[mainChain]["poolAddress"])
+  const integratorContract = await hre.ethers.getContractAt("Integrator", deployments[mainChain]["integratorAddress"]);
+  const registryContract = await hre.ethers.getContractAt("Registry", deployments[mainChain]["registryAddress"]);
+  const protocolName = "aave"
+  const chainToName = { 84532: "base", 11155111: "sepolia", 11155420: "optimism", 421614: "arbitrum" }
+  const targetChain = 11155420
+  const chainName = chainToName[targetChain]
   // // Get hash of protocol
-  // // const WETH = await hre.ethers.getContractAt("ERC20", deployments[chainName]["WETH"]);
-  // // await (await WETH.transfer(deployments[chainName]["integratorAddress"], "100000000000")).wait()
+  // const WETH = await hre.ethers.getContractAt("ERC20", deployments[mainChain]["WETH"]);
+  // await (await WETH.transfer(deployments[mainChain]["integratorAddress"], "10000000000000")).wait()
 
-  // console.log("PIVOT TRANSACTION: ", (await (await pool.sendPositionChange(
-  //   deployments[chainName][protocolName + "MarketId"],
-  //   protocolName + "-v3",
-  //   targetChain,
-  //   { gasLimit: 4000000 }
+  console.log("PIVOT TRANSACTION: ", (await (await pool.sendPositionChange(
+    deployments[chainName][protocolName + "MarketId"],
+    protocolName + "-v3",
+    targetChain,
+    { gasLimit: 4000000 }
 
-  // )).wait()).hash)
-
-
-  const arbContract = await hre.ethers.getContractAt("ArbitrationContract", deployments.sepolia["arbitrationContract"]);
-
-  console.log(await arbContract.testAssertion(
-    "0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E",
-    "11155111",
-    "aave-v3",
-    deployments.sepolia.aaveMarketId,
-    "84532",
-    "compound-v3",
-    deployments.base.compoundMarketId,
-    "500000",
-    1
-  ))
-
-  console.log(await arbContract.testAssertion(
-    "0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E",
-    "11155111",
-    "aave-v3",
-    deployments.sepolia.aaveMarketId,
-    "84532",
-    "compound-v3",
-    deployments.base.compoundMarketId,
-    "500000",
-    2
-  ))
-
-  console.log(await arbContract.testAssertion(
-    "0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E",
-    "11155111",
-    "aave-v3",
-    deployments.sepolia.aaveMarketId,
-    "84532",
-    "compound-v3",
-    deployments.base.compoundMarketId,
-    "500000",
-    3
-  ))
-
-  console.log(await arbContract.testAssertion(
-    "0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E",
-    "11155111",
-    "aave-v3",
-    deployments.sepolia.aaveMarketId,
-    "84532",
-    "compound-v3",
-    deployments.base.compoundMarketId,
-    "500000",
-    4
-  ))
+  )).wait()).hash)
 
 
+  const assertionId = await pool.openAssertion()
+  const arbContract = await hre.ethers.getContractAt("ArbitrationContract", deployments[mainChain]["arbitrationContract"]);
 
   // const USDC = await hre.ethers.getContractAt("ERC20", "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238");
   // await (await USDC.approve(deployments[chainName]["arbitrationContract"], 500000)).wait()
   // console.log("arbitration: ", await pool.arbitrationContract(), await pool.strategyIndex())
 
   // console.log((await (await pool.queryMovePosition(protocolName + "-v3", deployments[chainName][protocolName + "MarketId"], targetChain, { gasLimit: 7000000 })).wait()).hash)
+  // console.log((await (await arbContract.assertionResolvedCallback(
+  //   assertionId,
+  //   true,
+  //   { gasLimit: 7000000 }
+  // )).wait()).hash)
 }
 
-const upgradeContract = async () => {
+const upgradeContract = async (chain) => {
 
-  const ArbitrationContract = await hre.ethers.getContractFactory("ArbitrationContract");
-  const int = await hre.upgrades.upgradeProxy(deployments.sepolia["arbitrationContract"], ArbitrationContract);
-  const newAddr = await int.getAddress()
-  console.log("Int upgraded", newAddr);
+  const registryContract = await hre.ethers.getContractFactory("Registry");
+  const registry = await hre.upgrades.upgradeProxy(deployments[chain]["registryAddress"], registryContract);
+  const newAddr = await registry.getAddress()
+  console.log("Reg upgraded", newAddr);
+  deployments[chain]["registryAddress"] = newAddr
+  writeAddressesToFile(deployments)
 }
 
 const baseIntegrationsTest = async () => {
-  const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.base["integratorAddress"]);
-  const registryContract = await hre.ethers.getContractAt("Registry", deployments.base["registryAddress"]);
+  const integratorContract = await hre.ethers.getContractAt("Integrator", deployments.optimism["integratorAddress"]);
+  const registryContract = await hre.ethers.getContractAt("Registry", deployments.optimism["registryAddress"]);
 
   // Get hash of protocol
   const protocolHash = await integratorContract.hasher("aave-v3")
 
   // Get hash operations
-  const operation = await integratorContract.hasher("deposit")
+  // const operation = await integratorContract.hasher("deposit")
 
-  const amount = "50000000000000"
+  // const amount = "50000000000000"
 
-  const WETH = await hre.ethers.getContractAt("ERC20", "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357");
-  // console.log("Token Transfer: ", (await (await WETH.transfer(deployments.base["integratorAddress"], amount)).wait()).hash)
-  console.log(protocolHash, operation)
+  // const WETH = await hre.ethers.getContractAt("ERC20", deployments.sepolia["aaveTestWETH"]);
+  // console.log("Token Transfer: ", (await (await WETH.transfer(deployments.optimism["integratorAddress"], amount)).wait()).hash)
+  // console.log(protocolHash, operation)
   // Call the routeExternal function
-  // console.log((await (await integratorContract.routeExternalProtocolInteraction(protocolHash, operation, amount, deployments.sepolia["poolAddress"], "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357", "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951", { gasLimit: 1000000 })).wait()).hash)
+  // console.log((await (await integratorContract.routeExternalProtocolInteraction(protocolHash, operation, amount, deployments.sepolia["poolAddress"], deployments.sepolia["aaveTestWETH"], "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951", { gasLimit: 1000000 })).wait()).hash)
 
-  const bridgeLogicAddress = deployments.base["bridgeLogicAddress"]
+  const bridgeLogicAddress = deployments.optimism["bridgeLogicAddress"]
   const bridgeLogic = await hre.ethers.getContractAt("BridgeLogic", bridgeLogicAddress);
 
   //Check aToken balance of ntegrator
-  const curPos = await integratorContract.getCurrentPosition(
-    deployments.sepolia["poolAddress"],
-    "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357",
-    "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951",
-    protocolHash
-  );
-  console.log(await bridgeLogic.poolToAsset(deployments.sepolia["poolAddress"]), await bridgeLogic.poolToCurrentPositionMarket(deployments.sepolia["poolAddress"]), await bridgeLogic.poolToCurrentMarketId(deployments.sepolia["poolAddress"]), await bridgeLogic.poolToCurrentProtocolHash(deployments.sepolia["poolAddress"]))
-  const curPos2 = await bridgeLogic.getPositionBalance(deployments.sepolia["poolAddress"])
+  // const curPos = await integratorContract.getCurrentPosition(
+  //   deployments.sepolia["poolAddress"],
+  //   deployments.sepolia["aaveTestWETH"],
+  //   "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951",
+  //   protocolHash
+  // );
+  console.log(await bridgeLogic.poolToAsset(deployments.arbitrum["poolAddress"]), await bridgeLogic.poolToCurrentPositionMarket(deployments.arbitrum["poolAddress"]), await bridgeLogic.poolToCurrentProtocolHash(deployments.arbitrum["poolAddress"]))
+  const curPos2 = await bridgeLogic.getPositionBalance(deployments.arbitrum["poolAddress"])
 
-  console.log(curPos, curPos2)
+  console.log(curPos2)
 
 
 
-  console.log("Current Position: ", curPos, "Broker: ", await registryContract.poolAddressToBroker(deployments.sepolia["poolAddress"]))
+  console.log("Current Position: ", "Broker: ", await registryContract.poolAddressToBroker(deployments.arbitrum["poolAddress"]))
 }
 
 const upgradeCalc = async () => {
 
   const ManagerV2 = await hre.ethers.getContractFactory("ChaserManager");
-  const manager = await hre.upgrades.upgradeProxy(deployments.sepolia["managerAddress"], ManagerV2);
+  const manager = await hre.upgrades.upgradeProxy(deployments[mainChain]["managerAddress"], ManagerV2);
   const newAddr = await manager.getAddress()
   console.log("Manager upgraded", newAddr);
 
   const PoolCalculations = await hre.ethers.getContractFactory("PoolCalculations");
-  const poolCalculationsContract = await hre.upgrades.upgradeProxy(deployments.sepolia["poolCalculationsAddress"], PoolCalculations);
+  const poolCalculationsContract = await hre.upgrades.upgradeProxy(deployments[mainChain]["poolCalculationsAddress"], PoolCalculations);
   const poolCalculationsAddress = await poolCalculationsContract.getAddress()
   console.log("POOL CALCULATIONS", poolCalculationsAddress)
+}
+
+const bridgeTokens = async (currentChain, destinationChain) => {
+
+  const amount = "1000000000000"
+  const wethAddr = deployments[currentChain]["WETH"]
+  // const WETH = await hre.ethers.getContractAt("ERC20", wethAddr);
+  // await WETH.approve(deployments[currentChain]["spokePool"], amount)
+
+  const spokePool = await hre.ethers.getContractAt("ISpokePool", "0xec6e1527948a1d6bb3fdcd528d75844020b20a1d");
+  const bridgeTx = await (await spokePool.depositV3Now(
+    "0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E",
+    "0x1CA2b10c61D0d92f2096209385c6cB33E3691b5E",
+    deployments[currentChain]["WETH"],
+    zeroAddress,
+    amount,
+    totalFeeCalc(amount),
+    networks[destinationChain],
+    zeroAddress,
+    0,
+    0,
+    "0x",
+    { gasLimit: "8000000" }
+  )).wait();
+
+  console.log(bridgeTx)
+
+
 }
 
 const manualAcrossMessageHandle = async (amount, chain, message) => {
   //This is used when a Bridge message doesnt seem to go through and we need to determine if the issue is reversion
   const receiverContract = await hre.ethers.getContractAt("BridgeReceiver", deployments[chain]["receiverAddress"]);
+
   const wethAddr = deployments[chain]["WETH"]
 
   //message should be bytes from topic 0xe503f02a28c80b867adfed9777a61077c421693358e2f0f1fc54e13acaa18005
@@ -674,22 +642,11 @@ const testLogFinder = async () => {
 
   console.log(messageLogEvents.result.find(x => x.transactionHash === hash))
 
-  // const url = "https://corsproxy.io/?https%3A%2F%2Fccip.chain.link%2Fapi%2Fquery%2FMESSAGE_DETAILS_QUERY%3Fvariables%3D%257B%2522messageId%2522%253A%25220x4a39b65996d7b11d31156727e48a3398c63f84e13012dfa7e3394ce4ecb78703%2522%257D";
-
-  // const event = await fetch(url, {
-  //     method: "get",
-  //     headers: {
-  //         "Content-Type": "application/json",
-  //     }
-  // })
-
-  // const deployments = await event.json()
-
-  // console.log(deployments.data.allCcipMessages.nodes[0])
 
 }
 
 async function mainExecution() {
+
 
   try {
     // DEMO STEPS
@@ -699,42 +656,36 @@ async function mainExecution() {
     // 2. Add your RPC URI/key in "../hardhat.config.js"
     // --------------------------------------------------------------------------------------------
     // IF LOOKING TO DEPLOY YOUR OWN INSTANCE OF ALL CONTRACTS - EXECUTE THE FOLLOWING TWO FUNCTIONS ONE AT A TIME.
-    // await sepoliaDeployments() //CHECK THAT THE DEFAULT NETWORK IN "..hardhat.config.js" IS sepolia
-    // await baseDeployments() //CHANGE THE DEFAULT NETWORK IN "..hardhat.config.js" TO base
-    // await sepoliaSecondConfig() //CHANGE THE DEFAULT NETWORK IN "..hardhat.config.js" TO sepolia
+    // await mainDeployments() //CHECK THAT THE DEFAULT NETWORK IN "..hardhat.config.js" IS sepolia
+    // await secondaryDeployments("optimism") //CHANGE THE DEFAULT NETWORK IN "..hardhat.config.js" TO base
+    // await setReceivers("arbitrum")
+    // await setPivotConfigs()
     // --------------------------------------------------------------------------------------------
     // IF YOU EXECUTED THE PRIOR SECTION AND/OR WOULD LIKE TO DEPLOY YOUR POOL FOR TESTING - EXECUTE THE FOLLOWING FUNCTION
     // This function also sends the initial deposit funds through the bridge into the investment as the position is set on base
-    // await setPivotConfigs()
     // await upgradeCalc()
-    // await sepoliaPoolDeploy()
-    // await sepoliaPositionSetDeposit()
+    // await poolDeploy()
+    // await positionSetDeposit()
+
+    // await callPivot()
+    // await poolDeposit()
+    // await sendTokens()
     // await addStrategyCode()
-
-    // await sepoliaCallPivot()
-    // await sepoliaDeposit()
-
     // --------------------------------------------------------------------------------------------
-    // AFTER EXECUTING sepoliaPoolDeploy() OR sepoliaDeposit(), WAIT FOR THE ETHEREUM BASE ACROSS SPOKEPOOL TO RECEIVE THE DEPOSIT
-    // GET THE MESSAGE DATA FROM SEPOLIASCAN, COPYING THE HEX DATA BYTES FROM EVENT "0x244e451036514e829e60556484796d2251dc3d952cd079db45d2bfb4c0aff2a1"
-    // PASTE MESSAGE DATA INTO THE ARGUMENT FOR FOLLOWING FUNCTION
-    // await sepoliaSimulateCCIPReceive("0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000e00414e990000000000000000000000000000000000000000000000000000000000000000000000000000000009bdc76b596051e1e86eadb2e2af2a491e32bfa4800000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000886c98ec54a530000000000000000000000000000000000000000000000000005af3107a400003361877a052af4d82301c2eea28d1667f3fdbaff73f9d57880f1b317a552eda2")
     // --------------------------------------------------------------------------------------------
     // EXECUTE THIS FUNCTION TO START A DEPOSIT TO THE POOL
     // REMINDER TO REVISIT THE ABOVE SECTION TO SIMULATE THE CCIP TRIGGER MESSAGE FOR EXECUTING THE DEPOSIT ON ETHEREUM BASE
     // --------------------------------------------------------------------------------------------
-    // await upgradeContract()
+    // await upgradeContract("optimism")
     // await poolStatRead()
-    // await sepoliaWithdraw()
-    await poolStatRead()
-    // await sendTokens()
+    // await poolWithdraw()
+    // await poolStatRead()
     // 
+    // 
+    // await bridgeTokens("sepolia", "optimism")
 
-
-    // await baseSimulateCCIPReceive("0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001003705af6d000000000000000000000000000000000000000000000000000000000000000000000000000000009bdc76b596051e1e86eadb2e2af2a491e32bfa48000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000803f4c40f2d9e47df3a43c5c97200a65dd80990bf9d69827733cf5f393681c90dc000000000000000000000000000000000000000000000000000886c98b760000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000004a03cea247fc197")
     // --------------------------------------------------------------------------------------------
-    // baseReceivers()
-    // await manualAcrossMessageHandle("997500000000", "base", "0x5F240EEE000000000000000000000000000000000000000000000000000000000000000000000000000000001F73597FD37C24ECF1C8573EB2F1BDA5AA3353910000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000004020E2C0EE83105A16C8E21ACC892B241D47129974705CB352503F337637E379FF0000000000000000000000000000000000000000000000000000000000000000")
+    // await manualAcrossMessageHandle("48903935794173", "optimism", "0x5F240EEE00000000000000000000000000000000000000000000000000000000000000000000000000000000E512FEC32AD1645AE650BB8AD0FD26D1CFC6C4CC0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000004094F0D1C80A7B855DC8BD48D38EA0ADB40266A859A3B4B9C2A0E1B0AE6F60BC7E0000000000000000000000000000000000000000000000000000000000000001")
 
     // await baseIntegrationsTest()
     // await testLogFinder()
@@ -768,3 +719,30 @@ function writeAddressesToFile(contractAddresses) {
 
 
 mainExecution()
+
+
+
+
+//These addresses pertain to a Chaser version deployed to sepolia to demonstrate Uma capabilities. On other chains, this is a dummy UMA process 
+const sepoliaUMAdemo = {
+  "registryAddress": "0x5af00752888CA07391fA001cA2E06901f3b8Eeb6",
+  "poolCalculationsAddress": "0x7f69D502Bc7580BBD5d74a2D6E5D0E98e89Cb4d1",
+  "bridgeLogicAddress": "0x6dF1E4611b95F6D0fF2Bade43C6506940fC6d2F5",
+  "messengerAddress": "0xE60A6CCb85A7a4248F7FCb87188C5148e97884Cb",
+  "receiverAddress": "0xB6930f81CAae1F74b0B77c91d2851564Cf92232d",
+  "spokePool": "0x5ef6C01E11889d86803e0B23e3cB3F9E9d97B662",
+  "WETH": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+  "aaveMarketId": "0x29598b72eb5CeBd806C5dCD549490FdA35B13cD8",
+  "compoundMarketId": "0x2943ac1216979aD8dB76D9147F64E61adc126e96E4aB69C077896252FAFBD49EFD26B5D171A32410",
+  "integratorAddress": "0x5c5eBDd1837E109F85Db6Ba19FFcd7ff17d2f443",
+  "linkToken": "0x779877A7B0D9E8603169DdbD7836e478b4624789",
+  "managerAddress": "0x4899fc38660240d82f986243D472b5D4334455ba",
+  "poolAddress": "0x5804b12c656c115029f05586ce42bdf293c0a00e",
+  "investmentStrategy": "0x3Af008eBd82C8Bf3e5E62668F10f130b453f3Fda",
+  "arbitrationContract": "0xcEA44a22562d145fCEfEb836DB8D9cc6246AF80b",
+  "aaveTestWETH": "0xC558DBdd856501FCd9aaF1E62eae57A9F0629a3c",
+  "compoundTestWETH": "0x2D5ee574e710219a521449679A4A7f2B43f046ad"
+}
+
+
+

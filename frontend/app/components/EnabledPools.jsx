@@ -21,9 +21,10 @@ const EnabledPools = ({ poolCount, provider, registry, setErrorMessage }) => {
                             </th>
                         </tr>) : null
                     }
-                    {Array.from({ length: poolCount }, (_, index) => (
-                        <PoolRow key={index} poolNumber={index} provider={provider} registry={registry} setErrorMessage={(x) => setErrorMessage(x)} />
-                    ))}
+                    {Array.from({ length: poolCount }, (_, index) => {
+                        if (index <= 1) return null
+                        return <PoolRow key={index} poolNumber={index} provider={provider} registry={registry} setErrorMessage={(x) => setErrorMessage(x)} />
+                    })}
                 </tbody>
             </table>
         </div>

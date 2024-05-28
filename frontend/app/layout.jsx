@@ -73,6 +73,15 @@ const Layout = ({ children }) => {
 
   return (
     <html lang="en">
+      <head>
+        <title>Chaser Finance</title>
+        <meta name='description' content='Chaser Finance is a DeFi platform for data based investing strategies' />
+        <meta
+          name="keywords"
+          content="defi aave compound ethereum arbitrum finance bridge across"
+        />
+
+      </head>
       <body>
         <Web3Modal>
           <div className={"root"} style={rootStyle}>
@@ -80,21 +89,24 @@ const Layout = ({ children }) => {
             <ErrorPopup errorMessage={errorMessage} clearErrorMessage={() => setErrorMessage("")} />
             <div className={"header"}>
               <div style={{ display: "flex", cursor: "pointer" }} onClick={() => router.push('/')}>
-                <Image src={"/ChaserLogoNoText.png"} height={48} width={48} />
+                <Image src={"/ChaserLogoNoText.png"} alt="ChaserFinance" height={48} width={48} />
                 <span style={{ fontSize: "42px", color: "white", fontFamily: "Arquette" }}>chaser</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <div style={{ marginRight: "42px", display: "flex", fontFamily: "Aquette" }}>
+                <div style={{ marginRight: "40px", display: "flex", fontFamily: "Aquette" }}>
+                  <a href="/pool"><span style={{ fontFamily: "Arquette", display: "inline-block", lineHeight: "36px", color: "white", margin: "10px" }} >POOLS</span></a>
                   <a target="_blank" href="https://github.com/MichaelC1999/chaser#chaser"><span style={{ fontFamily: "Arquette", display: "inline-block", lineHeight: "36px", color: "white", margin: "10px" }} >DOCUMENTATION</span></a>
                   <a target="_blank" href="https://github.com/MichaelC1999/chaser"><span style={{ fontFamily: "Arquette", display: "inline-block", lineHeight: "36px", color: "white", margin: "10px" }} >GITHUB</span></a>
-                  <span style={{ fontFamily: "Arquette", display: "inline-block", lineHeight: "36px", color: "white", margin: "10px" }} >CONTRACTS</span>
+                  <a target="_blank" href="https://github.com/MichaelC1999/chaser/tree/master/contracts"><span style={{ fontFamily: "Arquette", display: "inline-block", lineHeight: "36px", color: "white", margin: "10px" }} >CONTRACTS</span></a>
 
                 </div>
-                <div style={{ marginRight: "12px" }}>
+                <div style={{ margin: "10px 14px 16px 0", padding: "2px 5px", borderRadius: "5px", backgroundColor: "white", display: "flex" }}>
+                  <Image style={{ backgroundColor: "white", padding: "1px", borderRadius: "10px" }} src={"./arbitrum-logo.svg"} height={28} width={28} />
+                  <span style={{ fontFamily: "Arquette", display: "inline-block", margin: "4px", color: "black" }} >SEPOLIA</span>
+                </div>
+                <div style={{ marginRight: "14px" }}>
                   <ConnectButton connected={connected} address={connectedAdddress} setErrorMessage={(msg) => setErrorMessage(msg)} />
-
                 </div>
-
               </div>
             </div>
             <div className={"contentContainer"}>

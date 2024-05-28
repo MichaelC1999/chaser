@@ -21,9 +21,9 @@ import { useWeb3Modal, useWeb3ModalAccount } from '@web3modal/ethers/react';
 
 const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessage }) => {
     const [assetAmount, setAssetAmount] = useState(0.0001);
-    const [initialMarket, setInitialMarket] = useState("0x2943ac1216979aD8dB76D9147F64E61adc126e96E4aB69C077896252FAFBD49EFD26B5D171A32410")
-    const [chainId, setChainId] = useState(11155111)
-    const [protocolName, setProtocolName] = useState("compound-v3")
+    const [initialMarket, setInitialMarket] = useState(contractAddresses.arbitrum.aaveMarketId)
+    const [chainId, setChainId] = useState(421614)
+    const [protocolName, setProtocolName] = useState("aave-v3")
     const [depoInitialized, setDepoInitialized] = useState(false);
     const [userAssetBalance, setUserAssetBalance] = useState(0)
     const [depositId, setDepositId] = useState("")
@@ -84,7 +84,7 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, signer)
 
         try {
-            const asset = new ethers.Contract(contractAddresses["sepolia"].WETH || "0x0", WethABI, signer)
+            const asset = new ethers.Contract(contractAddresses["arbitrum"].WETH || "0x0", WethABI, signer)
             const formattedAmount = parseEther(assetAmount + "")
             if (formatEther(userAssetBalance) <= assetAmount) {
                 const amountToWrap = Number(formattedAmount) - Number(userAssetBalance)
@@ -138,7 +138,7 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
         }
 
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, signer)
-        const asset = new ethers.Contract(contractAddresses["sepolia"].WETH || "0x0", WethABI, signer)
+        const asset = new ethers.Contract(contractAddresses["arbitrum"].WETH || "0x0", WethABI, signer)
         const formattedAmount = parseEther(assetAmount + "")
         try {
             if (formatEther(userAssetBalance) <= assetAmount) {
@@ -163,7 +163,6 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
                 fetchPoolData()
             }, 20000)
 
-            // setTxData({ hash: tx.hash, URI: ["https://sepolia.basescan.org/tx/" + tx.hash], poolAddress, message: `Chaser is processing your pool configuration and deposit. ${txAcrossMessage}` })
 
             //From event data get the Across depositId, destination chain
             //Event in logs array with topic[0] = 0xa123dc29aebf7d0c3322c8eeb5b999e859f39937950ed31056532713d0de396f
@@ -217,7 +216,11 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
                         marketIdKey = "compoundMarketId"
                     }
                     const networkKey = networks[x.target.value]
-                    setInitialMarket(contractAddresses[networkKey][marketIdKey])
+                    if (contractAddresses[networkKey][marketIdKey]) {
+                        setInitialMarket(contractAddresses[networkKey][marketIdKey])
+                    } else {
+                        setInitialMarket(contractAddresses[networkKey]["aaveMarketId"])
+                    }
                 }} value={chainId} >
                     {Object.keys(networks).map(network => (
                         <option key={networks[network]} value={network}>{networks[network]}</option>
@@ -239,7 +242,14 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
                     const networkKey = networks[chainId]
                     setInitialMarket(contractAddresses[networkKey][marketIdKey])
                 }} value={protocolName} >
-                    {Object.values(protocolHashes).map(protocol => (
+                    {Object.values(protocolHashes).filter(protocol => {
+                        if (protocol == "compound-v3") {
+                            return !!contractAddresses[networks[chainId]]["compoundMarketId"]
+                        }
+                        if (protocol == "aave-v3") {
+                            return !!contractAddresses[networks[chainId]]["aaveMarketId"]
+                        }
+                    }).map(protocol => (
                         <option key={protocol} value={protocol}>{protocol}</option>
                     ))}
                 </select>

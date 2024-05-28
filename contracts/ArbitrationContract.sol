@@ -13,7 +13,7 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 /// @dev This contract integrates with UMA Optimistic Oracle and handles assertion behaviors
 /// @notice This contract utilizes UMA's Optimistic Oracle for judging proposed movements of Chaser pool investments
 contract ArbitrationContract is OwnableUpgradeable {
-    IERC20 public umaCurrency;
+    address public umaCurrency;
     IOptimisticOracleV3 public oo;
     uint64 public assertionLiveness;
     bytes32 public defaultIdentifier;
@@ -63,18 +63,24 @@ contract ArbitrationContract is OwnableUpgradeable {
             registry.chainIdToSpokePoolAddress(0)
         );
 
-        if (_chainId == 11155111) {
-            umaCurrency = IERC20(0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238);
-        } else {
-            address umaCurrencyAddress = spokePool.wrappedNativeToken();
-            umaCurrency = IERC20(umaCurrencyAddress); // IMPORTANT - Not wrapped token, but rather USDC
-        }
-        oo = IOptimisticOracleV3(registry.chainIdToUmaAddress(_chainId));
-        defaultIdentifier = oo.defaultIdentifier();
-        assertionLiveness = 360; // 7200 at a minimum
+        addConfigsUMA(_chainId);
 
+        assertionLiveness = 360; // 7200 at a minimum
         chainIdToName[11155111] = "ethereum";
         chainIdToName[84532] = "base";
+    }
+
+    function addConfigsUMA(uint256 _chainId) public onlyOwner {
+        if (_chainId == 11155111) {
+            umaCurrency = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
+        } else {
+            umaCurrency = address(0);
+        }
+        address localOOaddress = registry.chainIdToUmaAddress(_chainId);
+        if (localOOaddress != address(0)) {
+            oo = IOptimisticOracleV3(localOOaddress);
+            defaultIdentifier = oo.defaultIdentifier();
+        }
     }
 
     /// @notice Requests a position move through the Optimistic Oracle
@@ -112,9 +118,15 @@ contract ArbitrationContract is OwnableUpgradeable {
             "Chain must have a bridge receiver to request a pivot"
         );
 
-        bool success = umaCurrency.transferFrom(_sender, address(this), _bond);
-        require(success, "Failed token transfer");
-        umaCurrency.approve(address(oo), _bond);
+        if (umaCurrency != address(0) && address(oo) != address(0)) {
+            bool success = IERC20(umaCurrency).transferFrom(
+                _sender,
+                address(this),
+                _bond
+            );
+            require(success, "Failed token transfer");
+            IERC20(umaCurrency).approve(address(oo), _bond);
+        }
         bytes32 assertionId = openProposal(_claim, _sender, _bond);
         assertionToRequestedMarketId[assertionId] = _requestMarketId;
         assertionToRequestedProtocol[assertionId] = _requestProtocol;
@@ -141,17 +153,22 @@ contract ArbitrationContract is OwnableUpgradeable {
         address asserter,
         uint256 bond
     ) internal returns (bytes32) {
-        bytes32 assertionId = oo.assertTruth(
-            claim,
-            asserter,
-            address(this),
-            address(0), // No sovereign security.
-            assertionLiveness,
-            umaCurrency,
-            bond,
-            defaultIdentifier,
-            bytes32(0) // No domain.
+        bytes32 assertionId = keccak256(
+            abi.encodePacked(claim, block.timestamp)
         );
+        if (umaCurrency != address(0) && address(oo) != address(0)) {
+            assertionId = oo.assertTruth(
+                claim,
+                asserter,
+                address(this),
+                address(0), // No sovereign security.
+                assertionLiveness,
+                IERC20(umaCurrency),
+                bond,
+                defaultIdentifier,
+                bytes32(0) // No domain.
+            );
+        }
         assertionsData[assertionId] = DataAssertion(claim, asserter, false);
 
         emit DataAsserted(claim, asserter, assertionId);
@@ -168,7 +185,12 @@ contract ArbitrationContract is OwnableUpgradeable {
         bytes32 assertionId,
         bool assertedTruthfully
     ) external {
-        require(msg.sender == address(oo));
+        if (address(oo) != address(0)) {
+            require(
+                msg.sender == address(oo),
+                "Callback may only be called by UMA oracle"
+            );
+        }
         address poolAddress = assertionToPoolAddress[assertionId];
         IPoolControl poolControl = IPoolControl(poolAddress);
         // If the assertion was true, then the data assertion is resolved.

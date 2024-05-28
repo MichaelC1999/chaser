@@ -8,18 +8,18 @@ const projectId = '8d59073cbe5cc16d4461e675fcc14a0c'
 
 // 2. Set chains
 const mainnet = {
-    chainId: 11155111,
-    name: 'Ethereum Sepolia',
+    chainId: 421614,
+    name: 'Arbitrum Sepolia',
     currency: 'ETH',
-    explorerUrl: 'https://etherscan.io',
-    rpcUrl: 'https://rpc.sepolia.org'
+    explorerUrl: 'https://sepolia.arbiscan.io',
+    rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc'
 }
 
 // 3. Create a metadata object
 const metadata = {
-    name: 'My Website',
-    description: 'My Website description',
-    url: 'http://localhost:3000/', // origin must match your domain & subdomain
+    name: 'Chaser Finance',
+    description: 'Chaser Finance',
+    url: 'https://chaser.finance/', // origin must match your domain & subdomain
     // icons: ['https://avatars.mywebsite.com/']
 }
 // 4. Create Ethers config

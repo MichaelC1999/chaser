@@ -101,7 +101,7 @@ function PivotingStatus({ provider, pivotTx, fetchPoolData, poolAddress, closePo
 
     const getPivotTargetData = async () => {
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, provider);
-        const poolCalculations = new ethers.Contract(contractAddresses["sepolia"].poolCalculationsAddress || "0x0", PoolCalculationABI, provider);
+        const poolCalculations = new ethers.Contract(contractAddresses["arbitrum"].poolCalculationsAddress || "0x0", PoolCalculationABI, provider);
         const data = {}
         data.targetPositionMarketId = await poolCalculations.targetPositionMarketId(poolAddress)
         data.targetChainId = await poolCalculations.targetPositionChain(poolAddress)
@@ -441,7 +441,7 @@ function PivotingStatus({ provider, pivotTx, fetchPoolData, poolAddress, closePo
         <div className="popup-message">
             <div style={{ display: "block", marginTop: "22px", fontSize: "16px" }}>
                 <span style={{ display: "block" }} >This pivot will deposit into market <b>{targetData?.targetPositionMarketId?.slice(0, 6)}...{targetData?.targetPositionMarketId?.slice(targetData?.targetPositionMarketId?.length - 15)}</b></span>
-                <span style={{ display: "block" }} >This involves exiting the current position on <b>{targetData?.currentPositionProtocol} {networks[targetData?.currentChainId?.toString()]?.toUpperCase()}</b> and entering into <b>{targetData?.targetPositionProtocol} {networks[targetData?.targetChainId?.toString()]?.toUpperCase()}</b></span>
+                <span style={{ display: "block" }} >Exiting the current position on <b>{targetData?.currentPositionProtocol} {networks[targetData?.currentChainId?.toString()]?.toUpperCase()}</b> and entering into <b>{targetData?.targetPositionProtocol} {networks[targetData?.targetChainId?.toString()]?.toUpperCase()}</b></span>
 
             </div>
             {display}

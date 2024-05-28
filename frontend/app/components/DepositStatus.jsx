@@ -26,7 +26,7 @@ function DepositStatus({ provider, depositId, poolData, fetchPoolData, poolAddre
 
     const getPoisitionIntializeTargetData = async () => {
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, provider);
-        const poolCalculations = new ethers.Contract(contractAddresses["sepolia"].poolCalculationsAddress || "0x0", PoolCalculationABI, provider);
+        const poolCalculations = new ethers.Contract(contractAddresses["arbitrum"].poolCalculationsAddress || "0x0", PoolCalculationABI, provider);
         const data = {}
         data.targetPositionMarketId = await poolCalculations.targetPositionMarketId(poolAddress)
         data.targetChainId = await poolCalculations.targetPositionChain(poolAddress)
@@ -123,7 +123,7 @@ function DepositStatus({ provider, depositId, poolData, fetchPoolData, poolAddre
         console.log("fetching Across Tx", poolData, targetData)
         let chainId = poolData?.currentChain?.toString()
         if (chainId === "0") {
-            chainId = targetData?.targetChainId
+            chainId = targetData?.targetChainId?.toString()
 
         }
         const message = await fetchAcrossRelayFillTx(chainId, numberToHex(Number(acrossDepositId), { size: 32 }))

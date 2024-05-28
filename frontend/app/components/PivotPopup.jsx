@@ -39,7 +39,7 @@ function PivotPopup({ isPivoting, poolData, provider, tvl, pivotTx, fetchPoolDat
 
     const getPivotAssertionData = async () => {
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, provider);
-        const arbitration = new ethers.Contract(contractAddresses["sepolia"].arbitrationContract || "0x0", ArbitrationABI, provider);
+        const arbitration = new ethers.Contract(contractAddresses["arbitrum"].arbitrationContract || "0x0", ArbitrationABI, provider);
         const data = {}
         data.interactionPaused = await arbitration.inAssertionBlockWindow(openAssertion)
         data.assertionMarketId = await arbitration.assertionToRequestedMarketId(openAssertion);
@@ -67,8 +67,10 @@ function PivotPopup({ isPivoting, poolData, provider, tvl, pivotTx, fetchPoolDat
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
         }
         try {
-            const UMAOO = new ethers.Contract("0xFd9e2642a170aDD10F53Ee14a93FcF2F31924944" || "0x0", UmaABI, signer);
-            await (await UMAOO.settleAssertion(openAssertion, { gasLimit: 8000000 })).wait()
+            // const UMAOO = new ethers.Contract("0xFd9e2642a170aDD10F53Ee14a93FcF2F31924944" || "0x0", UmaABI, signer);
+            // await (await UMAOO.settleAssertion(openAssertion, { gasLimit: 8000000 })).wait()
+            const arbitration = new ethers.Contract(contractAddresses["arbitrum"].arbitrationContract || "0x0", ArbitrationABI, signer);
+            await (await arbitration.assertionResolvedCallback(openAssertion, true)).wait()
             fetchPoolData()
             closePopup()
         } catch (err) {
@@ -136,8 +138,8 @@ function PivotPopup({ isPivoting, poolData, provider, tvl, pivotTx, fetchPoolDat
     } else if (!loading) {
         display = <><div className="popup-message">
             <div>
-                <span style={{ display: "block" }}>To open the proposal, you must approve USDC for the assertion bond. After approving the USDC bond and then executing the proposal transaction, you must wait for the proposal to be approved. This takes 5 minutes if there are no disputes (this period will be longer in production).</span>
-                <span style={{ margin: "10px 0", display: "block" }}><a target="_blank" href="https://faucet.circle.com/"><u>Click to access USDC faucet</u></a></span>
+                <span style={{ display: "block" }}>After the proposal transaction, you must wait for the proposal to be approved by the UMA Protocol and to execute the pivot. This takes 5 minutes if there are no disputes. In production, the liveness period will be longer and require a USDC bond for opening a proposal.</span>
+                {/* <span style={{ margin: "10px 0", display: "block" }}><a target="_blank" href="https://faucet.circle.com/"><u>Click to access USDC faucet</u></a></span> */}
             </div>
         </div>
             <div style={{ width: "100%", display: "flex", justifyContent: "center", flexDirection: "column", alignItems: "center" }}>

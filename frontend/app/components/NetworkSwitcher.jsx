@@ -24,7 +24,7 @@ export function NetworkSwitcher() {
         try {
             await windowOverride?.ethereum?.request({
                 method: 'wallet_switchEthereumChain',
-                params: [{ chainId: '0xaa36a7' }],
+                params: [{ chainId: '0x66eee' }],
             });
         } catch (switchError) {
             console.log(switchError.message);
@@ -32,7 +32,7 @@ export function NetworkSwitcher() {
     }
 
     if (isEthereumAvailable) {
-        if (chainId == "0xaa36a7" || fromHex(newChain, 'number') == 0) {
+        if (chainId == "0x66eee" || fromHex(newChain, 'number') == 0) {
             return null;
         }
     } else {
@@ -42,7 +42,7 @@ export function NetworkSwitcher() {
     return (
         <div className="popup-container">
             <div className="popup">
-                <div className="popup-title">Network Switcher</div>
+                <div className="popup-title">Network</div>
                 <div className="popup-message">Chaser is interfaced on {networks[process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID]} (Chain ID {process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID})</div>
                 <div className="popup-message">
                     You are currently connected to Chain ID {fromHex(newChain, 'number') || "N/A"}

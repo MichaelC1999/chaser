@@ -22,14 +22,14 @@ function WithdrawStatus({ provider, withdrawId, poolData, fetchPoolData, poolAdd
     const [targetData, setTargetData] = useState({})
 
     useEffect(() => {
-        getPoisitionIntializeTargetData()
+        getPositionIntializeTargetData()
     }, [])
 
 
 
-    const getPoisitionIntializeTargetData = async () => {
+    const getPositionIntializeTargetData = async () => {
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, provider);
-        const poolCalculations = new ethers.Contract(contractAddresses["sepolia"].poolCalculationsAddress || "0x0", PoolCalculationABI, provider);
+        const poolCalculations = new ethers.Contract(contractAddresses["arbitrum"].poolCalculationsAddress || "0x0", PoolCalculationABI, provider);
         const data = {}
         data.targetPositionMarketId = await poolCalculations.targetPositionMarketId(poolAddress)
         data.targetChainId = await poolCalculations.targetPositionChain(poolAddress)

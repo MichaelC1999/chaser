@@ -67,7 +67,7 @@ export const decodeCCIPSendMessageEvent = async (logs) => {
 }
 
 export const userLastDeposit = async (poolAddress, userAddress) => {
-    const URI = "https://api-sepolia.etherscan.io/api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + poolAddress + "&topic0=0xee99ac53f13979350092f60117dc361d473aca8ed92f200a947fefcba78d1221"
+    const URI = "https://api-sepolia.arbiscan.io/api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + poolAddress + "&topic0=0xee99ac53f13979350092f60117dc361d473aca8ed92f200a947fefcba78d1221"
 
     const event = await fetch(URI, {
         method: "get",
@@ -88,7 +88,7 @@ export const userLastDeposit = async (poolAddress, userAddress) => {
 }
 
 export const userLastWithdraw = async (poolAddress, userAddress) => {
-    const URI = "https://api-sepolia.etherscan.io/api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + poolAddress + "&topic0=0x4311354ef29bfb2e8c894c9ef5b35830f819dc8371cae086be213257904d3f36"
+    const URI = "https://api-sepolia.arbiscan.io/api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + poolAddress + "&topic0=0x4311354ef29bfb2e8c894c9ef5b35830f819dc8371cae086be213257904d3f36"
 
     const event = await fetch(URI, {
         method: "get",
@@ -107,7 +107,7 @@ export const userLastWithdraw = async (poolAddress, userAddress) => {
 }
 
 export const decodePoolPivot = async (poolAddress, pivotNonce) => {
-    const URI = "https://api-sepolia.etherscan.io/api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + poolAddress + "&topic0=0x9a217dcd98ee95ec445f2f45c6cff75f2e3a236ee69e5486f42b27884c12836f"
+    const URI = "https://api-sepolia.arbiscan.io/api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + poolAddress + "&topic0=0x9a217dcd98ee95ec445f2f45c6cff75f2e3a236ee69e5486f42b27884c12836f"
 
     const event = await fetch(URI, {
         method: "get",
@@ -151,9 +151,15 @@ export const fetchAcrossRelayFillTx = async (destinationChain, depositId) => {
         if (!destinationChain) return { success: false, messageId: null }
         let topic = "0x571749edf1d5c9599318cdbc4e28a6475d65e87fd3b2ddbe1e9a8d5e7a0f0ff7"
         let contractAddr = contractAddresses[networks[destinationChain]]["spokePool"]
-        let path = "https://api-sepolia.basescan.org/"
-        if (destinationChain === process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID) {
+        let path = "https://api-sepolia.arbiscan.io/"
+        if (destinationChain === "84532") {
+            path = "https://api-sepolia.basescan.org/"
+        }
+        if (destinationChain === "11155111") {
             path = "https://api-sepolia.etherscan.io/"
+        }
+        if (destinationChain === "11155420") {
+            path = "https://api-sepolia-optimistic.etherscan.io/"
         }
         let logUri = path + "api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + contractAddr + "&topic0=" + topic
         const messageEvent = await fetch(logUri, {
@@ -165,7 +171,7 @@ export const fetchAcrossRelayFillTx = async (destinationChain, depositId) => {
 
         const messageLogEvents = await messageEvent.json()
 
-        const check = messageLogEvents.result.find(x => x.topics[2] === depositId)
+        const check = sortDesc(messageLogEvents.result).find(x => x.topics[2] === depositId)
 
         if (!check) return { success: false, messageId: null }
 
@@ -184,9 +190,7 @@ export const fetchAcrossRelayFillTx = async (destinationChain, depositId) => {
         })
 
         const logEvents = await logEvent.json()
-
-
-        const log = (logEvents?.result?.find(x => x.transactionHash === check.transactionHash)) || null
+        const log = (sortDesc(logEvents?.result)?.find(x => x.transactionHash === check.transactionHash)) || null
 
         if (!log) {
             return { success: true, messageId: null }
@@ -202,9 +206,15 @@ export const findCcipMessageFromTxHash = async (txHash, chainId) => {
     //ccip
     const topic = "0x3d8a9f055772202d2c3c1fddbad930d3dbe588d8692b75b84cee071946282911"
     let contractAddr = contractAddresses[networks[chainId]]["messengerAddress"]
-    let path = "https://api-sepolia.basescan.org/"
-    if (chainId === process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID) {
+    let path = "https://api-sepolia.arbiscan.io/"
+    if (chainId === "84532") {
+        path = "https://api-sepolia.basescan.org/"
+    }
+    if (chainId === "11155111") {
         path = "https://api-sepolia.etherscan.io/"
+    }
+    if (chainId === "11155420") {
+        path = "https://api-sepolia-optimistic.etherscan.io/"
     }
     let logUri = path + "api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + contractAddr + "&topic0=" + topic
 
@@ -218,7 +228,7 @@ export const findCcipMessageFromTxHash = async (txHash, chainId) => {
     const messageLogEvents = await messageEvent.json()
     console.log(messageLogEvents)
     if (!messageLogEvents) return { messageId: null, success: false }
-    const log = (messageLogEvents?.result?.find(x => x.transactionHash === txHash)) || null
+    const log = (sortDesc(messageLogEvents?.result)?.find(x => x.transactionHash === txHash)) || null
     if (!log) return { messageId: null, success: false }
 
 
@@ -234,9 +244,15 @@ export const findCcipMessageFromTxHash = async (txHash, chainId) => {
 export const findAcrossDepositFromTxHash = async (txHash, chainId) => {
     const topic = "0xa123dc29aebf7d0c3322c8eeb5b999e859f39937950ed31056532713d0de396f"
     let contractAddr = contractAddresses[networks[chainId]]["spokePool"]
-    let path = "https://api-sepolia.basescan.org/"
-    if (chainId === process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID) {
+    let path = "https://api-sepolia.arbiscan.io/"
+    if (chainId === "84532") {
+        path = "https://api-sepolia.basescan.org/"
+    }
+    if (chainId === "11155111") {
         path = "https://api-sepolia.etherscan.io/"
+    }
+    if (chainId === "11155420") {
+        path = "https://api-sepolia-optimistic.etherscan.io/"
     }
     let logUri = path + "api?apikey=" + process.env.NEXT_PUBLIC_ETHERSCAN_API + "&module=logs&action=getLogs&fromBlock=1092029&toBlock=latest&address=" + contractAddr + "&topic0=" + topic
 

@@ -8,7 +8,7 @@ const StrategyFetch = ({ stratNumber, setStrategyNames, provider }) => {
     useEffect(() => {
         const execution = async () => {
             try {
-                const investmentStrategyContract = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, provider);
+                const investmentStrategyContract = new ethers.Contract(contractAddresses.arbitrum["investmentStrategy"], InvestmentStrategyABI, provider);
                 const name = (await investmentStrategyContract.strategyName(stratNumber))
                 setStrategyNames(prev => ({ ...prev, [stratNumber]: name }))
             } catch (err) {

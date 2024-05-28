@@ -18,7 +18,7 @@ const MainPage = () => {
     }} />
     <div className="MainPage">
       <div style={{ marginLeft: "64px", color: "white" }}>
-        <span id="LandingPageTitle" style={{ paddingTop: "220px", display: "block", fontSize: "138px" }}>Chaser Finance</span>
+        <h1 id="LandingPageTitle" style={{ fontWeight: "lighter", paddingTop: "220px", display: "block", fontSize: "138px" }}>Chaser Finance</h1>
         <span id="LandingPageDesc" style={{ paddingLeft: "16px", paddingTop: "2px", display: "block", fontSize: "32px" }}>Chase Better Yields, Unlock Data Based Investing for Your DAO</span>
         <div id="LandingPageButtons" style={{ display: "flex", paddingLeft: "16px", paddingTop: "16px" }}>
           <button style={{ width: "225px", padding: "8px" }} onClick={() => router.push('/pool')} className={'button'}>Earn Yield</button>

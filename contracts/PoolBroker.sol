@@ -34,9 +34,7 @@ contract PoolBroker {
         );
         // Integrator calls this function
         // Make call to external market for withdraw
-        (bool success, bytes memory returnData) = _marketAddress.call(
-            _encodedFunction
-        );
+        (bool success, ) = _marketAddress.call(_encodedFunction);
 
         require(
             success,

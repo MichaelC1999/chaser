@@ -13,7 +13,7 @@ import { createPublicClient, getContract, http, formatEther, zeroAddress } from 
 import protocolHashes from '../../JSON/protocolHashes.json'
 import networks from '../../JSON/networks.json'
 
-import { sepolia, baseSepolia } from 'viem/chains'
+import { sepolia, baseSepolia, arbitrumSepolia, optimismSepolia } from 'viem/chains'
 import UserPoolSection from '@/app/components/UserPoolSection';
 import contractAddresses from '../../JSON/contractAddresses.json'
 import ErrorPopup from '@/app/components/ErrorPopup.jsx';
@@ -43,17 +43,11 @@ export default function Page() {
         windowOverride ? new ethers.BrowserProvider(windowOverride.ethereum) : null
     ), [windowOverride]);
 
-    useEffect(() => {
-        if (!ethers.isAddress(address)) {
-            open({})
-        }
-    }, [address])
-
     const getPoolData = async (address) => {
         const returnObject = {}
         const pool = new ethers.Contract(address || "0x0", PoolABI, provider);
-        const poolCalc = new ethers.Contract(contractAddresses["sepolia"].poolCalculationsAddress || "0x0", PoolCalculationsABI, provider);
-        const stratContact = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, provider)
+        const poolCalc = new ethers.Contract(contractAddresses["arbitrum"].poolCalculationsAddress || "0x0", PoolCalculationsABI, provider);
+        const stratContact = new ethers.Contract(contractAddresses.arbitrum["investmentStrategy"], InvestmentStrategyABI, provider)
 
         const metaData = await pool.poolMetaData()
         returnObject.poolTokenAddress = metaData["0"]
@@ -111,8 +105,16 @@ export default function Page() {
         if (!chainId) {
             return {}
         }
-        let chain = sepolia
-        let chainName = 'sepolia'
+        let chain = arbitrumSepolia
+        let chainName = 'arbitrum'
+        if (chainId.toString() === "11155111") {
+            chain = sepolia
+            chainName = 'sepolia'
+        }
+        if (chainId.toString() === "11155420") {
+            chain = optimismSepolia
+            chainName = 'optimism'
+        }
         if (chainId.toString() === "84532") {
             chain = baseSepolia
             chainName = 'base'

@@ -6,7 +6,7 @@ import PoolCalculationsABI from '../ABI/PoolCalculationsABI.json'; // Adjust the
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { createPublicClient, getContract, http, formatEther } from 'viem';
-import { sepolia, baseSepolia } from 'viem/chains';
+import { sepolia, baseSepolia, arbitrumSepolia, optimismSepolia } from 'viem/chains';
 import BridgeLogicABI from '../ABI/BridgeLogicABI.json'; // Adjust the path as needed
 import protocolHashes from '../JSON/protocolHashes.json'
 import networks from '../JSON/networks.json'
@@ -39,8 +39,16 @@ const PoolRow = ({ poolNumber, provider, registry, setErrorMessage }) => {
             if (chainId == '0') {
                 return { tvl: 0 }
             }
-            let chain = sepolia
-            let chainName = 'sepolia'
+            let chain = arbitrumSepolia
+            let chainName = 'arbitrum'
+            if (chainId.toString() === "11155111") {
+                chain = sepolia
+                chainName = 'sepolia'
+            }
+            if (chainId.toString() === "11155420") {
+                chain = optimismSepolia
+                chainName = 'optimism'
+            }
             if (chainId.toString() === "84532") {
                 chain = baseSepolia
                 chainName = 'base'

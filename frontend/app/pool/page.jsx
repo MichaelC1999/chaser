@@ -1,9 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from "react";
-import { NetworkSwitcher } from "../components/NetworkSwitcher";
 import { ethers } from "ethers";
-import ConnectButton from "../components/ConnectButton";
 import ErrorPopup from "../components/ErrorPopup.jsx";
 import Pools from "../components/Pools";
 import contractAddresses from '../JSON/contractAddresses.json'
@@ -20,7 +18,7 @@ const PoolPage = () => {
     ), [windowOverride]);
 
     const registry = useMemo(() => (
-        provider ? new ethers.Contract(contractAddresses["sepolia"].registryAddress || "0x0", RegistryABI, provider) : null
+        provider ? new ethers.Contract(contractAddresses["arbitrum"].registryAddress || "0x0", RegistryABI, provider) : null
     ), [provider]);
 
     return (<>

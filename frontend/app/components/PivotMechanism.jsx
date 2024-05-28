@@ -11,10 +11,10 @@ import { useWeb3Modal, useWeb3ModalAccount } from '@web3modal/ethers/react';
 
 
 const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) => {
-    const [targetChain, setTargetChain] = useState('11155111');
+    const [targetChain, setTargetChain] = useState('421614');
     const [protocolName, setProtocolName] = useState("aave-v3")
     const [pivotInitialized, setPivotInitialized] = useState(false);
-    const [initialMarket, setInitialMarket] = useState("0x29598b72eb5CeBd806C5dCD549490FdA35B13cD8")
+    const [initialMarket, setInitialMarket] = useState(contractAddresses.arbitrum.aaveMarketId)
     const [pivotTx, setPivotTx] = useState("")
 
     const { open } = useWeb3Modal()
@@ -57,9 +57,9 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
             )).wait()
 
             let eventData = {}
-            if (networks[poolData?.currentChain] !== 'sepolia') {
+            if (networks[poolData?.currentChain] !== 'arbitrum') {
                 eventData = await decodeCCIPSendMessageEvent(tx.logs)
-            } else if (networks[targetChain] !== 'sepolia') {
+            } else if (networks[targetChain] !== 'arbitrum') {
                 eventData = await decodeAcrossDepositEvent(tx.logs)
             }
             setPivotTx(tx.hash)
@@ -83,8 +83,8 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
         try {
             //User approve USDC bond
             //call query move position on the pool
-            const USDC = new ethers.Contract("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" || "0x0", WethABI, signer)
-            await (await USDC.approve(contractAddresses.sepolia["arbitrationContract"], 500000)).wait()
+            // const USDC = new ethers.Contract("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" || "0x0", WethABI, signer)
+            // await (await USDC.approve(contractAddresses.arbitrum["arbitrationContract"], 500000)).wait()
 
             const queryTx = (await (await pool.queryMovePosition(protocolName, initialMarket, targetChain, { gasLimit: 7000000 })).wait()).hash
 
@@ -122,7 +122,11 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
                             marketIdKey = "compoundMarketId"
                         }
                         const networkKey = networks[x.target.value]
-                        setInitialMarket(contractAddresses[networkKey][marketIdKey])
+                        if (contractAddresses[networkKey][marketIdKey]) {
+                            setInitialMarket(contractAddresses[networkKey][marketIdKey])
+                        } else {
+                            setInitialMarket(contractAddresses[networkKey]["aaveMarketId"])
+                        }
                     }} value={targetChain} >
                         {Object.keys(networks).map(network => (
                             <option key={networks[network]} value={network}>{networks[network]}</option>
@@ -142,9 +146,20 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
                             marketIdKey = "compoundMarketId"
                         }
                         const networkKey = networks[targetChain]
-                        setInitialMarket(contractAddresses[networkKey][marketIdKey])
+                        if (contractAddresses[networkKey][marketIdKey]) {
+                            setInitialMarket(contractAddresses[networkKey][marketIdKey])
+                        } else {
+                            setInitialMarket(contractAddresses[networkKey]["aaveMarketId"])
+                        }
                     }} value={protocolName} >
-                        {Object.values(protocolHashes).map(protocol => (
+                        {Object.values(protocolHashes).filter(protocol => {
+                            if (protocol == "compound-v3") {
+                                return !!contractAddresses[networks[targetChain]]["compoundMarketId"]
+                            }
+                            if (protocol == "aave-v3") {
+                                return !!contractAddresses[networks[targetChain]]["aaveMarketId"]
+                            }
+                        }).map(protocol => (
                             <option key={protocol} value={protocol}>{protocol}</option>
                         ))}
                     </select>

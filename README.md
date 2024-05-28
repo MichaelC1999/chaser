@@ -1,27 +1,27 @@
 # Chaser
 
-<b>Chaser is live on Sepolia! [chaser.finance](https://chaser.finance/) </b>
+<b>Chaser is live on Arbitrum Sepolia! [chaser.finance](https://chaser.finance/) </b>
 
-Chaser revolutionizes DeFi investing by empowering users to create data based investment strategies on chain. With granular subgraph data on various DeFi protocols, Chaser pools generate optimal yield while gaining deep control over risk. Factoring in historical and positional subgraph data, Chaser opens up impossible investment strategies like:  
+Chaser revolutionizes DeFi investing by empowering users to create data based investment strategies on chain. With granular subgraph data from various DeFi protocols, Chaser pools generate optimal yield while gaining deep control over risk. Factoring in historical and positional subgraph data, Chaser enables previously impossible investment strategies like:  
 
-- Deposit WETH into the lending protocol with the lowest 30 day volatility
-- Any stablecoin market on Aave that has consistently yielded above 5% in the last year
-- Move funds to the best Aave market with no borrows worth +10% of TVL
-- Invest into the lending protocol with highest daily volume
+- Deposit WETH into the lending protocol with the lowest 30 day volatility.
+- Investing in any stablecoin market on Aave that has consistently yielded above 5% in the last year.
+- Moving funds to the best Aave market with no borrow positions that exceed 10% of TVL.
+- Investing into the lending protocol with highest daily volume
 
-After defining the ideal, metric based investment, Chaser will move pool deposits in between different protocols and networks as market conditions change. By calculating these strategies on chain, DAOs and other decentralized protocols can enhance liquidity utilization and maximize returns while setting their own desired risk parameters. 
+After defining the ideal, metric-based investment, Chaser moves pool deposits between different protocols and networks as market conditions change. By calculating these strategies on-chain, DAOs and other decentralized protocols can enhance liquidity utilization and maximize returns while setting their own desired risk parameters. 
 
 By routing deposits to lending protocols like Aave and Compound, revenue is made from reliable, time-tested sources. Chaser is built on top of the Across Bridge for cross-chain transactions, Chainlink CCIP for cross-network state management, and the UMA Oracle for automating investment movements. This architecture simplifies the process for DAOs and end users by managing all aspects of cross-chain and cross-protocol routing.
 
 ## How does Chaser improve DeFi?
 
-Imagine using the below statstics from Aave/Compound/Spark/etc to determine exactly how your DAO's unused liquidity can be invested:
+Imagine using the below statistics from Aave/Compound/Spark to define exactly how your DAO's unused liquidity can be invested:
 
-- Daily market volumes, revenues, opened positions, yields
-- Granular data on all open positions
-- Protocol wide data, comparisons between cooresponding markets on different networks
+- Daily market volumes, revenues, opened positions, and yields.
+- Granular data on all open positions.
+- Protocol wide data, comparisons between corresponding markets on different networks.
 
-Without this kind of data, DeFi investment strategies are very limited. Only current state is available on contracts. There is also a lack of indexed, calculated metrics such as open position balances or user counts. While a single EOA could run a bot off chain, DAOs do not have the luxury of centralizing these determinations. 
+Without this kind of data, DeFi investment strategies are very limited. Only current state data is available on contracts. There is also a lack of indexed, calculated metrics such as open position balances or user counts. While a single EOA could run a bot off-chain, DAOs do not have the luxury of centralizing these determinations.
 
 Chaser makes it possible to factor all of this in into your DAOs liquidity management. By deploying a pool and defining a strategy script, Chaser moves your funds efficiently while following your desired risk parameters. 
 
@@ -46,19 +46,17 @@ As an example, here are the 90 day APYs for USDC deposits on 8 different Aave an
 <br>
 <br>
 
-During that same time period, Chaser increases yield significantly by moving funds to the highest market for each day. With 14% APY, it is nearly 4% more than the single market with the best revenues during that same period. No interactions or bridging required by the depositor, as Chaser handles all of that.
-
+During that same period, Chaser significantly increases yield by moving funds daily to the market offering the highest returns. With a 14% APY, it is nearly 4% more than the single market with the best performance during that period. No interactions or bridging are required by the depositor, as Chaser handles all of that.
 
 <a href="https://raw.githubusercontent.com/MichaelC1999/chaser/master/media/chaser.png" target="_blank" ><img src="./media/chaser.png" width="900px"/></a>
 
 ## How does Chaser investing work?
 
-Chaser's architecture uses a pool system. Each pool defines a strategy on how and when funds should be moved (see more on this below).
-Chaser handles all of the complexities of entering and exiting investment positions on external protocols behind the scenes. 
+Chaser's architecture uses a pool system. Each pool defines a strategy on how and when funds should be moved. Chaser handles all the complexities of entering and exiting investment positions on external protocols behind the scenes.
 
 It is important to keep in mind that when a pool has an investment position on a different network, there are delays when finalizing your interactions. Specifically, deposits to other chains need to bridge and send a callback message before minting pool tokens. Also, withdraws from positions on other chains face similar delays. 
 
-The current idea of the Chaser token is to facilitate instant liquidity for pools with positions on other chains. If there is an open proposal to move the pools funds, there is a block on deposits and withdraws to prevent funds lost when bridging gets executed. This is still strictly a concept and will not be launched any time soon.
+The current idea of the Chaser token is to facilitate instant liquidity for pools with positions on other chains. If there is an open proposal to move the pools funds, there is a block on deposits and withdraws to prevent funds lost when bridging gets executed. This is still just a concept and will not be launched any time soon.
 
 ## Contracts
 
@@ -73,11 +71,11 @@ Upon finalizing the first deposit and position entrance on a pool, the PoolContr
 #### Functions
 
 - `function userDepositAndSetPosition(uint256 _amount,uint256 _totalFee,string memory _targetPositionProtocol,bytes memory _targetPositionMarketId,uint256 _targetPositionChain)`
-- - The first function you must call after deploying a pool. This function simulataneously sets the initial market position for the pool and makes the first deposit. 
-- - `_amount` is the amount denominated in the pool asset to send as first deposit. `_totalFee` is the total amount of the asset that will be paid to the Across bridge in order to move the funds to their destination chain. This fee should be calculated on the frontend/off chain according to Across' reccomendations. If the initial position being set is on Sepolia, this argument does not matter. `_targetPositionProtocol` is the protocol name to set the initial position into (ex. `aave-v3` or `compound-v3`). `_targetPositionMarketId` is the ID of the market entity on the subgraph that corresponds to where your want to deposit into (read below to find this ID). `_targetPositionChain` is the chain ID that this market is on. 
+- - The first function you must call after deploying a pool. This function simultaneously sets the initial market position for the pool and makes the first deposit. 
+- - `_amount` is the amount denominated in the pool asset to send as first deposit. `_totalFee` is the total amount of the asset that will be paid to the Across bridge in order to move the funds to their destination chain. This fee should be calculated on the frontend/off chain according to Across' recommendations. If the initial position being set is on Arbitrum Sepolia, this argument does not matter. `_targetPositionProtocol` is the protocol name to set the initial position into (ex. `aave-v3` or `compound-v3`). `_targetPositionMarketId` is the ID of the market entity on the subgraph that corresponds to where your want to deposit into (read below to find this ID). `_targetPositionChain` is the chain ID that this market is on. 
 
 - `function userDeposit(uint256 _amount, uint256 _totalFee)`
-- - This function is to make any deposit that is not the initial, position setting deposit. Depending on the current position location, the pool routes this deposit through its other contracts and inter-chain tools to move into position and execute a callback on the pool after finaizing.
+- - This function is to make any deposit that is not the initial, position setting deposit. Depending on the current position location, the pool routes this deposit through its other contracts and inter-chain tools to move into position and execute a callback on the pool after finalizing.
 
 - `function userWithdrawOrder(uint256 _amount)`
 - - This function makes a request to make a withdraw for the caller. Depending on the position location, this is a request to be validated and fulfilled depending on the position value on the other chain. The pool contract does not have access to the current position value when deposited to other chains. This request checks the users proportion of pool tokens and then compares the asset amount requested to this proportion of the total pool. Once verified, the funds are bridged back to the pool and forwarded to the user.  
@@ -113,6 +111,8 @@ These functions are only valid when called on the chain that is holding a given 
 ### Integrator
 
 The Integrator contract is resposible for compatibility with external protocols. It contains logic specific to each supported protocol to enable deposits, withdraws and balance reads on each protocol. It is only callable by BridgeLogic to facilitate investments into their different markets. The way this contract manages investments for all pools is by deploying a PoolBroker contract for each pool. This contract holds pool/position tokens for the external protocol that a Chaser pool is invested in. This way investments do not get mixed and token balances are better segmented by pool. A pool has one of these contracts on each chain that it has pivoted to at some point.
+
+Note: On testnets, not all protocols have the same canonical address for assets. The Integrator solves this by holding a balance of protocol specific versions of these assets on each chain, holding transfers of the verion bridged by Across, and using the protocol specific version in transactions, which are then converted back to the Across version for bridging. There is also a small balance of the Across version kept on the integrator to account for interest gained on these external protocols. This is all just for testing and will be undone for mainnet launch.   
 
 ### BridgeReceiver
 
@@ -270,7 +270,7 @@ As deposits are usually being invested in other protocols on other chains, liqui
 
 #### Mechanics of pivoting investment
 
-Chaser pivots based off of comparison. We optimistically assume that the current market where deposits are currently invested in is the best investment at the moment for the pool's strategy. When someone proposes that a different market is better than the current market according to the strategy logic, they put up a bond in order to assert this on the UMA oracle. Pools can be configured to reward these assertions in order to incentivize monitoring the investment for he best possible strategy.
+Chaser pivots based off of comparison. We optimistically assume that the current market where deposits are currently invested in is the best investment at the moment for the pool's strategy. When someone proposes that a different market is better than the current market according to the strategy logic, they put up a bond in order to assert this on the UMA oracle. Pools can be configured to reward these assertions in order to incentivize monitoring the investment for the best possible strategy.
 
 Any entity can propose to the UMA Oracle a new market for your pool to invest in based on your strategy. Strategies have a measureable, numeric determination of which market is a better investment. As strategies determine when to move funds based off of querying subgraphs, proposing pivots are easily automateable (See Strategy Pivot Bot below)
 
@@ -302,7 +302,7 @@ As Chaser strategies are based on data, automating the process of proposing new 
     - Withdraws
     - Reading the position value of a given liquidity provider, denominated in the asset deposited. This value should be current and including yield.
 - There is no updating needed from the other protocols, Chaser is completely backwards compatible
-- For now, these protocol integratons will be developed and maintained by the Chaser team for security purposes. However this will eventually be community developed with incentives to expand reach while maintaining quality
+- For now, these protocol integrations will be developed and maintained by the Chaser team for security purposes. However this will eventually be community developed with incentives to expand reach while maintaining quality
 - The integration contract receives input from other Chaser contracts as to what protocol/market/asset is being invested into. With this input, the integration contract routes deposits and withdraw requests using specialized logic to account for particularities of each protocol.  
 - Deposits are credited to the PoolBroker contract for the sake of keeping revenues, balances, and data separated and individual for each pool
 - All withdraw requests have the PoolBroker receive the deposits, then pass them through the Integration contract to wherever the funds reach their destination (pool, other protocol, bridging, etc)

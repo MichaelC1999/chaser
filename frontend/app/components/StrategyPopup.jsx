@@ -46,14 +46,14 @@ function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyI
     }, [strategyToView])
 
     const getStrategyName = async () => {
-        const investmentStrategyContract = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, provider);
+        const investmentStrategyContract = new ethers.Contract(contractAddresses.arbitrum["investmentStrategy"], InvestmentStrategyABI, provider);
         const name = await investmentStrategyContract.strategyName(strategyIndex)
         setStrategyName(name)
     }
 
     const getStrategyLogic = async () => {
 
-        const investmentStrategyContract = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, provider);
+        const investmentStrategyContract = new ethers.Contract(contractAddresses.arbitrum["investmentStrategy"], InvestmentStrategyABI, provider);
         const code = hexToString(await investmentStrategyContract.strategyCode(strategyToView))
         console.log(code)
         setStrategyCode(code)
@@ -70,7 +70,7 @@ function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyI
             setSubmitting(false)
             return
         }
-        const stratContact = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, signer)
+        const stratContact = new ethers.Contract(contractAddresses.arbitrum["investmentStrategy"], InvestmentStrategyABI, signer)
         //Maybe here a loading spinner popup? Then once Tx success or fail then do tx popup?
 
         const codeBytes = stringToBytes(newStrategyCode)
@@ -79,7 +79,7 @@ function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyI
                 codeBytes,
                 newStrategyName,
                 {
-                    gasLimit: 8000000
+                    gasLimit: 30000000
                 }
             )).wait();
             const hash = stratTx.hash

@@ -18,7 +18,7 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
 
     const instructionBoxDefault = 'Hover over an input for more instruction...'
     const [poolName, setPoolName] = useState('');
-    const [assetAddress, setAssetAddress] = useState('0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14');
+    const [assetAddress, setAssetAddress] = useState('0x980B62Da83eFf3D4576C647993b0c1D7faf17c73');
     const [strategyIndex, setStrategyIndex] = useState('0');
     const [instructionBox, setInstructionBox] = useState(instructionBoxDefault)
     const [submitting, setSubmitting] = useState(false)
@@ -32,7 +32,7 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
     }, [])
 
     const getStrategyCount = async () => {
-        const investmentStrategyContract = new ethers.Contract(contractAddresses.sepolia["investmentStrategy"], InvestmentStrategyABI, provider);
+        const investmentStrategyContract = new ethers.Contract(contractAddresses.arbitrum["investmentStrategy"], InvestmentStrategyABI, provider);
         const count = Number(await investmentStrategyContract.strategyCount() || 0)
         console.log(count)
         setStrategyCount(count)
@@ -49,7 +49,7 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
             setSubmitting(false)
             return
         }
-        const manager = new ethers.Contract(contractAddresses["sepolia"].managerAddress || "0x0", ManagerABI, signer)
+        const manager = new ethers.Contract(contractAddresses["arbitrum"].managerAddress || "0x0", ManagerABI, signer)
         //Maybe here a loading spinner popup? Then once Tx success or fail then do tx popup?
         try {
             const poolTx = await (await manager.createNewPool(
@@ -99,11 +99,11 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
                 Pool Name:
                 <input type="text" value={poolName} onChange={(e) => setPoolName(e.target.value)} />
             </label>
-            <label key={2} onMouseEnter={() => setInstructionBox("Add the asset address that will be used for deposits and investments.\nThis address should be on Base Sepolia. Chaser uses Across to bridge to the equivalent of this asset on other networks.\nFor the time being, the only asset allowed is WETH.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
+            <label key={2} onMouseEnter={() => setInstructionBox("Add the asset address that will be used for deposits and investments.\nThis address should be on Arbitrum Sepolia. Chaser uses Across to bridge to the equivalent of this asset on other networks.\nFor the time being, the only asset allowed is WETH.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
                 Asset Address:
                 <input type="text" value={assetAddress} onChange={() => null} />
             </label>
-            <label key={3} onMouseEnter={() => setInstructionBox("You select one strategy for a pool, this strategy determines where and how to move funds in order to make the best ROI while following custom risk parameters. Each strategy contains code that helps the UMA OO objectively determine where to move deposits.\nView details about approved strategies or create your own (COMING SOON)")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
+            <label key={3} onMouseEnter={() => setInstructionBox("Select a strategy for your pool to determine where and how to move funds in order to make the best ROI while following custom risk parameters. Each strategy contains code that helps the UMA OO determine where to move deposits.")} onMouseLeave={() => setInstructionBox(instructionBoxDefault)}>
                 Strategy: {strategyNames[strategyIndex] ?? ""}
 
                 <div className="button" style={{ textAlign: "center", border: "white 1px solid" }} onClick={() => setShowStrategyPopup(true)}>Strategy Selection</div>

@@ -24,9 +24,9 @@ const ConnectButton = ({ connected, address, setErrorMessage }) => {
         classes += ' buttonConnected'
     }
     return (
-        connected !== null ? <button className={classes} onClick={connect}>
+        <button style={connected ? {} : { width: "167px", textAlign: "center" }} className={classes} onClick={connect}>
             {connected ? '0x' + address?.slice(2, 6) + '...' + (address?.slice(36) ?? "0000") : "Connect"}
-        </button> : null
+        </button>
     );
 };
 

@@ -71,11 +71,13 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
         bridgeFunctions = IBridgeLogic(_bridgeLogicAddress);
 
         allowlistSourceChain(16015286601757825753, true);
-        allowlistSourceChain(12532609583862916517, true);
         allowlistSourceChain(10344971235874465080, true);
+        allowlistSourceChain(3478487238524512106, true);
+        allowlistSourceChain(5224473277236331295, true);
         allowlistDestinationChain(16015286601757825753, true);
-        allowlistDestinationChain(12532609583862916517, true);
         allowlistDestinationChain(10344971235874465080, true);
+        allowlistDestinationChain(3478487238524512106, true);
+        allowlistDestinationChain(5224473277236331295, true);
         transferOwnership(_registry);
     }
 

@@ -27,7 +27,7 @@ export default function Pools({ setErrorMessage, isCreatePool, setIsCreatePool }
     ), [windowOverride]);
 
     const registry = useMemo(() => (
-        provider ? new ethers.Contract(contractAddresses["sepolia"].registryAddress || "0x0", RegistryABI, provider) : null
+        provider ? new ethers.Contract(contractAddresses["arbitrum"].registryAddress || "0x0", RegistryABI, provider) : null
     ), [provider]);
 
     useEffect(() => {

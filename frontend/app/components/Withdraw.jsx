@@ -79,11 +79,9 @@ const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, fetchPoolD
                 { gasLimit: 1000000 }
             )).wait()
 
-            const URIs = ["https://sepolia.basescan.org/tx/" + tx.hash]
             let txCCIPMessage = ''
-            if (networks[poolData?.currentChain] !== 'sepolia') {
+            if (networks[poolData?.currentChain] !== 'arbitrum') {
                 const ccipData = await decodeCCIPSendMessageEvent(tx.logs)
-                URIs.push("https://ccip.chain.link/msg/" + ccipData?.messageId)
                 setWithdrawId(ccipData?.messageId);
                 setTimeout(() => fetchPoolData(), 60000)
             } else {

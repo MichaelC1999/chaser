@@ -7,7 +7,7 @@ require('@openzeppelin/hardhat-upgrades');
 require('dotenv').config({ path: __dirname + '/.env' });
 
 module.exports = {
-  defaultNetwork: "sepolia",
+  defaultNetwork: "arbitrum",
   solidity: {
     version: "0.8.22",
     settings: {
@@ -44,6 +44,16 @@ module.exports = {
     base: {
       url: "https://sepolia.base.org",
       chainId: 84532,
+      accounts: [process.env.WALLET_PK]
+    },
+    arbitrum: {
+      url: "https://sepolia-rollup.arbitrum.io/rpc",
+      chainId: 421614,
+      accounts: [process.env.WALLET_PK]
+    },
+    optimism: {
+      url: "https://sepolia.optimism.io",
+      chainId: 11155420,
       accounts: [process.env.WALLET_PK]
     }
   },

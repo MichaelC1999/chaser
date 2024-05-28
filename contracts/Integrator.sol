@@ -48,8 +48,12 @@ contract Integrator is Initializable {
         address _poolBroker
     ) internal {
         address trueAsset = _assetAddress;
+        // IMPORTANT - REMOVE PROTOCOL SPECIFIC TESTNET TOKEN ANALOGS
         if (chainId == 11155111) {
-            _assetAddress = address(0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357);
+            _assetAddress = address(0xC558DBdd856501FCd9aaF1E62eae57A9F0629a3c);
+        }
+        if (chainId == 421614) {
+            _assetAddress = address(0x1dF462e2712496373A347f8ad10802a5E95f053D);
         }
 
         if (_operation == hasher("deposit")) {
@@ -166,7 +170,12 @@ contract Integrator is Initializable {
             // Default to the AAVE pool contract
             if (chainId == 11155111) {
                 _assetAddress = address(
-                    0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357
+                    0xC558DBdd856501FCd9aaF1E62eae57A9F0629a3c
+                );
+            }
+            if (chainId == 421614) {
+                _assetAddress = address(
+                    0x1dF462e2712496373A347f8ad10802a5E95f053D
                 );
             }
 
