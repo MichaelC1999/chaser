@@ -47,7 +47,7 @@ export function NetworkSwitcher() {
                 <div className="popup-message">
                     You are currently connected to Chain ID {fromHex(newChain, 'number') || "N/A"}
                 </div>
-                <button onClick={switchNetwork} className="popup-ok-button">Switch to {networks[process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID]}</button>
+                <button onClick={switchNetwork} className="popup-ok-button">Switch to {networks[process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID]} sepolia</button>
             </div>
         </div>
     );

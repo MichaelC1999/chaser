@@ -75,7 +75,7 @@ const Layout = ({ children }) => {
     <html lang="en">
       <head>
         <title>Chaser Finance</title>
-        <meta name='description' content='Chase Better DeFi Yields, Unlock Data Based Investing for Your DAO with Chaser Finance' />
+        <meta name='description' content='Chaser Finance is a DeFi platform for data based investing strategies' />
         <meta
           name="keywords"
           content="defi aave compound ethereum arbitrum finance bridge across"

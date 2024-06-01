@@ -1,4 +1,4 @@
-export const strategyCalculation = async () => {
+const strategyCalculation = async () => {
     // This object converts Sepolia/Base testnet markets to their mainnet addresses for the subgraph query
     const TESTNET_ANALOG_MARKETS = {
         '0x61490650abaa31393464c3f34e8b29cd1c44118ee4ab69c077896252fafbd49efd26b5d171a32410': "0x46e6b214b524310239732d51387075e0e70970bf4200000000000000000000000000000000000006",
@@ -43,29 +43,11 @@ export const strategyCalculation = async () => {
     const makeQuery = (marketId) => {
         return '{\
 marketDailySnapshots(first: 365, skip: 1, orderBy: timestamp, orderDirection: desc, where: { market:"' + marketId + '"}) {   \                                                                                                            \
-    borrowingPositionCount\
-    closedPositionCount\
-    dailyBorrowCount\
-    dailyBorrowUSD\
-    dailyActiveDepositors\
-    dailyActiveBorrowers\
-    dailyLiquidateCount\
-    dailyLiquidateUSD\
-    dailyDepositUSD\
-    dailyDepositCount\
     dailyTotalRevenueUSD\
     dailySupplySideRevenueUSD\
     dailyProtocolSideRevenueUSD\
-    dailyRepayCount\
-    dailyWithdrawCount\
-    dailyWithdrawUSD\
     days\
     id\
-    inputTokenBalance\
-    inputTokenPriceUSD\
-    lendingPositionCount\
-    openPositionCount\
-    outputTokenSupply\
     totalBorrowBalanceUSD\
     totalDepositBalanceUSD\
     totalValueLockedUSD\
@@ -85,24 +67,7 @@ market(id:"'+ marketId + '") {\
       side\
       type\
     }\
-    cumulativeBorrowUSD\
-    cumulativeDepositUSD\
-    cumulativeLiquidateUSD\
-    cumulativeProtocolSideRevenueUSD\
-    cumulativeSupplySideRevenueUSD\
-    cumulativeTotalRevenueUSD\
-    cumulativeTransferUSD\
-    cumulativeUniqueBorrowers\
-    cumulativeUniqueDepositors\
-    cumulativeUniqueFlashloaners\
-    cumulativeUniqueLiquidatees\
-    cumulativeUniqueLiquidators\
-    cumulativeUniqueTransferrers\
-    cumulativeUniqueUsers\
     depositCount\
-    inputTokenBalance\
-    inputTokenPriceUSD\
-    isActive\
     liquidationCount\
     lendingPositionCount\
     liquidationThreshold\
