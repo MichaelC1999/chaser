@@ -75,7 +75,7 @@ const Layout = ({ children }) => {
     <html lang="en">
       <head>
         <title>Chaser Finance</title>
-        <meta name='description' content='Chaser Finance is a DeFi platform for data based investing strategies' />
+        <meta name='description' content='Chaser Finance is a DeFi platform for metric based investing strategies' />
         <meta
           name="keywords"
           content="defi aave compound ethereum arbitrum finance bridge across"
@@ -101,7 +101,7 @@ const Layout = ({ children }) => {
 
                 </div>
                 <div style={{ margin: "10px 14px 16px 0", padding: "2px 5px", borderRadius: "5px", backgroundColor: "white", display: "flex" }}>
-                  <Image style={{ backgroundColor: "white", padding: "1px", borderRadius: "10px" }} src={"./arbitrum-logo.svg"} height={28} width={28} />
+                  <Image style={{ backgroundColor: "white", padding: "1px", borderRadius: "10px" }} src={"/arbitrum-logo.svg"} height={28} width={28} />
                   <span style={{ fontFamily: "Arquette", display: "inline-block", margin: "4px", color: "black" }} >SEPOLIA</span>
                 </div>
                 <div style={{ marginRight: "14px" }}>
