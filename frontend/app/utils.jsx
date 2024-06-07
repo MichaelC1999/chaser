@@ -146,7 +146,7 @@ export const decodePoolPivot = async (poolAddress, pivotNonce) => {
     }
 }
 
-export const fetchAcrossRelayFillTx = async (destinationChain, depositId) => {
+export const fetchAcrossRelayFillTx = async (originChain, destinationChain, depositId) => {
     try {
         if (!destinationChain) return { success: false, messageId: null }
         let topic = "0x571749edf1d5c9599318cdbc4e28a6475d65e87fd3b2ddbe1e9a8d5e7a0f0ff7"
@@ -171,7 +171,12 @@ export const fetchAcrossRelayFillTx = async (destinationChain, depositId) => {
 
         const messageLogEvents = await messageEvent.json()
 
-        const check = sortDesc(messageLogEvents.result).find(x => x.topics[2] === depositId)
+        let check = sortDesc(messageLogEvents.result).filter(x => x.topics[2] === depositId)
+        if (check.find(x => x.topics[1] + "" === originChain)) {
+            check = check.find(x => x.topics[1] + "" === originChain)
+        } else {
+            check = check?.[0]
+        }
 
         if (!check) return { success: false, messageId: null }
 
@@ -193,7 +198,10 @@ export const fetchAcrossRelayFillTx = async (destinationChain, depositId) => {
         const log = (sortDesc(logEvents?.result)?.find(x => x.transactionHash === check.transactionHash)) || null
 
         if (!log) {
-            return { success: true, messageId: null }
+            if (destinationChain === process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID) {
+                return { success: true, messageId: null }
+            }
+            return { success: false, messageId: null }
         }
 
         return { messageId: log.topics[1], success: true }

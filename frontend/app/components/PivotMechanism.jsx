@@ -40,9 +40,9 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
     const executePivot = async () => {
         let signer = null;
         try {
-            await provider.send("eth_requestAccounts", []);
-            signer = await provider.getSigner();
+            signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
+            open()
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
         }
 
@@ -73,10 +73,11 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
     const openProposal = async () => {
         let signer = null;
         try {
-            await provider.send("eth_requestAccounts", []);
-            signer = await provider.getSigner();
+            signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
+            open()
+            return
         }
 
         const pool = new ethers.Contract(poolData.address || "0x0", PoolABI, signer)

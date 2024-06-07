@@ -38,10 +38,7 @@ export default function Page() {
     const windowOverride = useMemo(() => (
         typeof window !== 'undefined' ? window : null
     ), []);
-
-    const provider = useMemo(() => (
-        windowOverride?.ethereum ? new ethers.BrowserProvider(windowOverride.ethereum) : null
-    ), [windowOverride]);
+    const provider = new ethers.JsonRpcProvider("https://sepolia-rollup.arbitrum.io/rpc/" + process.env.NEXT_PUBLIC_INFURA_API)
 
     const getPoolData = async (address) => {
         const returnObject = {}
@@ -239,8 +236,10 @@ export default function Page() {
         infoHeader = null
     }
 
-    if (windowOverride?.ethereum?.selectedAddress && poolData) {
+    if (address && poolData) {
         userEle = <UserPoolSection fetchPoolData={fetchPoolData} setErrorMessage={(x) => setErrorMessage(x)} user={windowOverride?.ethereum?.selectedAddress} poolData={poolData} provider={provider} txData={txData} setTxData={setTxData} />
+    } else if (poolData && !address) {
+        open()
     }
 
     let txPopup = null

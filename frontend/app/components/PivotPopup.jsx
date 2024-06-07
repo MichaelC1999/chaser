@@ -61,10 +61,11 @@ function PivotPopup({ isPivoting, poolData, provider, tvl, pivotTx, fetchPoolDat
     const settleAssertion = async () => {
         let signer = null;
         try {
-            await provider.send("eth_requestAccounts", []);
-            signer = await provider.getSigner();
+            signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
+            open()
+            return
         }
         try {
             // const UMAOO = new ethers.Contract("0xFd9e2642a170aDD10F53Ee14a93FcF2F31924944" || "0x0", UmaABI, signer);

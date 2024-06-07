@@ -22,9 +22,8 @@ export default function Pools({ setErrorMessage, isCreatePool, setIsCreatePool }
         typeof window !== 'undefined' ? window : null
     ), []);
 
-    const provider = useMemo(() => (
-        windowOverride?.ethereum ? new ethers.BrowserProvider(windowOverride.ethereum) : null
-    ), [windowOverride]);
+    const provider = new ethers.JsonRpcProvider("https://sepolia-rollup.arbitrum.io/rpc/" + process.env.NEXT_PUBLIC_INFURA_API)
+
 
     const registry = useMemo(() => (
         provider ? new ethers.Contract(contractAddresses["arbitrum"].registryAddress || "0x0", RegistryABI, provider) : null

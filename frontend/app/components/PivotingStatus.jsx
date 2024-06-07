@@ -153,18 +153,24 @@ function PivotingStatus({ provider, pivotTx, fetchPoolData, poolAddress, closePo
     }
 
     const fetchCCIPStatus = async (messageId, ccipStep) => {
-        console.log("fetching CCIP status", messageId)
-        const url = "https://corsproxy.io/?https%3A%2F%2Fccip.chain.link%2Fapi%2Fquery%2FMESSAGE_DETAILS_QUERY%3Fvariables%3D%257B%2522messageId%2522%253A%2522" + messageId + "%2522%257D";
+        const url = "https://ccip.chain.link/api/h/atlas/message/" + messageId;
+        if (!messageId) {
+            return
+        }
+        let messageData = {}
+        try {
+            const depos = await fetch(url, {
+                method: "get",
+                headers: {
+                    "Content-Type": "application/json",
+                }
+            })
 
-        const depos = await fetch(url, {
-            method: "get",
-            headers: {
-                "Content-Type": "application/json",
-            }
-        })
-
-        const deployments = await depos.json()
-        const messageData = (deployments.data.allCcipMessages.nodes[0])
+            const deployments = await depos.json()
+            messageData = (deployments.data.allCcipMessages.nodes[0])
+        } catch (err) {
+            return
+        }
 
         const msg = await findCcipMessageFromTxHash(messageData.receiptTransactionHash, messageData.destChainId)
         console.log(msg)
@@ -196,7 +202,7 @@ function PivotingStatus({ provider, pivotTx, fetchPoolData, poolAddress, closePo
         if (!targetData?.targetChainId?.toString()) {
             return
         }
-        const message = await fetchAcrossRelayFillTx(targetData?.targetChainId?.toString(), numberToHex(Number(acrossDepositId), { size: 32 }))
+        const message = await fetchAcrossRelayFillTx(targetData?.currentChainId?.toString(), targetData?.targetChainId?.toString(), numberToHex(Number(acrossDepositId), { size: 32 }))
         //Fetch the destination spokepool's recent events. 
         // If the matching message ID is there, set step
         //possibly get the  CCIP message id

@@ -101,17 +101,24 @@ function WithdrawStatus({ provider, withdrawId, poolData, fetchPoolData, poolAdd
     }
 
     const fetchCCIPStatus = async (messageId) => {
-        const url = "https://corsproxy.io/?https%3A%2F%2Fccip.chain.link%2Fapi%2Fquery%2FMESSAGE_DETAILS_QUERY%3Fvariables%3D%257B%2522messageId%2522%253A%2522" + messageId + "%2522%257D";
+        if (!messageId) return
+        const url = "https://ccip.chain.link/api/h/atlas/message/" + messageId;
 
-        const depos = await fetch(url, {
-            method: "get",
-            headers: {
-                "Content-Type": "application/json",
-            }
-        })
+        let messageData
+        try {
+            const depos = await fetch(url, {
+                method: "get",
+                headers: {
+                    "Content-Type": "application/json",
+                }
+            })
 
-        const deployments = await depos.json()
-        const messageData = (deployments.data.allCcipMessages.nodes[0])
+            const deployments = await depos.json()
+
+            messageData = (deployments.data.allCcipMessages.nodes[0])
+        } catch (err) {
+            return
+        }
         if (messageData?.receiptTransactionHash && !ccip1Loaded) {
             setCcip1Loaded(true)
         }
@@ -125,15 +132,13 @@ function WithdrawStatus({ provider, withdrawId, poolData, fetchPoolData, poolAdd
         //NO NEED TO FIND CCIP MESSAGE FROM TX HASH. NEED TO GET THE DESTINATION TX FROM THE MESSAGE ID, THEN LOOK FOR ACROSS DEPO ID FROM THAT TX
 
         if (depo.success) {
-
             setAcrossWithdrawId(depo.depositId)
         }
 
     }
 
-
     const fetchAcrossTx = async () => {
-        const message = await fetchAcrossRelayFillTx(process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID, numberToHex(Number(acrossWithdrawId), { size: 32 }))
+        const message = await fetchAcrossRelayFillTx(poolData?.currentChain?.toString(), process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID, numberToHex(Number(acrossWithdrawId), { size: 32 }))
         //Fetch the destination spokepool's recent events. 
         // If the matching message ID is there, set step
         //possibly get the  CCIP message id

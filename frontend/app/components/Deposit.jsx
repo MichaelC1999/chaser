@@ -28,7 +28,7 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
     const [userAssetBalance, setUserAssetBalance] = useState(0)
     const [depositId, setDepositId] = useState("")
     const { open } = useWeb3Modal()
-    const { isConnected } = useWeb3ModalAccount()
+    const { isConnected, address } = useWeb3ModalAccount()
 
     useEffect(() => {
         if (poolData) {
@@ -46,8 +46,9 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
     const getBalanceOf = async () => {
         if (poolData?.poolAsset && zeroAddress !== poolData.poolAsset) {
             const asset = new ethers.Contract(poolData?.poolAsset || "0x0", PoolTokenABI, provider)
-            const balance = (await asset.balanceOf(windowOverride?.ethereum?.selectedAddress))
-            setUserAssetBalance(balance)
+            const balance = (await asset.balanceOf(address))
+            const ethBal = (await provider.getBalance(address))
+            setUserAssetBalance(Number(balance) + Number(ethBal))
         }
         return
     }
@@ -75,11 +76,11 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
     const handleSetPositionDeposit = async () => {
         let signer = null;
         try {
-            await provider.send("eth_requestAccounts", []);
-            signer = await provider.getSigner();
+            signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
-            console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
-            setErrorMessage("Connection Error: " + err?.info?.error?.message ?? err?.message)
+            open()
+            setDepoInitialized(false)
+
         }
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, signer)
 
@@ -129,11 +130,10 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
     const handleDeposit = async () => {
         let signer = null;
         try {
-            await provider.send("eth_requestAccounts", []);
-            signer = await provider.getSigner();
+            signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
-            console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
-            setErrorMessage("Connection Error: " + err?.info?.error?.message ?? err?.message)
+            open()
+            setDepoInitialized(false)
 
         }
 

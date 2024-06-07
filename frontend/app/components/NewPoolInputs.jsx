@@ -34,16 +34,15 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
     const getStrategyCount = async () => {
         const investmentStrategyContract = new ethers.Contract(contractAddresses.arbitrum["investmentStrategy"], InvestmentStrategyABI, provider);
         const count = Number(await investmentStrategyContract.strategyCount() || 0)
-        console.log(count)
         setStrategyCount(count)
     }
 
     const submitLogic = async () => {
         let signer = null;
         try {
-            await provider.send("eth_requestAccounts", []);
-            signer = await provider.getSigner();
+            signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
+            open()
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
             setErrorMessage("Connection Error: " + err?.info?.error?.message)
             setSubmitting(false)

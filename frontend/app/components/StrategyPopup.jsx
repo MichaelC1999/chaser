@@ -62,9 +62,9 @@ function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyI
     const submitNewStrategy = async () => {
         let signer = null;
         try {
-            await provider.send("eth_requestAccounts", []);
-            signer = await provider.getSigner();
+            signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
+            open()
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
             // setErrorMessage("Connection Error: " + err?.info?.error?.message)
             setSubmitting(false)

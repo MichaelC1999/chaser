@@ -63,9 +63,9 @@ const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, fetchPoolD
         }
         let signer = null;
         try {
-            await provider.send("eth_requestAccounts", []);
-            signer = await provider.getSigner();
+            signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
+            open()
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
             setErrorMessage(err?.info?.error?.message ?? "This transaction has failed, try again or get in touch with the Chaser devs")
 
