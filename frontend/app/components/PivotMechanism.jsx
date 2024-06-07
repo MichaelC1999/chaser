@@ -42,7 +42,11 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
         try {
             signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
-            open()
+            if (!isConnected) {
+                open()
+                setPivotInitialized(false)
+                return
+            }
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
         }
 
@@ -76,8 +80,11 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
             signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
-            open()
-            return
+            if (!isConnected) {
+                open()
+                setPivotInitialized(false)
+                return
+            }
         }
 
         const pool = new ethers.Contract(poolData.address || "0x0", PoolABI, signer)
@@ -88,7 +95,6 @@ const PivotMechanism = ({ fetchPoolData, poolData, provider, setErrorMessage }) 
             // await (await USDC.approve(contractAddresses.arbitrum["arbitrationContract"], 500000)).wait()
 
             const queryTx = (await (await pool.queryMovePosition(protocolName, initialMarket, targetChain, { gasLimit: 7000000 })).wait()).hash
-
             fetchPoolData()
 
         } catch (err) {

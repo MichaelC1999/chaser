@@ -59,12 +59,18 @@ function StrategyPopup({ provider, getStrategyCount, strategyIndex, setStrategyI
         setStrategyCode(code)
     }
 
+    const windowOverride = useMemo(() => (
+        typeof window !== 'undefined' ? window : null
+    ), []);
+
     const submitNewStrategy = async () => {
         let signer = null;
         try {
             signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
-            open()
+            if (!isConnected) {
+                open()
+            }
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
             // setErrorMessage("Connection Error: " + err?.info?.error?.message)
             setSubmitting(false)

@@ -68,16 +68,6 @@ export default function Page() {
         returnObject.strategyIndex = await pool.strategyIndex()
         returnObject.strategyName = await stratContact.strategyName(returnObject.strategyIndex)
 
-        console.log(returnObject)
-
-        try {
-            if (returnObject.poolTokenAddress) {
-                const poolToken = new ethers.Contract(returnObject.poolTokenAddress || "0x0", PoolTokenABI, provider);
-            }
-        } catch (err) {
-
-        }
-
         try {
             const poolAssetContract = new ethers.Contract(returnObject.poolAsset || "0x0", PoolTokenABI, provider);
             returnObject.poolAssetName = await poolAssetContract.name()
@@ -160,15 +150,27 @@ export default function Page() {
             if (!poolDataReturn.isPivoting) {
                 poolDataReturn.currentApy = calculateAPY(poolDataReturn?.recordPositionValue, bridgedPoolData?.TVL, poolDataReturn?.recordTimestamp)
             }
-
             if (poolDataReturn?.isPivoting === false && poolData?.isPivoting === true) {
                 setShowPivotSuccess(true)
             }
             setPoolData({ ...poolDataReturn, ...bridgedPoolData })
 
         } catch (err) {
-            console.log(err, provider)
-            setErrorMessage("Error fetching pool data: " + (err?.info?.error?.message ?? "Try reloading"))
+            try {
+                const poolDataReturn = await getPoolData(poolId)
+                const bridgedPoolData = await getBridgePoolData(poolId, poolDataReturn.protocol, poolDataReturn.currentChain, poolDataReturn)
+                if (!poolDataReturn.isPivoting) {
+                    poolDataReturn.currentApy = calculateAPY(poolDataReturn?.recordPositionValue, bridgedPoolData?.TVL, poolDataReturn?.recordTimestamp)
+                }
+
+                if (poolDataReturn?.isPivoting === false && poolData?.isPivoting === true) {
+                    setShowPivotSuccess(true)
+                }
+                setPoolData({ ...poolDataReturn, ...bridgedPoolData })
+            } catch (err) {
+                console.log(err, provider)
+                setErrorMessage("Error fetching pool data: " + (err?.info?.error?.message ?? "Try reloading"))
+            }
         }
     }
 

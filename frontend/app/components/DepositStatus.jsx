@@ -21,10 +21,10 @@ function DepositStatus({ provider, depositId, poolData, fetchPoolData, poolAddre
     const [targetData, setTargetData] = useState({})
 
     useEffect(() => {
-        getPoisitionIntializeTargetData()
+        getPositionIntializeTargetData()
     }, [])
 
-    const getPoisitionIntializeTargetData = async () => {
+    const getPositionIntializeTargetData = async () => {
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, provider);
         const poolCalculations = new ethers.Contract(contractAddresses["arbitrum"].poolCalculationsAddress || "0x0", PoolCalculationABI, provider);
         const data = {}
@@ -86,14 +86,7 @@ function DepositStatus({ provider, depositId, poolData, fetchPoolData, poolAddre
 
 
     const fetchDepositEventData = async () => {
-        // const getUserLastDeposit
-        console.log('fetchDepositEventData')
         const deposit = await userLastDeposit(poolAddress, poolData?.user?.address)
-
-        //Build function in util similar to decodePoolPivot but finds the deposit tx based on user address
-        //-Get logs on sep spokepool with topic0 for depositv3
-        //-Find most recent where tx.sender is the user
-
         setAcrossDepositId(deposit.depositId)
     }
 

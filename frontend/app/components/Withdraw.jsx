@@ -65,10 +65,13 @@ const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, fetchPoolD
         try {
             signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
-            open()
+            if (!isConnected) {
+                open()
+            }
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
             setErrorMessage(err?.info?.error?.message ?? "This transaction has failed, try again or get in touch with the Chaser devs")
-
+            setWithdrawInitialized(false)
+            return
         }
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, signer)
         const formattedAmount = parseEther(assetAmount + "")
@@ -102,7 +105,6 @@ const Withdraw = ({ poolAddress, poolData, provider, setErrorMessage, fetchPoolD
 
     let withdrawPopup = null
     if (poolData?.userIsWithdrawing || withdrawId) {
-        console.log('HIT WITH')
         withdrawPopup = <WithdrawStatus provider={provider} withdrawId={withdrawId} poolData={poolData} fetchPoolData={fetchPoolData} poolAddress={poolAddress} />
     }
     return (

@@ -78,26 +78,29 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
         try {
             signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
-            open()
+            if (!isConnected) {
+                open()
+            }
             setDepoInitialized(false)
-
+            return
         }
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, signer)
 
         try {
             const asset = new ethers.Contract(contractAddresses["arbitrum"].WETH || "0x0", WethABI, signer)
             const formattedAmount = parseEther(assetAmount + "")
-            if (formatEther(userAssetBalance) <= assetAmount) {
-                const amountToWrap = Number(formattedAmount) - Number(userAssetBalance)
-                await (await asset.deposit({ value: formattedAmount, gasLimit: 8000000 }))
+            const ethBal = Number(await provider.getBalance(address))
+            const wethBal = Number(await asset.balanceOf(address))
+
+            const amountToWrap = Number(formattedAmount) - wethBal
+            if (amountToWrap > 0 && amountToWrap <= ethBal) {
+                await (await asset.deposit({ value: amountToWrap, gasLimit: 8000000 })).wait()
             }
 
-            if (Number(await asset.allowance(windowOverride?.ethereum?.selectedAddress, poolAddress)) < Number(formattedAmount)) {
+            if (Number(await asset.allowance(address, poolAddress)) < Number(formattedAmount)) {
                 const approval = await asset.approve(poolAddress, formattedAmount)
                 await approval.wait()
             }
-
-            console.log('REACHED', protocolName, initialMarket, chainId)
 
             const tx = await (await pool.userDepositAndSetPosition(
                 formattedAmount,
@@ -132,19 +135,27 @@ const Deposit = ({ fetchPoolData, poolAddress, poolData, provider, setErrorMessa
         try {
             signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
-            open()
-            setDepoInitialized(false)
+            if (!isConnected) {
+                open()
 
+            }
+            setDepoInitialized(false)
+            return
         }
 
         const pool = new ethers.Contract(poolAddress || "0x0", PoolABI, signer)
         const asset = new ethers.Contract(contractAddresses["arbitrum"].WETH || "0x0", WethABI, signer)
         const formattedAmount = parseEther(assetAmount + "")
         try {
-            if (formatEther(userAssetBalance) <= assetAmount) {
-                await (await asset.deposit({ value: formattedAmount, gasLimit: 8000000 }))
+
+            const ethBal = Number(await provider.getBalance(address))
+            const wethBal = userAssetBalance - ethBal
+            if (formatEther(wethBal) <= assetAmount) {
+                const amountToWrap = Number(formattedAmount) - wethBal
+                await (await asset.deposit({ value: amountToWrap, gasLimit: 8000000 }))
             }
-            if (Number(await asset.allowance(windowOverride?.ethereum?.selectedAddress, poolAddress)) < Number(formattedAmount)) {
+
+            if (Number(await asset.allowance(address, poolAddress)) < Number(formattedAmount)) {
                 await (await asset.approve(poolAddress, formattedAmount)).wait()
             }
 

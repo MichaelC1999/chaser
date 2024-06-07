@@ -10,6 +10,7 @@ import Loader from './Loader.jsx';
 import ArbitrationABI from '../ABI/ArbitrationABI.json'; // Adjust the path as needed
 import { ethers, parseEther, solidityPackedKeccak256 } from 'ethers';
 import PivotingStatus from './PivotingStatus.jsx';
+import { useWeb3ModalAccount } from '@web3modal/ethers/react';
 
 
 function PivotPopup({ isPivoting, poolData, provider, tvl, pivotTx, fetchPoolData, poolAddress, pivotTarget, openAssertion, closePopup, openProposal, executePivot }) {
@@ -17,6 +18,7 @@ function PivotPopup({ isPivoting, poolData, provider, tvl, pivotTx, fetchPoolDat
     const [loading, setLoading] = useState(false)
     const [assertionData, setAssertionData] = useState({})
     const [openingProposal, setOpeningProposal] = useState(true)
+    const { isConnected } = useWeb3ModalAccount()
 
     useEffect(() => {
         fetchPoolData()
@@ -58,13 +60,19 @@ function PivotPopup({ isPivoting, poolData, provider, tvl, pivotTx, fetchPoolDat
         setAssertionData(data)
     }
 
+    const windowOverride = useMemo(() => (
+        typeof window !== 'undefined' ? window : null
+    ), []);
+
     const settleAssertion = async () => {
         let signer = null;
         try {
             signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
             console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
-            open()
+            if (!isConnected) {
+                open()
+            }
             return
         }
         try {

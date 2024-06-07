@@ -31,6 +31,10 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
         getStrategyCount()
     }, [])
 
+    const windowOverride = useMemo(() => (
+        typeof window !== 'undefined' ? window : null
+    ), []);
+
     const getStrategyCount = async () => {
         const investmentStrategyContract = new ethers.Contract(contractAddresses.arbitrum["investmentStrategy"], InvestmentStrategyABI, provider);
         const count = Number(await investmentStrategyContract.strategyCount() || 0)
@@ -42,11 +46,12 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
         try {
             signer = await new ethers.BrowserProvider(windowOverride.ethereum).getSigner()
         } catch (err) {
-            open()
-            console.log("Connection Error: " + err?.info?.error?.message ?? err?.message);
-            setErrorMessage("Connection Error: " + err?.info?.error?.message)
-            setSubmitting(false)
-            return
+            if (!isConnected) {
+                open()
+                setSubmitting(false)
+            }
+            console.log("Connection Error: " + err);
+            setErrorMessage("Connection Error: " + err?.info?.error?.message ?? err?.message)
         }
         const manager = new ethers.Contract(contractAddresses["arbitrum"].managerAddress || "0x0", ManagerABI, signer)
         //Maybe here a loading spinner popup? Then once Tx success or fail then do tx popup?
@@ -63,7 +68,6 @@ const NewPoolInputs = ({ provider, setTxPopupData, setErrorMessage }) => {
             const hash = poolTx.hash
             router.push(("/pool/" + poolAddress))
         } catch (err) {
-            console.log('test! ', err)
             setErrorMessage(err?.info?.error?.message)
         }
         setSubmitting(false)
