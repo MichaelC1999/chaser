@@ -81,6 +81,10 @@ interface IComet {
     function totalSupply() external view virtual returns (uint256);
     function totalBorrow() external view virtual returns (uint256);
     function balanceOf(address owner) external view virtual returns (uint256);
+    function userCollateral(
+        address,
+        address
+    ) external view returns (uint128, uint128);
     function borrowBalanceOf(
         address account
     ) external view virtual returns (uint256);

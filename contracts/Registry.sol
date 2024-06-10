@@ -36,7 +36,15 @@ contract Registry is OwnableUpgradeable {
 
     mapping(address => address) public poolAddressToBroker;
 
+    mapping(uint256 => address) public addressUSDC;
+
+    mapping(uint256 => address) public uniswapRouter;
+
+    mapping(uint256 => address) public uniswapFactory;
+
     address public manager;
+
+    address public treasuryAddress;
 
     address public bridgeLogicAddress;
 
@@ -57,24 +65,35 @@ contract Registry is OwnableUpgradeable {
     function initialize(
         uint256 _currentChainId,
         uint256 _managerChainId,
-        address _managerAddress
+        address _managerAddress,
+        address _treasuryAddress
     ) public initializer {
         __Ownable_init();
 
         //_currentChainId is the chain that this registry is currently deployed on
         //_managerChainId is the chain that has the manager contract and all of the pools
-        if (_currentChainId == _managerChainId) {
-            manager = _managerAddress;
-        }
+        manager = _managerAddress;
 
         currentChainId = _currentChainId;
 
         managerChainId = _managerChainId;
 
+        treasuryAddress = _treasuryAddress;
+
         chainIdToUmaAddress[11155111] = address(
             0xFd9e2642a170aDD10F53Ee14a93FcF2F31924944
         );
+        chainIdToUmaAddress[42161] = address(
+            0xa6147867264374F324524E30C02C331cF28aa879
+        );
 
+        chainIdToSpokePoolAddress[1] = address(
+            0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5
+        );
+
+        chainIdToSpokePoolAddress[42161] = address(
+            0xe35e9842fceaCA96570B734083f4a58e8F7C5f2A
+        );
         chainIdToSpokePoolAddress[84532] = address(
             0x82B564983aE7274c86695917BBf8C99ECb6F0F8F
         );
@@ -121,6 +140,34 @@ contract Registry is OwnableUpgradeable {
         );
         chainIdToLinkAddress[11155420] = address(
             0xE4aB69C077896252FAFBD49EFD26B5D171A32410
+        );
+
+        uniswapRouter[1] = address(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+        uniswapRouter[42161] = address(
+            0xE592427A0AEce92De3Edee1F18E0157C05861564
+        );
+
+        uniswapFactory[1] = address(0x1F98431c8aD98523631AE4a59f267346ea31F984);
+        uniswapFactory[42161] = address(
+            0x1F98431c8aD98523631AE4a59f267346ea31F984
+        );
+
+        addressUSDC[1] = address(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+
+        addressUSDC[42161] = address(
+            0xaf88d065e77c8cC2239327C5EDb3A432268e5831
+        );
+        addressUSDC[84532] = address(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e
+        );
+        addressUSDC[421614] = address(
+            0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d
+        );
+        addressUSDC[11155420] = address(
+            0x5fd84259d66Cd46123540766Be93DFE6D43130D7
+        );
+        addressUSDC[11155111] = address(
+            0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
         );
     }
 

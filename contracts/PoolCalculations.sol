@@ -9,6 +9,8 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 /// @title Pool Calculations
 /// @notice Provides detailed calculations and state management for pool operations including deposits, withdrawals, and pivots
 contract PoolCalculations is OwnableUpgradeable {
+    uint256 public protocolFeePct; //Where 1000000 = 100%
+
     mapping(bytes32 => address) public depositIdToDepositor;
     mapping(bytes32 => uint256) public depositIdToDepositAmount;
     mapping(bytes32 => bool) public depositIdToTokensMinted;
@@ -84,6 +86,10 @@ contract PoolCalculations is OwnableUpgradeable {
             "User cannot have withdraw pending on this pool"
         );
         _;
+    }
+
+    function setProtocolFeePct(uint256 feePct) public onlyOwner {
+        protocolFeePct = feePct;
     }
 
     /// @notice Creates a withdrawal order in state
@@ -386,7 +392,8 @@ contract PoolCalculations is OwnableUpgradeable {
     /// @param _destinationBridgeReceiver Address of the bridge receiver on the destination chain
     /// @return Encoded data including protocol hash, market address, destination chain ID and BridgeReceiver address on the destination chain
     function createPivotExitMessage(
-        address _destinationBridgeReceiver
+        address _destinationBridgeReceiver,
+        uint256 _proposalRewardUSDC
     ) external view returns (bytes memory) {
         address marketAddress = getMarketAddressFromId(
             targetPositionMarketId[msg.sender],
@@ -396,7 +403,9 @@ contract PoolCalculations is OwnableUpgradeable {
             targetPositionProtocolHash[msg.sender],
             marketAddress,
             targetPositionChain[msg.sender],
-            _destinationBridgeReceiver
+            _destinationBridgeReceiver,
+            protocolFeePct,
+            _proposalRewardUSDC
         );
         return data;
     }
@@ -422,16 +431,6 @@ contract PoolCalculations is OwnableUpgradeable {
         }
 
         return marketAddress;
-    }
-
-    /// @notice Determines the bond amount required for a pivot proposal
-    /// @param _asset Address of the asset
-    /// @return The calculated bond amount
-    function getPivotBond(
-        address _asset
-    ) external view onlyValidPool returns (uint256) {
-        // IMPORTANT -  For test net, this will be set as a simple, hardcoded value. In production this will be a function of asset type, TVL, user amount etc
-        return 500000;
     }
 
     /// @notice Calculates the amount of pool tokens to mint for a deposit

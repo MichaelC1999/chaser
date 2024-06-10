@@ -4,6 +4,7 @@ pragma solidity ^0.8.9;
 import "hardhat/console.sol";
 import {IAavePool} from "./interfaces/IAavePool.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
+import {IChaserTreasury} from "./interfaces/IChaserTreasury.sol";
 import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
 import {IPoolControl} from "./interfaces/IPoolControl.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -11,15 +12,18 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 
 contract BridgeReceiver is OwnableUpgradeable {
     IBridgeLogic public bridgeLogic;
+    IChaserRegistry public registry;
     address spokePoolAddress;
     mapping(address => address) poolToAsset;
 
     function initialize(
         address _bridgeLogicAddress,
-        address _spokePoolAddress
+        address _spokePoolAddress,
+        address _registryAddress
     ) public initializer {
         __Ownable_init();
         bridgeLogic = IBridgeLogic(_bridgeLogicAddress);
+        registry = IChaserRegistry(_registryAddress);
         spokePoolAddress = _spokePoolAddress;
     }
 
@@ -74,6 +78,30 @@ contract BridgeReceiver is OwnableUpgradeable {
         ) {
             finalizeWithdraw(method, tokenSent, amount, poolAddress, data);
         }
+        if (method == bytes4(keccak256(abi.encode("BaProtocolDeduction")))) {
+            protocolDeduction(method, tokenSent, amount, poolAddress, data);
+        }
+    }
+
+    function protocolDeduction(
+        bytes4 _method,
+        address _tokenSent,
+        uint256 _amount,
+        address _poolAddress,
+        bytes memory _data
+    ) internal {
+        (uint256 _protocolFees, uint256 _rewardAmountInAsset) = abi.decode(
+            _data,
+            (uint256, uint256)
+        );
+        address treasuryAddress = registry.treasuryAddress();
+        bool success = IERC20(_tokenSent).transfer(treasuryAddress, _amount);
+        IChaserTreasury(treasuryAddress).separateProtocolFeeAndReward(
+            _rewardAmountInAsset,
+            _protocolFees,
+            _poolAddress,
+            _tokenSent
+        );
     }
 
     function finalizeWithdraw(

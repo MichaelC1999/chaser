@@ -33,7 +33,11 @@ interface IChaserRegistry {
     function hashToProtocol(bytes32) external view returns (string memory);
     function poolCountToPool(uint256) external view returns (address);
     function poolAddressToBroker(address) external view returns (address);
+    function addressUSDC(uint256) external view returns (address);
     function manager() external view returns (address);
+    function uniswapRouter(uint256) external view returns (address);
+    function uniswapFactory(uint256) external view returns (address);
+    function treasuryAddress() external view returns (address);
     function bridgeLogicAddress() external view returns (address);
     function receiverAddress() external view returns (address);
     function integratorAddress() external view returns (address);

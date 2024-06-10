@@ -6,7 +6,7 @@ import "./PoolToken.sol";
 import {ISpokePool} from "./interfaces/ISpokePool.sol";
 import {IStrategy} from "./interfaces/IStrategy.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
-import {IChaserManager} from "./ChaserManager.sol";
+import {IChaserManager} from "./interfaces/IChaserManager.sol";
 import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
 import {IPoolCalculations} from "./interfaces/IPoolCalculations.sol";
 import {IPoolToken} from "./interfaces/IPoolToken.sol";
@@ -24,10 +24,13 @@ contract PoolControl {
     uint256 public strategyIndex; // Index in mapping pointing to the strategy code on InvestmentStrategy contract
     bytes32 public openAssertion = bytes32("");
     uint256 public currentPositionChain;
+    uint256 public proposalRewardUSDC;
+    uint256 public rewardDebt;
+    address public assertionSender;
 
     address public localBridgeReceiver;
     IBridgeLogic public localBridgeLogic;
-    IChaserManager public manager;
+    address public manager;
     IChaserRegistry public registry;
     IPoolCalculations public poolCalculations;
     IArbitrationContract public arbitrationContract;
@@ -52,22 +55,25 @@ contract PoolControl {
         uint256 _strategyIndex,
         string memory _poolName,
         uint256 _localChain,
+        uint256 _proposalRewardUSDC,
         address _registry,
-        address _poolCalculations
+        address _poolCalculations,
+        address _arbitration
     ) {
+        manager = msg.sender;
         localChain = _localChain;
         currentPositionChain = 0;
         poolName = _poolName;
         deployingUser = _deployingUser;
         strategyIndex = _strategyIndex;
         asset = IERC20(_asset);
+        proposalRewardUSDC = _proposalRewardUSDC;
+
         registry = IChaserRegistry(_registry);
         poolCalculations = IPoolCalculations(_poolCalculations);
         localBridgeLogic = IBridgeLogic(registry.bridgeLogicAddress());
         localBridgeReceiver = registry.chainIdToBridgeReceiver(localChain);
-        arbitrationContract = IArbitrationContract(
-            registry.arbitrationContract()
-        );
+        arbitrationContract = IArbitrationContract(_arbitration);
     }
 
     modifier callerSource() {
@@ -372,7 +378,6 @@ contract PoolControl {
             bytes memory currentPositionMarketId,
             bool pivotPending
         ) = poolCalculations.getCurrentPositionData(address(this));
-        uint256 bond = poolCalculations.getPivotBond(address(asset));
         require(
             !pivotPending,
             "Cannot propose new move while pivot is pending"
@@ -391,8 +396,9 @@ contract PoolControl {
             _requestMarketId,
             _requestProtocol,
             _requestChainId,
-            bond
+            proposalRewardUSDC + rewardDebt
         );
+        assertionSender = msg.sender;
     }
 
     /// @notice Executes a change in the pool's position following a successful pivot proposal
@@ -433,7 +439,8 @@ contract PoolControl {
         );
 
         bytes memory pivotMessage = poolCalculations.createPivotExitMessage(
-            destinationBridgeReceiver
+            destinationBridgeReceiver,
+            proposalRewardUSDC
         );
 
         if (currentPositionChain == localChain) {
@@ -458,6 +465,15 @@ contract PoolControl {
                 pivotMessage
             );
         }
+        address rewardRecipient = msg.sender;
+        if (assertionSender != address(0)) {
+            rewardRecipient = assertionSender;
+        }
+        bool success = IERC20(registry.addressUSDC(localChain)).transfer(
+            rewardRecipient,
+            proposalRewardUSDC
+        );
+        require(success, "Reward transfer failed");
     }
 
     /// @notice Finalizes the pivot process
@@ -572,101 +588,11 @@ contract PoolControl {
         bool success = asset.transfer(depositor, _amount);
         require(success, "Token transfer failure");
     }
-
-    /// @notice Reads the strategy code associated with the current investment strategy of the pool
-    /// @return A string representing the executable strategy code
-    function readStrategyCode() external view returns (string memory) {
-        address strategyAddress = registry.investmentStrategyContract();
-        bytes memory strategyBytes = IStrategy(strategyAddress).strategyCode(
-            strategyIndex
+    function setRewardDebt(uint256 _rewardDebtAmount) external {
+        require(
+            msg.sender == registry.treasuryAddress(),
+            "Only treasury may set reward debt"
         );
-        return string(strategyBytes);
-    }
-
-    /// @notice Provides metadata about the pool including the pool token address, asset address, and pool name
-    /// @return Tuple containing the pool token address, asset address, and the pool name
-    function poolMetaData()
-        external
-        view
-        returns (address, address, string memory)
-    {
-        return (poolToken, address(asset), poolName);
-    }
-
-    /// @notice Retrieves detailed data about the current position of the pool including market, protocol, and valuation
-    /// @return Comprehensive data set including position address, protocol hash, valuation, and related timestamps
-    function readPoolCurrentPositionData()
-        external
-        view
-        returns (
-            address,
-            bytes32,
-            uint256,
-            uint256,
-            uint256,
-            string memory,
-            bytes memory
-        )
-    {
-        (
-            address currentPositionAddress,
-            bytes32 currentPositionProtocolHash,
-            uint256 currentRecordPositionValue,
-            uint256 currentPositionValueTimestamp,
-            string memory currentPositionProtocol,
-            bytes memory currentPositionMarketId
-        ) = poolCalculations.readCurrentPositionData(address(this));
-
-        return (
-            currentPositionAddress,
-            currentPositionProtocolHash,
-            currentRecordPositionValue,
-            currentPositionValueTimestamp,
-            currentPositionChain,
-            currentPositionProtocol,
-            currentPositionMarketId
-        );
-    }
-
-    /// @notice Fetches details of a position change requested through the arbitration process
-    /// @return Details including the requested market ID, protocol, chain ID, and the time of request initiation
-    function readAssertionRequestedPosition()
-        external
-        view
-        returns (bytes memory, string memory, uint256, uint256)
-    {
-        (
-            bytes memory requestedMarketId,
-            string memory requestedProtocol,
-            uint256 requestedChainId,
-            uint256 openingTime
-        ) = arbitrationContract.readAssertionRequestedPosition(openAssertion);
-        return (
-            requestedMarketId,
-            requestedProtocol,
-            requestedChainId,
-            openingTime
-        );
-    }
-
-    /// @notice Provides the current transaction status of the pool including nonce for deposits and withdrawals and pivot pending status
-    /// @return Current transaction statuses including nonces for deposits and withdrawals, pivot pending flag, and the current open assertion
-    function transactionStatus()
-        external
-        view
-        returns (uint256, uint256, bool, bytes32)
-    {
-        (
-            uint256 poolDepositNonce,
-            uint256 poolWithdrawNonce,
-            bool poolToPivotPending
-        ) = poolCalculations.poolTransactionStatus(address(this));
-
-        return (
-            poolDepositNonce,
-            poolWithdrawNonce,
-            poolToPivotPending,
-            openAssertion
-        );
+        rewardDebt = _rewardDebtAmount;
     }
 }

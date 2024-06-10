@@ -22,6 +22,10 @@ interface IArbitrationContract {
         bytes memory
     ) external view returns (bytes memory);
 
+    function setBond(uint256) external;
+
+    function setArbitrationConfigs(address, uint256, uint256) external;
+
     function assertionResolvedCallback(bytes32, bool) external;
 
     function assertionDisputedCallback(bytes32) external;

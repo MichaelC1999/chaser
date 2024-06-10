@@ -2,24 +2,18 @@
 pragma solidity ^0.8.9;
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PoolControl} from "./PoolControl.sol";
-import {Registry} from "./Registry.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
-import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import {IArbitrationContract} from "./interfaces/IArbitrationContract.sol";
+import {ISwapRouter} from "./interfaces/ISwapRouter.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IPoolControl} from "./interfaces/IPoolControl.sol";
 
-interface IChaserManager {
-    function createNewPool(
-        address poolAsset,
-        uint amount,
-        uint256 strategyIndex,
-        string memory poolName
-    ) external;
-}
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
 contract ChaserManager is OwnableUpgradeable {
     IChaserRegistry public registry;
 
     uint256 currentChainId;
-
     address poolCalculationsAddress;
 
     event PoolCreated(address indexed poolAddress);
@@ -42,21 +36,41 @@ contract ChaserManager is OwnableUpgradeable {
     function createNewPool(
         address poolAsset,
         uint256 strategyIndex,
-        string memory poolName
+        string memory poolName,
+        uint256 proposalRewardUSDC,
+        uint256 proposalBondUSDC,
+        uint256 livenessLevel
     ) external {
-        address initialDepositor = msg.sender;
+        IERC20 usdc = IERC20(registry.addressUSDC(currentChainId));
+        require(
+            usdc.balanceOf(msg.sender) >= proposalRewardUSDC,
+            "Not enough USDC for pre-depositing reward"
+        );
+        require(
+            usdc.allowance(msg.sender, address(this)) >= proposalRewardUSDC,
+            "Need to approve USDC for pre-depositing reward"
+        );
+        address arbitrationAddress = registry.arbitrationContract();
 
         PoolControl pool = new PoolControl(
-            initialDepositor,
+            msg.sender,
             poolAsset,
             strategyIndex,
             poolName,
             currentChainId,
+            proposalRewardUSDC,
             address(registry),
-            poolCalculationsAddress
+            poolCalculationsAddress,
+            arbitrationAddress
         );
         address poolAddress = address(pool);
+        IArbitrationContract(arbitrationAddress).setArbitrationConfigs(
+            poolAddress,
+            proposalBondUSDC,
+            livenessLevel
+        );
         registry.enablePool(poolAddress);
+        usdc.transferFrom(msg.sender, poolAddress, proposalRewardUSDC);
         emit PoolCreated(poolAddress);
     }
 }

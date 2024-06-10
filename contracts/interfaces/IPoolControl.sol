@@ -20,6 +20,8 @@ interface IPoolControl {
     function queryMovePosition(string memory, bytes memory, uint256) external;
     function sendPositionChange(bytes memory, string memory, uint256) external;
     function pivotCompleted(address, uint256) external;
+    function setRewardDebt(uint256) external;
+    function proposalRewardUSDC() external view returns (uint256);
     function finalizeWithdrawOrder(
         bytes32,
         uint256,

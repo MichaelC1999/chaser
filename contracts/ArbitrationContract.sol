@@ -15,9 +15,9 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 contract ArbitrationContract is OwnableUpgradeable {
     address public umaCurrency;
     IOptimisticOracleV3 public oo;
-    uint64 public assertionLiveness;
     bytes32 public defaultIdentifier;
     IChaserRegistry public registry;
+    uint256 currentChainId;
 
     mapping(bytes32 => bytes) public assertionToRequestedMarketId;
     mapping(bytes32 => string) public assertionToRequestedProtocol;
@@ -26,8 +26,11 @@ contract ArbitrationContract is OwnableUpgradeable {
     mapping(bytes32 => uint256) public assertionToBlockTime;
     mapping(bytes32 => uint256) public assertionToSettleTime;
     mapping(bytes32 => uint256) public assertionToOpeningTime;
+    mapping(bytes32 => uint256) public assertionToReward;
+    mapping(address => uint256) public poolPivotedTimestamp;
     mapping(address => bool) public poolHasAssertionOpen;
-    mapping(uint256 => string) public chainIdToName;
+    mapping(address => uint256) public poolBondUSDC;
+    mapping(address => uint64) public poolLiveness;
     mapping(bytes32 => DataAssertion) public assertionsData;
 
     struct DataAssertion {
@@ -64,22 +67,16 @@ contract ArbitrationContract is OwnableUpgradeable {
         );
 
         addConfigsUMA(_chainId);
-
-        assertionLiveness = 360; // 7200 at a minimum
-        chainIdToName[11155111] = "ethereum";
-        chainIdToName[84532] = "base";
+        currentChainId = _chainId;
     }
 
     function addConfigsUMA(uint256 _chainId) public onlyOwner {
-        if (_chainId == 11155111) {
-            umaCurrency = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
-        } else {
-            umaCurrency = address(0);
-        }
+        umaCurrency = registry.addressUSDC(_chainId);
+
         address localOOaddress = registry.chainIdToUmaAddress(_chainId);
         if (localOOaddress != address(0)) {
             oo = IOptimisticOracleV3(localOOaddress);
-            defaultIdentifier = oo.defaultIdentifier();
+            // defaultIdentifier = oo.defaultIdentifier(); // IMPORTANT - UNDO
         }
     }
 
@@ -90,7 +87,7 @@ contract ArbitrationContract is OwnableUpgradeable {
     /// @param _requestMarketId Market ID for the requested position
     /// @param _requestProtocol Protocol name for the requested position
     /// @param _requestChainId Requested position Chain ID to bridge to
-    /// @param _bond Amount of currency bonded for the claim
+    /// @param _proposalRewardUSDC Amount of currency rewarded for the proposal
     /// @return assertionId Generated identifier for the new assertion
     function queryMovePosition(
         address _sender,
@@ -98,7 +95,7 @@ contract ArbitrationContract is OwnableUpgradeable {
         bytes memory _requestMarketId,
         string memory _requestProtocol,
         uint256 _requestChainId,
-        uint256 _bond
+        uint256 _proposalRewardUSDC
     ) external returns (bytes32) {
         require(
             registry.poolEnabled(msg.sender),
@@ -118,27 +115,41 @@ contract ArbitrationContract is OwnableUpgradeable {
             "Chain must have a bridge receiver to request a pivot"
         );
 
-        if (umaCurrency != address(0) && address(oo) != address(0)) {
+        require(
+            block.timestamp - 10800 >= poolPivotedTimestamp[msg.sender],
+            "A new pivot may only be proposed 3 hours after resolving the previous pivot"
+        );
+
+        uint64 liveness = 360; //IMPORTANT - PRODUCTION 7200
+        if (poolLiveness[msg.sender] > 0) {
+            liveness = poolLiveness[msg.sender];
+        }
+
+        if (address(oo) != address(0)) {
             bool success = IERC20(umaCurrency).transferFrom(
                 _sender,
                 address(this),
-                _bond
+                poolBondUSDC[msg.sender]
             );
             require(success, "Failed token transfer");
-            IERC20(umaCurrency).approve(address(oo), _bond);
+            IERC20(umaCurrency).approve(address(oo), poolBondUSDC[msg.sender]);
         }
-        bytes32 assertionId = openProposal(_claim, _sender, _bond);
+        bytes32 assertionId = openProposal(
+            _claim,
+            _sender,
+            poolBondUSDC[msg.sender],
+            liveness
+        );
         assertionToRequestedMarketId[assertionId] = _requestMarketId;
         assertionToRequestedProtocol[assertionId] = _requestProtocol;
         assertionToRequestedChainId[assertionId] = _requestChainId;
         assertionToPoolAddress[assertionId] = msg.sender;
         assertionToBlockTime[assertionId] =
             block.timestamp +
-            ((assertionLiveness * 3) / 5);
-        assertionToSettleTime[assertionId] =
-            block.timestamp +
-            assertionLiveness;
+            ((liveness * 3) / 5);
+        assertionToSettleTime[assertionId] = block.timestamp + liveness;
         assertionToOpeningTime[assertionId] = block.timestamp;
+        assertionToReward[assertionId] = _proposalRewardUSDC;
         poolHasAssertionOpen[msg.sender] = true;
         return assertionId;
     }
@@ -151,18 +162,19 @@ contract ArbitrationContract is OwnableUpgradeable {
     function openProposal(
         bytes memory claim,
         address asserter,
-        uint256 bond
+        uint256 bond,
+        uint64 liveness
     ) internal returns (bytes32) {
         bytes32 assertionId = keccak256(
             abi.encodePacked(claim, block.timestamp)
         );
-        if (umaCurrency != address(0) && address(oo) != address(0)) {
+        if (address(oo) != address(0)) {
             assertionId = oo.assertTruth(
                 claim,
                 asserter,
                 address(this),
                 address(0), // No sovereign security.
-                assertionLiveness,
+                liveness,
                 IERC20(umaCurrency),
                 bond,
                 defaultIdentifier,
@@ -217,6 +229,7 @@ contract ArbitrationContract is OwnableUpgradeable {
             );
 
             poolHasAssertionOpen[poolAddress] = false;
+            poolPivotedTimestamp[poolAddress] = block.timestamp;
 
             poolControl.sendPositionChange(
                 requestMarketId,
@@ -249,6 +262,22 @@ contract ArbitrationContract is OwnableUpgradeable {
         delete assertionToSettleTime[assertionId];
         delete assertionToOpeningTime[assertionId];
         delete poolHasAssertionOpen[poolAddress];
+    }
+
+    function setArbitrationConfigs(
+        address _poolAddress,
+        uint256 _bondUSDC,
+        uint256 _livenessLevel
+    ) external {
+        poolBondUSDC[_poolAddress] = _bondUSDC;
+        uint64 liveness = 7200;
+        if (_livenessLevel == 1) {
+            liveness = 3600 * 12;
+        }
+        if (_livenessLevel == 2) {
+            liveness = 3600 * 24;
+        }
+        poolLiveness[_poolAddress] = liveness;
     }
 
     /// @notice Retrieves details of a requested position change

@@ -8,11 +8,11 @@ import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IPoolBroker} from "./interfaces/IPoolBroker.sol";
 import {DataTypes} from "./libraries/AaveDataTypes.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 /// @title Integrator Contract
 /// @dev Handles protocol-specific operations like deposits and withdrawals
-contract Integrator is Initializable {
+contract Integrator is OwnableUpgradeable {
     address public bridgeLogicAddress;
     address public registryAddress;
     uint256 chainId;
@@ -26,6 +26,8 @@ contract Integrator is Initializable {
         address _bridgeLogicAddress,
         address _registryAddress
     ) public initializer {
+        __Ownable_init();
+
         bridgeLogicAddress = _bridgeLogicAddress;
         registryAddress = _registryAddress;
         IChaserRegistry(registryAddress).addIntegrator(address(this));
@@ -190,7 +192,17 @@ contract Integrator is Initializable {
         }
 
         if (_protocolHash == hasher("compound-v3")) {
-            return IComet(_marketAddress).balanceOf(brokerAddress);
+            uint256 userCollateral = IComet(_marketAddress).balanceOf(
+                brokerAddress
+            );
+            if (userCollateral > 0) return userCollateral;
+
+            (uint128 collateral, ) = IComet(_marketAddress).userCollateral(
+                brokerAddress,
+                _assetAddress
+            );
+
+            return uint256(collateral);
         }
     }
 
