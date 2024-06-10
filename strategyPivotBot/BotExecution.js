@@ -65,21 +65,36 @@ const TESTNET_ANALOG_MARKETS = {
   '0x29598b72eb5cebd806c5dcd549490fda35b13cd8': "0x4d5f47fa6a74757f35c14fd3a6ef8e3c9bc514e8"
 }
 
+
+// SEPARATE EACH QUERY INTO OBJECTS WITH MARKET, CHAIN/NETWORK, PROTOCOL
+// SET A MARKER SO THAT JORGE KNOWS THAT THESE ARE THE PROTOCOL/CHAINS TO LOOP THROUGH FOR EACH STRATEGY
+const PROTOCOL_MARKET_PAIRS = [
+  { subgraphEndpoint: "aave-v3-arbitrum", protocol: "aave-v3", chain: "arbitrum", market: "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8" },
+  { subgraphEndpoint: "aave-v3-base", protocol: "aave-v3", chain: "base", market: "0xd4a0e0b9149bcee3c920d2e00b5de09138fd8bb7" },
+  { subgraphEndpoint: "aave-v3-ethereum", protocol: "aave-v3", chain: "ethereum", market: "0x4d5f47fa6a74757f35c14fd3a6ef8e3c9bc514e8" },
+  { subgraphEndpoint: "aave-v3-optimism", protocol: "aave-v3", chain: "optimism", market: "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8" },
+  { subgraphEndpoint: "aave-v3-polygon", protocol: "aave-v3", chain: "polygon", market: "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8" },
+  { subgraphEndpoint: "compound-v3-ethereum", protocol: "compound-v3", chain: "ethereum", market: "0xc3d688b66703497daa19211eedff47f25384cdc3c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2" },
+  { subgraphEndpoint: "compound-v3-arbitrum", protocol: "compound-v3", chain: "arbitrum", market: "0x9c4ec768c28520b50860ea7a15bd7213a9ff58bf82af49447d8a07e3bd95bd0d56f35241523fbab1" },
+  { subgraphEndpoint: "compound-v3-polygon", protocol: "compound-v3", chain: "polygon", market: "0xf25212e676d1f7f89cd72ffee66158f5412464457ceb23fd6bc0add59e62ac25578270cff1b9f619" }]
+
 const sepoliaMonitor = async (poolAddress) => {
   // read current position
   const pool = await hre.ethers.getContractAt("PoolControl", poolAddress)
   const calcContract = await hre.ethers.getContractAt("PoolCalculations", await pool.poolCalculations())
 
-  const curProtocol = await calcContract.currentPositionProtocol(poolAddress)
+  // const curProtocol = await calcContract.currentPositionProtocol(poolAddress)
 
-  let curMarketId = await calcContract.currentPositionMarketId(poolAddress)
-  curMarketId = TESTNET_ANALOG_MARKETS[curMarketId] || curMarketId
-  const curChain = await pool.currentPositionChain()
+  // let curMarketId = await calcContract.currentPositionMarketId(poolAddress)
+  // curMarketId = TESTNET_ANALOG_MARKETS[curMarketId] || curMarketId
+  // const curChain = await pool.currentPositionChain()
 
+
+  // // make fetch and process for current yield here
+  const curProtocol = "aave-v3"
+  const curChain = "arbitrum"
+  const curMarketId = "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8"
   const network = networks[curChain]
-
-  // make fetch and process for current yield here
-  console.log(curProtocol, network, curMarketId)
   const currentMarketData = await fetchAndPrepareData(curProtocol, network, curMarketId)
   const ror = await getCurrentPositionYield(currentMarketData.data)
 
@@ -96,7 +111,7 @@ const sepoliaMonitor = async (poolAddress) => {
 
     process.argv.push(curChain, chainToName[best.depo], curMarketId, best.market, curProtocol, best.protocol)
     const shouldPivot = await strategyCalculation()
-    console.log('YES YES YES', shouldPivot)
+    console.log('YES', shouldPivot)
     // IMPORTANT - COULD GET THE STRATEGY CODE, SAVE IT WITH FS, THEN GENERATE CODE TO EXECUTE IT
 
     // await sepoliaCallPivot(best)

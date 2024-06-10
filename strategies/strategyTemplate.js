@@ -17,13 +17,13 @@ export const strategyCalculation = async () => {
     }
 
     const curChain = networks[process.argv[2]]
-    const reqChain = networks[process.argv[3]]
+    const desChain = networks[process.argv[3]]
     const curMarketId = TESTNET_ANALOG_MARKETS[process.argv[4]] || process.argv[4]
-    const reqMarketId = TESTNET_ANALOG_MARKETS[process.argv[5]] || process.argv[5]
+    const desMarketId = TESTNET_ANALOG_MARKETS[process.argv[5]] || process.argv[5]
     const curProtocol = process.argv[6]
-    const reqProtocol = process.argv[7]
+    const desProtocol = process.argv[7]
 
-    if (!reqMarketId) return (false);
+    if (!desMarketId) return (false);
 
     const prepareData = async (protocol, network, marketId) => {
         const base = "https://api.thegraph.com/subgraphs/name/messari/";
@@ -129,14 +129,14 @@ market(id:"'+ marketId + '") {\
 
         const supportedProtocols = ["aave-v3", "compound-v3"]
 
-        if (!supportedProtocols.includes(reqProtocol)) {
+        if (!supportedProtocols.includes(desProtocol)) {
             return false
         }
 
         const curPositionData = await prepareData(curProtocol, curChain, curMarketId);
-        const desPositionData = await prepareData(reqProtocol, reqChain, reqMarketId);
+        const desPositionData = await prepareData(desProtocol, desChain, desMarketId);
 
-        if (!supportedChainsAssets[reqChain].includes(desPositionData.market.inputToken.id)) {
+        if (!supportedChainsAssets[desChain].includes(desPositionData.market.inputToken.id)) {
             return false
         }
 

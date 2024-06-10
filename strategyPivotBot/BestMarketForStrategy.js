@@ -1,4 +1,4 @@
-const bestYieldOnStrategy = async () => {
+const bestYieldOnStrategy = async (PROTOCOL_MARKET_PAIRS) => {
 
     console.log(process.argv)
 
@@ -45,29 +45,32 @@ const bestYieldOnStrategy = async () => {
         }
     }
 
-    aavev3["arbitrum"] = {}
-    aavev3["arbitrum"]["usdc"] = await fetchAndPrepareData("aave-v3-arbitrum", "0x625e7708f30ca75bfd92586e17077590c60eb4cd")
+    // LOOP OVER PROTOCOL_MARKET_PAIRS, CALL fetchAndPrepareData for each element in the arr
 
-    aavev3["base"] = {}
-    aavev3["base"]["usdc"] = await fetchAndPrepareData("aave-v3-base", "0x4e65fe4dba92790696d040ac24aa414708f5c0ab")
+    // await fetchAndPrepareData("aave-v3-arbitrum", "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8")
 
-    aavev3["ethereum"] = {}
-    aavev3["ethereum"]["usdc"] = await fetchAndPrepareData("aave-v3-ethereum", "0x98c23e9d8f34fefb1b7bd6a91b7ff122f4e16f5c")
+    // aavev3["base"] = {}
+    // aavev3["base"]["weth"] = await fetchAndPrepareData("aave-v3-base", "0xd4a0e0b9149bcee3c920d2e00b5de09138fd8bb7")
 
-    aavev3["optimism"] = {}
-    aavev3["optimism"]["usdc"] = await fetchAndPrepareData("aave-v3-optimism", "0x625e7708f30ca75bfd92586e17077590c60eb4cd")
+    // aavev3["ethereum"] = {}
+    // aavev3["ethereum"]["weth"] = await fetchAndPrepareData("aave-v3-ethereum", "0x4d5f47fa6a74757f35c14fd3a6ef8e3c9bc514e8")
 
-    aavev3["polygon"] = {}
-    aavev3["polygon"]["usdc"] = await fetchAndPrepareData("aave-v3-polygon", "0x625e7708f30ca75bfd92586e17077590c60eb4cd")
+    // aavev3["optimism"] = {}
+    // aavev3["optimism"]["weth"] = await fetchAndPrepareData("aave-v3-optimism", "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8")
 
-    compoundv3["ethereum"] = {}
-    compoundv3["ethereum"]["usdc"] = await fetchAndPrepareData("compound-v3-ethereum", "0xc3d688b66703497daa19211eedff47f25384cdc3a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+    // aavev3["polygon"] = {}
+    // aavev3["polygon"]["weth"] = await fetchAndPrepareData("aave-v3-polygon", "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8")
 
-    compoundv3["arbitrum"] = {}
-    compoundv3["arbitrum"]["usdc"] = await fetchAndPrepareData("compound-v3-arbitrum", "0x9c4ec768c28520b50860ea7a15bd7213a9ff58bfaf88d065e77c8cc2239327c5edb3a432268e5831")
+    // compoundv3["ethereum"] = {}
+    // compoundv3["ethereum"]["weth"] = await fetchAndPrepareData("compound-v3-ethereum", "0xc3d688b66703497daa19211eedff47f25384cdc3c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2")
 
-    compoundv3["polygon"] = {}
-    compoundv3["polygon"]["usdc"] = await fetchAndPrepareData("compound-v3-polygon", "0xf25212e676d1f7f89cd72ffee66158f5412464452791bca1f2de4661ed88a30c99a7a9449aa84174")
+    // compoundv3["arbitrum"] = {}
+    // compoundv3["arbitrum"]["weth"] = await fetchAndPrepareData("compound-v3-arbitrum", "0x9c4ec768c28520b50860ea7a15bd7213a9ff58bf82af49447d8a07e3bd95bd0d56f35241523fbab1")
+
+    // compoundv3["polygon"] = {}
+    // compoundv3["polygon"]["weth"] = await fetchAndPrepareData("compound-v3-polygon", "0xf25212e676d1f7f89cd72ffee66158f5412464457ceb23fd6bc0add59e62ac25578270cff1b9f619")
+
+
 
 
     // aavev2["ethereum"] = {}
