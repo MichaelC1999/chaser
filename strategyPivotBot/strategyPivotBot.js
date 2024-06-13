@@ -1,114 +1,200 @@
-const hre = require("hardhat");
+const hre = require('hardhat')
 
-const { bestYieldOnStrategy } = require("./BestMarketForStrategy");
-const { strategyCalculation } = require("./highYield3Month");
+/**
+ * Strategy Structure
+ * {
+ * 		checkConditions: (positionData, protocol, chain, marketId) => checkConditionsOfStrategyName(positionData, protocol, chain, marketId),
+ * 		getReturnRate: (positionData) => getReturnRateOfStrategyName(positionData)
+ * },
+ * 
+ * Strategy Array
+ * [
+ * 		{
+ * 			checkConditions: (positionData, protocol, chain, marketId) => checkConditionsOfStrategyName(positionData, protocol, chain, marketId),
+ * 			getReturnRate: (positionData) => getReturnRateOfStrategyName(positionData)
+ * 		},
+ * ]
+ */
 
 class StrategyPivotBot {
-    constructor(options) {
-        this.options = options;
-        this.botInterval = null;
+  #poolAddresses
+  #protocolMarkets
+  #strategies
+  #botIntervalTimeout
+  #botInterval
+
+  constructor ({
+    poolAddresses,
+    protocolMarkets,
+    strategies,
+    botIntervalTimeout
+  }) {
+    this.#poolAddresses = poolAddresses
+    this.#protocolMarkets = protocolMarkets
+    this.#strategies = strategies
+    this.#botIntervalTimeout = botIntervalTimeout
+    this.#botInterval = null
+  }
+
+  async #fetchMarketData ({ protocol, chain, marketId }) {
+    const base = 'https://api.thegraph.com/subgraphs/name/messari/'
+
+    const marketDataQuery = marketId => {
+      return `{                                                                                                               
+								marketDailySnapshots(first: 90, orderBy: timestamp, orderDirection: desc, where: { market: ${marketId} }) {                                                                                                             \
+									market {                                                                                                        
+											id                                                                                                          
+									}                                                                                                                
+									days                                                                                                                
+									rates(where: {side: LENDER}) {                                                                                  
+											side                                                                                                        
+											rate                                                                                                        
+									}                                                                                                               
+								}                                                                                                                   
+							}`
     }
 
-    async #makeQuery(marketId) {
-        return '{                                                                                                               \
-            marketDailySnapshots(first: 90, orderBy: timestamp, orderDirection: desc, where: { market:"'+ marketId + '"}) {   \                                                                                                            \
-                market {                                                                                                        \
-                    id                                                                                                          \
-                }                                                                                                                \
-                days                                                                                                                \
-                rates(where: {side: LENDER}) {                                                                                  \
-                    side                                                                                                        \
-                    rate                                                                                                        \
-                }                                                                                                               \
-            }                                                                                                                   \
-        }'
-    }
+    let marketData = await fetch(base + protocol + '-' + chain, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        query: marketDataQuery(marketId)
+      })
+    })
+    return await marketData.json()
+  }
 
-    async #fetchAndPrepareData(protocol, network, marketId) {
-        const base = "https://api.thegraph.com/subgraphs/name/messari/";
-        
-        let req = await fetch(base + protocol + '-' + network, {
-            method: "POST",
-            headers: {
-            "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-            query: this.#makeQuery(marketId)
-            })
-        });
-        return await req.json();
-    }
-    
-    async #getCurrentPositionYield(data) {
-        let curROR = 0;
-        let curMeanROR
-        
-        if (data) {
-            console.log(data.marketDailySnapshots)
-            data.marketDailySnapshots.forEach(ins => {
-            const rate = (Number(ins.rates[0].rate))
-            curROR += rate
-        
-            });
-            curMeanROR = curROR / data.marketDailySnapshots.length;
-        }
-        return curMeanROR
-    }
+  #getStrategyByPoolAddress (poolAddress) {
+		try {
+			if (poolAddress != null) {
+				let strategyIndex = 0
+				/* 
+					Will place a logic here to get a target strategy from strategies array by the given poolAddress
+					
+					* * *
 
-    async #sepoliaMonitor(poolAddress) {
-        // read current position
-        const pool = await hre.ethers.getContractAt("PoolControl", poolAddress)
-        const calcContract = await hre.ethers.getContractAt("PoolCalculations", await pool.poolCalculations())
-      
-        // const curProtocol = await calcContract.currentPositionProtocol(poolAddress)
-      
-        // let curMarketId = await calcContract.currentPositionMarketId(poolAddress)
-        // curMarketId = TESTNET_ANALOG_MARKETS[curMarketId] || curMarketId
-        // const curChain = await pool.currentPositionChain()
-      
-      
-        // // make fetch and process for current yield here
-        const curProtocol = "aave-v3"
-        const curChain = "arbitrum"
-        const curMarketId = "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8"
-        const network = this.options.networks[curChain]
-        const currentMarketData = await this.#fetchAndPrepareData(curProtocol, network, curMarketId)
-        const ror = await this.#getCurrentPositionYield(currentMarketData.data)
-      
-        console.log('Yield', currentMarketData, ror)
-        //call highYieldUSDC
-        const best = await bestYieldOnStrategy()
-        console.log(best)
-      
-        if (ror > best.yield) {
-          console.log('NO PIVOT')
-        } else {
-          console.log("BETTER INVESTMENT RIGHT NOW", best)
-          const chainToName = { "base": 84532, "sepolia": 11155111 }
-      
-          process.argv.push(curChain, chainToName[best.depo], curMarketId, best.market, curProtocol, best.protocol)
-          const shouldPivot = await strategyCalculation()
-          console.log('YES', shouldPivot)
-          // IMPORTANT - COULD GET THE STRATEGY CODE, SAVE IT WITH FS, THEN GENERATE CODE TO EXECUTE IT
-      
-          // await sepoliaCallPivot(best)
-        }
-        return
-        //If returns higher than current yield and is differen market/depo/protocol, then sepoliaCallPivot
-    }
+				*/
+				return this.#strategies[strategyIndex]
+			} else
+			return null
+		} catch (error) {
+			this.#handleError(error)			
+		}
+  }
 
-    run() {
-        try {
-            this.botInterval = setInterval(async () => await sepoliaMonitor(poolAddress), this.options.botIntervalTime);
-        } catch (error) {
-            console.log(error);
-        }
-    }
+  async #getCurrentPositionDataByPoolAddress (poolAddress) {
+    const pool = await hre.ethers.getContractAt('PoolControl', poolAddress)
+    const calcContract = await hre.ethers.getContractAt(
+      'PoolCalculations',
+      await pool.poolCalculations()
+    )
 
-    terminate() {
-        if (this.botInterval !== null)
-            clearInterval(this.botInterval);
+    const curProtocol = await calcContract.currentPositionProtocol(poolAddress)
+    const curChain = await pool.currentPositionChain()
+    const curMarketId = await calcContract.currentPositionMarketId(poolAddress)
+    // curMarketId = TESTNET_ANALOG_MARKETS[curMarketId] || curMarketId
+
+		return { curProtocol, curChain, curMarketId }
+	}
+
+  async #sepoliaMonitor () {
+    try {
+      if (
+        Array.isArray(this.#poolAddresses) &&
+        this.#poolAddresses.length > 0
+      ) {
+        // Validate poolAddresses variable
+
+        this.#poolAddresses.forEach((poolAddress, poolIndex) => {
+          // Start a loop for poolAddresses
+
+          const { curMarketId } = this.#getCurrentPositionDataByPoolAddress(poolAddress) // Get current position data from a given pool address
+
+          let bestMarketId = curMarketId
+          let bestRor = 0
+
+          const strategy = this.#getStrategyByPoolAddress(poolAddress) // Get a target strategy for the given poolAddress
+
+          if (strategy !== null && curMarketId != null) {
+            // Validate the target strategy
+
+            if (
+              Array.isArray(this.#protocolMarkets) &&
+              this.#protocolMarkets.length > 0
+            ) {
+              // Validate protocolMarkets variable
+
+              this.#protocolMarkets.forEach(
+                (protocolMarket, protocolMarketIndex) => {
+                  // Start a loop for protocolMarkets
+
+                  const marketData = this.#fetchMarketData(protocolMarket)
+                  const condition = strategy.checkConditions(
+                    marketData,
+                    protocolMarket
+                  )
+                  const ror = condition
+                    ? strategy.getReturnRate(marketData)
+                    : null
+
+                  if (ror > bestRor) {
+                    // Get the best marketId and ror
+                    bestRor = ror
+                    bestMarketId = protocolMarket.marketId
+                  }
+                }
+              )
+            } else {
+              throw new Error(
+                'The protocolMarkets must be an array and not empty.'
+              )
+            }
+          } else {
+            throw new Error('Invalid variables.')
+          }
+
+          if (bestMarketId != curMarketId) {
+            this.#executePivot()
+          }
+        })
+      } else {
+        throw new Error('The poolAddresses must be an array and not empty.')
+      }
+    } catch (error) {
+      this.#handleError(error)
     }
+  }
+
+  async #executePivot () {
+    /* 
+			Will place a pivot logic here
+			
+			* * *
+
+		*/
+  }
+
+  #handleError (error) {
+    console.error(error)
+    this.terminate()
+  }
+
+  run () {
+    try {
+      this.#botInterval = setInterval(
+        async () => await this.#sepoliaMonitor(),
+        this.#botIntervalTimeout
+      )
+    } catch (error) {
+      this.#handleError(error)
+    }
+  }
+
+  terminate () {
+    if (this.#botInterval !== null) clearInterval(this.#botInterval)
+  }
 }
 
-export default StrategyPivotBot;
+export default StrategyPivotBot
