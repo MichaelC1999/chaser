@@ -41,7 +41,7 @@ class StrategyPivotBot {
 
     const marketDataQuery = marketId => {
       return `{                                                                                                               
-								marketDailySnapshots(first: 90, orderBy: timestamp, orderDirection: desc, where: { market: ${marketId} }) {                                                                                                             \
+								marketDailySnapshots(first: 90, orderBy: timestamp, orderDirection: desc, where: { market: ${marketId} }) {
 									market {                                                                                                        
 											id                                                                                                          
 									}                                                                                                                
