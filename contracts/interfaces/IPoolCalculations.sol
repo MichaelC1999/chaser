@@ -33,17 +33,17 @@ interface IPoolCalculations {
         bytes32
     ) external returns (bytes memory);
 
+    function setWithdrawReceived(bytes32, uint256) external returns (address);
+
     function fulfillWithdrawOrder(
         bytes32,
         uint256,
-        uint256,
-        uint256,
-        address
+        uint256
     ) external returns (address, uint256);
 
     function undoPositionInitializer(bytes32) external returns (address);
 
-    function undoDeposit(bytes32) external returns (address);
+    function undoDeposit(bytes32, uint256) external returns (address);
 
     function undoPivot(uint256) external;
 
@@ -62,12 +62,22 @@ interface IPoolCalculations {
         string memory,
         uint256
     ) external returns (address);
-
+    function protocolFeePct() external view returns (uint256);
     function getReceivingChain() external view returns (uint256);
+    function getMarketAddressFromId(
+        bytes memory,
+        bytes32
+    ) external view returns (address);
     function getCurrentPositionData(
         address
     ) external view returns (string memory, bytes memory, bool);
     function targetPositionChain(address) external view returns (uint256);
+    function targetPositionProtocolHash(
+        address
+    ) external view returns (bytes32);
+    function targetPositionMarketId(
+        address
+    ) external view returns (bytes memory);
     function getPivotBond(address) external view returns (uint256);
     function createInitialSetPositionMessage(
         bytes32,

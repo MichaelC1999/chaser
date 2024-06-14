@@ -123,24 +123,6 @@ contract PoolControl {
         }
     }
 
-    /// @notice Updates the current position's valuation based on data received
-    /// @param _data Encoded data detailing the current position value and associated deposit ID
-    function receivePositionBalance(bytes memory _data) external messageSource {
-        (
-            uint256 positionAmount,
-            uint256 depositAmountReceived,
-            bytes32 depositId
-        ) = abi.decode(_data, (uint256, uint256, bytes32));
-        if (depositId != bytes32("")) {
-            poolCalculations.updateDepositReceived(
-                depositId,
-                positionAmount,
-                depositAmountReceived
-            );
-            mintUserPoolTokens(depositId, positionAmount);
-        }
-    }
-
     /// @notice Initiates a withdrawal order for a user, handling local or cross-chain processes
     /// @param _amount The amount the user wishes to withdraw, denominated in the pool's asset
     /// @dev Creates withdrawal data and sends it to the appropriate bridge logic through CCIP
@@ -250,7 +232,7 @@ contract PoolControl {
     function userDeposit(uint256 _amount, uint256 _totalFee) external {
         require(
             poolCalculations.poolDepositNonce(address(this)) > 0,
-            "The deosits can only be made after the first deposit + position set has settled"
+            "Deposits can only be made after the first deposit + position set has finished"
         );
 
         (bytes32 depositId, uint256 withdrawNonce) = poolCalculations
@@ -358,7 +340,7 @@ contract PoolControl {
             _receivingChain,
             address(0),
             uint32(block.timestamp),
-            uint32(block.timestamp + 30000),
+            uint32(block.timestamp + 7200),
             0,
             _message
         );
@@ -434,12 +416,12 @@ contract PoolControl {
 
         emit ExecutePivot(currentPositionChain, pivotNonce);
 
-        address destinationBridgeReceiver = registry.chainIdToBridgeReceiver(
+        address targetChainBridgeReceiver = registry.chainIdToBridgeReceiver(
             _targetPositionChain
         );
 
         bytes memory pivotMessage = poolCalculations.createPivotExitMessage(
-            destinationBridgeReceiver,
+            targetChainBridgeReceiver,
             proposalRewardUSDC
         );
 
@@ -455,14 +437,45 @@ contract PoolControl {
 
             localBridgeLogic.executeExitPivot(address(this), pivotMessage);
         } else {
-            bytes4 method = bytes4(
-                keccak256(abi.encode("AbPivotMovePosition"))
-            );
+            // PIVOT CASE 2 currentPositionChain == _targetPositionChain
+            //PIVOT CASE 2: Send CCIP to current position chain. Executes exit pivot.
+            //If localChain, executes entrance and sends callback.
+            //Or bridges to manager chain and needs to separate fees.
+            //PIVOT CASE 2 needs exactly the same CCIP message as before. Only updates are upon receiving bridge, bridgeLogic getting position from poolCalc
+
+            //PIVOT CASE 3  currentPositionChain != _targetPositionChain AND NEITHER ARE MANAGER CHAIN
+            //Send CCIP to current position chain to exit position and bridge to different chain, send a bridge to manager chain for fees/rewards
+            // Needs data _targetPositionChain,targetChainBridgeReceiver,protocolFee,proposalRewardUSDC
+            //For case 3, must avoid exiting the position and instead . Then bridges to the correct chain
+            //Send CCIP to target position chain to call handleEnterPositionState
+            //passes targetPositionProtocolHash[msg.sender],marketAddress, asset
+
             registry.sendMessage(
                 currentPositionChain,
-                method,
+                bytes4(keccak256(abi.encode("AbPivotMovePosition"))),
                 address(this),
                 pivotMessage
+            );
+        }
+
+        if (
+            _targetPositionChain != localChain &&
+            _targetPositionChain != currentPositionChain
+        ) {
+            // PIVOT CASE 1 and 3 SENDS ADDITIONAL MESSAGE TO TARGET POSITION CHAIN TO SET POSITION
+            address marketAddress = poolCalculations.getMarketAddressFromId(
+                _targetPositionMarketId,
+                keccak256(abi.encode(_targetPositionProtocol))
+            );
+            registry.sendMessage(
+                _targetPositionChain,
+                bytes4(keccak256(abi.encode("AbPivotSetPosition"))),
+                address(this),
+                abi.encode(
+                    asset,
+                    keccak256(abi.encode(_targetPositionProtocol)),
+                    marketAddress
+                )
             );
         }
         address rewardRecipient = msg.sender;
@@ -521,7 +534,10 @@ contract PoolControl {
         bytes32 _depositId,
         uint256 _amount
     ) external callerSource {
-        address originalSender = poolCalculations.undoDeposit(_depositId);
+        address originalSender = poolCalculations.undoDeposit(
+            _depositId,
+            _amount
+        );
         bool success = asset.transferFrom(msg.sender, originalSender, _amount);
         require(success, "Token transfer failure");
     }
@@ -562,31 +578,58 @@ contract PoolControl {
         asset.approve(acrossSpokePool, _amount);
     }
 
-    /// @notice Finalizes a withdrawal order, transferring the specified amount to the user and burning the corresponding pool tokens
-    /// @param _withdrawId Identifier of the withdrawal
-    /// @param _amount Amount of assets to transfer to the user. The outputAmount on this side of the bridge
-    /// @param _totalAvailableForUser Maximum amount available for the user to withdraw
-    /// @param _positionValue Current total value of the pool's position
-    /// @param _inputAmount Initial amount requested for withdrawal
-    function finalizeWithdrawOrder(
+    /// @notice Updates the current position's valuation based on data received
+    /// @param _data Encoded data detailing the current position value and associated deposit ID
+    function receivePositionBalanceDeposit(
+        bytes memory _data
+    ) external messageSource {
+        (
+            uint256 currentPositionBalance,
+            uint256 outputAmount,
+            ,
+            bytes32 depositId
+        ) = abi.decode(_data, (uint256, uint256, uint256, bytes32));
+
+        poolCalculations.updateDepositReceived(
+            depositId,
+            currentPositionBalance,
+            outputAmount
+        );
+        mintUserPoolTokens(depositId, currentPositionBalance);
+    }
+
+    function setWithdrawReceived(
         bytes32 _withdrawId,
-        uint256 _amount,
-        uint256 _totalAvailableForUser,
-        uint256 _positionValue,
-        uint256 _inputAmount
-    ) external callerSource {
+        uint256 _outputAmount
+    ) external {
+        address user = poolCalculations.setWithdrawReceived(
+            _withdrawId,
+            _outputAmount
+        );
+        bool success = IERC20(asset).transfer(user, _outputAmount);
+        require(success, "Token transfer failure");
+    }
+
+    /// @notice Updates the current position's valuation based on data received
+    /// @param _data Encoded data detailing the current position value and associated deposit ID
+    function receivePositionBalanceWithdraw(
+        bytes memory _data
+    ) external messageSource {
+        (
+            uint256 currentPositionBalance,
+            ,
+            uint256 totalAvailableForUser,
+            bytes32 withdrawId
+        ) = abi.decode(_data, (uint256, uint256, uint256, bytes32));
+
         (address depositor, uint256 poolTokensToBurn) = poolCalculations
             .fulfillWithdrawOrder(
-                _withdrawId,
-                _positionValue,
-                _totalAvailableForUser,
-                _inputAmount,
-                poolToken
+                withdrawId,
+                currentPositionBalance,
+                totalAvailableForUser
             );
 
         IPoolToken(poolToken).burn(depositor, poolTokensToBurn);
-        bool success = asset.transfer(depositor, _amount);
-        require(success, "Token transfer failure");
     }
     function setRewardDebt(uint256 _rewardDebtAmount) external {
         require(

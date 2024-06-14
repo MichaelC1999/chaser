@@ -220,16 +220,29 @@ contract ChaserMessenger is CCIPReceiver, Ownable {
             emit ExecutionMessage("AbPivotMovePosition success");
         }
 
+        if (_method == bytes4(keccak256(abi.encode("AbPivotSetPosition")))) {
+            bridgeFunctions.handleEnterPositionState(_poolAddress, _data);
+            emit ExecutionMessage("AbPivotSetPosition success");
+        }
         if (_method == bytes4(keccak256(abi.encode("AbWithdrawOrderUser")))) {
             bridgeFunctions.userWithdrawSequence(_poolAddress, _data);
             emit ExecutionMessage("AbWithdrawOrderUser success");
         }
 
         if (
-            _method == bytes4(keccak256(abi.encode("BaMessagePositionBalance")))
+            _method ==
+            bytes4(keccak256(abi.encode("BaMessagePositionBalanceDeposit")))
         ) {
-            IPoolControl(_poolAddress).receivePositionBalance(_data);
-            emit ExecutionMessage("BaMessagePositionBalance success");
+            IPoolControl(_poolAddress).receivePositionBalanceDeposit(_data);
+            emit ExecutionMessage("BaMessagePositionBalanceDeposit success");
+        }
+
+        if (
+            _method ==
+            bytes4(keccak256(abi.encode("BaMessagePositionBalanceWithdraw")))
+        ) {
+            IPoolControl(_poolAddress).receivePositionBalanceWithdraw(_data);
+            emit ExecutionMessage("BaMessagePositionBalanceWithdraw success");
         }
 
         if (_method == bytes4(keccak256(abi.encode("BaPositionInitialized")))) {

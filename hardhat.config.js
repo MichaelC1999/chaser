@@ -19,8 +19,12 @@ module.exports = {
   },
   networks: {
     hardhat: {
-      chainId: 1337,
-      allowUnlimitedContractSize: true
+      chainId: 1,
+      forking: {
+        enabled: true,
+        url: "https://mainnet.infura.io/v3/" + process.env.INFURA_API_KEY
+      },
+      accounts: { privateKey: process.env.WALLET_PK, balance: "1000000000000000000000" }
     },
     goerli: {
       url: "https://goerli.infura.io/v3/" + process.env.INFURA_API_KEY,

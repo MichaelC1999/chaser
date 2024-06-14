@@ -3,6 +3,7 @@ pragma solidity ^0.8.9;
 
 import {IBridgeLogic} from "./interfaces/IBridgeLogic.sol";
 import {IChaserMessenger} from "./interfaces/IChaserMessenger.sol";
+import {ISpokePool} from "./interfaces/ISpokePool.sol";
 import {PoolBroker} from "./PoolBroker.sol";
 
 import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.sol";
@@ -169,6 +170,51 @@ contract Registry is OwnableUpgradeable {
         addressUSDC[11155111] = address(
             0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
         );
+        addressUSDC[0] = addressUSDC[currentChainId];
+    }
+
+    function localEquivalent(
+        address managerChainAssetAddress
+    ) external view returns (address) {
+        if (
+            managerChainAssetAddress ==
+            address(0x980B62Da83eFf3D4576C647993b0c1D7faf17c73)
+        ) {
+            return
+                ISpokePool(chainIdToSpokePoolAddress[0]).wrappedNativeToken();
+        }
+        if (managerChainAssetAddress == addressUSDC[managerChainId]) {
+            return addressUSDC[0];
+        }
+        return address(0);
+    }
+
+    function getDataFeed(address asset) external view returns (address) {
+        if (currentChainId == 84532) {
+            if (asset == address(0x4200000000000000000000000000000000000006))
+                return address(0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1);
+        }
+        if (currentChainId == 1) {
+            if (asset == address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2))
+                return address(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
+        }
+        if (currentChainId == 42161) {
+            if (asset == address(0x82aF49447D8a07e3bd95BD0d56f35241523fBab1))
+                return address(0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612);
+        }
+        if (currentChainId == 421614) {
+            if (asset == address(0x980B62Da83eFf3D4576C647993b0c1D7faf17c73))
+                return address(0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165);
+        }
+        if (currentChainId == 11155420) {
+            if (asset == address(0x4200000000000000000000000000000000000006))
+                return address(0x61Ec26aA57019C486B10502285c5A3D4A4750AD7);
+        }
+        if (currentChainId == 11155111) {
+            if (asset == address(0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14))
+                return address(0x694AA1769357215DE4FAC081bf1f309aDC325306);
+        }
+        return address(0);
     }
 
     function addInvestmentStrategyContract(

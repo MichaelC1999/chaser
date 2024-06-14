@@ -22,6 +22,7 @@ interface IChaserRegistry {
     function sendMessage(uint256, bytes4, address, bytes memory) external;
 
     // External/Public State Variable Accessors
+    function localEquivalent(address) external view returns (address);
     function poolEnabled(address) external view returns (bool);
     function chainIdToBridgeReceiver(uint256) external view returns (address);
     function chainIdToMessageReceiver(uint256) external view returns (address);
@@ -31,6 +32,7 @@ interface IChaserRegistry {
     function chainIdToSelector(uint256) external view returns (uint64);
     function chainIdToUmaAddress(uint256) external view returns (address);
     function hashToProtocol(bytes32) external view returns (string memory);
+    function getDataFeed(address) external view returns (address);
     function poolCountToPool(uint256) external view returns (address);
     function poolAddressToBroker(address) external view returns (address);
     function addressUSDC(uint256) external view returns (address);

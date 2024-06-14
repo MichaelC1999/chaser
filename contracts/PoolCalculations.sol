@@ -19,6 +19,7 @@ contract PoolCalculations is OwnableUpgradeable {
 
     mapping(bytes32 => address) public withdrawIdToDepositor;
     mapping(bytes32 => uint256) public withdrawIdToAmount;
+    mapping(bytes32 => uint256) public withdrawIdToOutputAmount;
     mapping(bytes32 => uint256) public withdrawIdToUserPoolTokens;
     mapping(bytes32 => bool) public withdrawIdToTokensBurned;
     mapping(address => uint256) public poolToPendingWithdraws;
@@ -27,11 +28,6 @@ contract PoolCalculations is OwnableUpgradeable {
     mapping(address => uint256) public poolWithdrawNonce;
     mapping(address => uint256) public poolPivotNonce;
     mapping(address => bool) public poolToPivotPending;
-
-    mapping(address => mapping(address => bool))
-        public poolToUserPendingWithdraw;
-    mapping(address => mapping(address => bool))
-        public poolToUserPendingDeposit;
 
     mapping(address => bytes) public targetPositionMarketId; //Market address to be passed to BridgeLogic, Not final address that actually holds deposits
     mapping(address => uint256) public targetPositionChain;
@@ -77,14 +73,6 @@ contract PoolCalculations is OwnableUpgradeable {
                     .inAssertionBlockWindow(_openAssertion),
             "An open pivot proposal has passed position entrance window. Wait until this pivot settles."
         );
-        require(
-            !poolToUserPendingDeposit[msg.sender][_sender],
-            "User cannot have deposit pending on this pool"
-        );
-        require(
-            !poolToUserPendingWithdraw[msg.sender][_sender],
-            "User cannot have withdraw pending on this pool"
-        );
         _;
     }
 
@@ -110,8 +98,6 @@ contract PoolCalculations is OwnableUpgradeable {
         noPending(_sender, _openAssertion)
         returns (bytes memory)
     {
-        poolToUserPendingWithdraw[msg.sender][_sender] = true;
-
         bytes32 withdrawId = keccak256(
             abi.encode(msg.sender, _sender, _amount, block.timestamp)
         );
@@ -141,43 +127,46 @@ contract PoolCalculations is OwnableUpgradeable {
     /// @param _withdrawId Unique identifier of the withdrawal
     /// @param _positionValue Last recorded value of the pool's position
     /// @param _totalAvailableForUser Total funds available for the user to withdraw (denominated in asset)
-    /// @param _amount Amount fully deducted from pool, including fees (inputAmount)
-    /// @param _poolToken Address of the pool token contract
     /// @return Address of the depositor and the number of pool tokens to burn
     function fulfillWithdrawOrder(
         bytes32 _withdrawId,
         uint256 _positionValue,
-        uint256 _totalAvailableForUser,
-        uint256 _amount,
-        address _poolToken
+        uint256 _totalAvailableForUser
     ) external onlyValidPool returns (address, uint256) {
         require(
             !withdrawIdToTokensBurned[_withdrawId],
             "Tokens have already been burned for this withdraw"
         );
-        address depositor = withdrawIdToDepositor[_withdrawId];
         address poolAddress = msg.sender;
-
-        currentRecordPositionValue[poolAddress] = _positionValue;
+        address depositor = withdrawIdToDepositor[_withdrawId];
+        uint256 inputAmount = withdrawIdToAmount[_withdrawId];
+        poolToPendingWithdraws[poolAddress] -= inputAmount;
         currentPositionValueTimestamp[poolAddress] = block.timestamp;
+        currentRecordPositionValue[poolAddress] = _positionValue;
 
-        if (_totalAvailableForUser < _amount) {
-            _amount = _totalAvailableForUser;
+        if (_totalAvailableForUser < inputAmount) {
+            inputAmount = _totalAvailableForUser;
         }
         uint256 poolTokensToBurn = withdrawIdToUserPoolTokens[_withdrawId];
         if (_totalAvailableForUser > 0) {
-            uint256 ratio = (_amount * (10 ** 18)) / (_totalAvailableForUser);
+            uint256 ratio = (inputAmount * (10 ** 18)) /
+                (_totalAvailableForUser);
             poolTokensToBurn =
                 (ratio * withdrawIdToUserPoolTokens[_withdrawId]) /
                 (10 ** 18);
         }
 
-        poolToUserPendingWithdraw[poolAddress][depositor] = false;
-        poolToPendingWithdraws[poolAddress] -= withdrawIdToAmount[_withdrawId];
-        withdrawIdToAmount[_withdrawId] = _amount;
         withdrawIdToTokensBurned[_withdrawId] = true;
 
         return (depositor, poolTokensToBurn);
+    }
+
+    function setWithdrawReceived(
+        bytes32 _withdrawId,
+        uint256 _outputAmount
+    ) external onlyValidPool returns (address) {
+        withdrawIdToOutputAmount[_withdrawId] = _outputAmount;
+        return withdrawIdToDepositor[_withdrawId];
     }
 
     /// @notice Opens a new position setup for the pool, initializing state for a pivot operation
@@ -228,7 +217,6 @@ contract PoolCalculations is OwnableUpgradeable {
             keccak256(abi.encode(msg.sender, _sender, _amount, block.timestamp))
         );
 
-        poolToUserPendingDeposit[msg.sender][_sender] = true;
         depositIdToDepositor[depositId] = _sender;
         depositIdToDepositAmount[depositId] = _amount;
         depositIdToTokensMinted[depositId] = false;
@@ -263,9 +251,6 @@ contract PoolCalculations is OwnableUpgradeable {
         currentRecordPositionValue[msg.sender] = _positionAmount;
         currentPositionValueTimestamp[msg.sender] = block.timestamp;
 
-        poolToUserPendingDeposit[msg.sender][
-            depositIdToDepositor[_depositId]
-        ] = false;
         poolToPendingDeposits[msg.sender] -= depositIdToDepositAmount[
             _depositId
         ];
@@ -305,7 +290,6 @@ contract PoolCalculations is OwnableUpgradeable {
     ) external onlyValidPool returns (address) {
         emit HandleUndo("HandleUndo - Initialize");
         address originalSender = depositIdToDepositor[_depositId];
-        poolToUserPendingDeposit[msg.sender][originalSender] = false;
         targetPositionMarketId[msg.sender] = abi.encode(0);
         targetPositionChain[msg.sender] = 0;
         targetPositionProtocol[msg.sender] = "";
@@ -322,13 +306,16 @@ contract PoolCalculations is OwnableUpgradeable {
     /// @param _depositId Identifier of the deposit to be undone
     /// @return Address of the depositor
     function undoDeposit(
-        bytes32 _depositId
+        bytes32 _depositId,
+        uint256 _amount
     ) external onlyValidPool returns (address) {
         emit HandleUndo("HandleUndo - Deposit");
         address originalSender = depositIdToDepositor[_depositId];
-        poolToUserPendingDeposit[msg.sender][originalSender] = false;
-        depositIdToDepositor[_depositId] = address(0);
-        depositIdToDepositAmount[_depositId] = 0;
+        // If amount returned in bridge is at least 97% of the original deposit, unblock user's transactions
+        // This prevents malicious users front running
+
+        // depositIdToDepositor[_depositId] = address(0);
+        // depositIdToDepositAmount[_depositId] = 0;
         return originalSender;
     }
 

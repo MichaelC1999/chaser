@@ -22,13 +22,9 @@ interface IPoolControl {
     function pivotCompleted(address, uint256) external;
     function setRewardDebt(uint256) external;
     function proposalRewardUSDC() external view returns (uint256);
-    function finalizeWithdrawOrder(
-        bytes32,
-        uint256,
-        uint256,
-        uint256,
-        uint256
-    ) external;
+    function setWithdrawReceived(bytes32, uint256) external;
+    function receivePositionBalanceDeposit(bytes memory data) external;
+    function receivePositionBalanceWithdraw(bytes memory data) external;
     function readPoolCurrentPositionData()
         external
         view
