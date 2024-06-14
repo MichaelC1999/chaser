@@ -14,12 +14,15 @@ const hre = require('hardhat')
  * 			getReturnRate: (positionData) => getReturnRateOfStrategyName(positionData)
  * 		},
  * ]
+ * 
+ * Pass the contractAddresses through "deployments" field of StrategyPivotBot class
  */
 
 class StrategyPivotBot {
   #poolAddresses
   #protocolMarkets
   #strategies
+  #deployments
   #botIntervalTimeout
   #botInterval
 
@@ -27,11 +30,13 @@ class StrategyPivotBot {
     poolAddresses,
     protocolMarkets,
     strategies,
+    deployments,
     botIntervalTimeout
   }) {
     this.#poolAddresses = poolAddresses
     this.#protocolMarkets = protocolMarkets
     this.#strategies = strategies
+    this.#deployments = deployments
     this.#botIntervalTimeout = botIntervalTimeout
     this.#botInterval = null
   }
@@ -54,7 +59,7 @@ class StrategyPivotBot {
 							}`
     }
 
-    let marketData = await fetch(base + protocol + '-' + chain, {
+    const response = await fetch(base + protocol + '-' + chain, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -63,22 +68,28 @@ class StrategyPivotBot {
         query: marketDataQuery(marketId)
       })
     })
-    return await marketData.json()
+
+    if (!response.ok) {
+      throw new Error(`Error while fetching market data! status: ${response.status}`)
+    }
+
+    const marketData = await response.json()
+
+    return marketData
   }
 
-  #getStrategyByPoolAddress (poolAddress) {
-		try {
-			if (poolAddress != null) {
-				let strategyIndex = 0
-				/* 
-					Will place a logic here to get a target strategy from strategies array by the given poolAddress
-					
-					* * *
+  async #getStrategyByPoolAddress (poolAddress) {
+		if (!poolAddress) return null
+    try {
+      let strategyIndex = 0
+      /* 
+        Will place a logic here to get a target strategy from strategies array by the given poolAddress
+        
+        * * *
 
-				*/
-				return this.#strategies[strategyIndex]
-			} else
-			return null
+      */
+      return this.#strategies[strategyIndex]
+			
 		} catch (error) {
 			this.#handleError(error)			
 		}
@@ -101,76 +112,73 @@ class StrategyPivotBot {
 
   async #sepoliaMonitor () {
     try {
-      if (
-        Array.isArray(this.#poolAddresses) &&
-        this.#poolAddresses.length > 0
-      ) {
-        // Validate poolAddresses variable
-
-        this.#poolAddresses.forEach((poolAddress, poolIndex) => {
-          // Start a loop for poolAddresses
-
-          const { curMarketId } = this.#getCurrentPositionDataByPoolAddress(poolAddress) // Get current position data from a given pool address
-
-          let bestMarketId = curMarketId
-          let bestRor = 0
-
-          const strategy = this.#getStrategyByPoolAddress(poolAddress) // Get a target strategy for the given poolAddress
-
-          if (strategy !== null && curMarketId != null) {
-            // Validate the target strategy
-
-            if (
-              Array.isArray(this.#protocolMarkets) &&
-              this.#protocolMarkets.length > 0
-            ) {
-              // Validate protocolMarkets variable
-
-              this.#protocolMarkets.forEach(
-                (protocolMarket, protocolMarketIndex) => {
-                  // Start a loop for protocolMarkets
-
-                  const marketData = this.#fetchMarketData(protocolMarket)
-                  const condition = strategy.checkConditions(
-                    marketData,
-                    protocolMarket
-                  )
-                  const ror = condition
-                    ? strategy.getReturnRate(marketData)
-                    : null
-
-                  if (ror > bestRor) {
-                    // Get the best marketId and ror
-                    bestRor = ror
-                    bestMarketId = protocolMarket.marketId
-                  }
-                }
-              )
-            } else {
-              throw new Error(
-                'The protocolMarkets must be an array and not empty.'
-              )
-            }
-          } else {
-            throw new Error('Invalid variables.')
-          }
-
-          if (bestMarketId != curMarketId) {
-            this.#executePivot()
-          }
-        })
-      } else {
+      // Validate poolAddresses variable
+      if (!Array.isArray(this.#poolAddresses) || this.#poolAddresses.length <= 0)
         throw new Error('The poolAddresses must be an array and not empty.')
+      
+      // Validate protocolMarkets variable
+      if (!Array.isArray(this.#protocolMarkets) || this.#protocolMarkets.length <= 0) {
+        throw new Error('The protocolMarkets must be an array and not empty.');
+      }
+
+      // Start a loop for poolAddresses
+      for (const poolAddress of this.#poolAddresses) {
+        // Get current position data from a given pool address
+        const { curMarketId, curProtocol, curChain } = await this.#getCurrentPositionDataByPoolAddress(poolAddress)
+
+        let bestMarketId = curMarketId
+        let bestRor = 0
+        let bestProtocol = curProtocol
+        let bestChain = curChain
+        
+        // Get a target strategy for the given poolAddress
+        const strategy = await this.#getStrategyByPoolAddress(poolAddress)
+
+        // Validate the target strategy
+        if (strategy && curMarketId) {
+          // Start a loop for protocolMarkets
+          for (const protocolMarket of this.#protocolMarkets){
+            const marketData = await this.#fetchMarketData(protocolMarket)
+            const condition = await strategy.checkConditions(
+              marketData,
+              protocolMarket
+            )
+            
+            if (condition) {
+              const ror = strategy.getReturnRate(marketData)
+              if (ror > bestRor) {
+                bestRor = ror
+                bestMarketId = protocolMarket.marketId
+                bestProtocol = protocolMarket.protocol
+                bestChain = protocolMarket.chain
+              }
+            }
+          }
+        } else {
+          throw new Error('Invalid strategy or current market ID.')
+        }
+
+        console.log("Current Time => ", new Date())
+        if (bestMarketId != curMarketId) {
+          console.log("Pool Address => ", poolAddress)
+          console.log("Best MarketId => ", bestMarketId)
+          console.log("Best Protocol => ", bestProtocol)
+          console.log("Best Chain => ", bestChain)
+          console.log("Best ROR => ", bestRor)
+          await this.#executePivot({poolAddress, bestProtocol, bestChain})
+        } else {
+          console.log("Pool Address => ", poolAddress, "No pivot on this pool")
+        }
       }
     } catch (error) {
       this.#handleError(error)
     }
   }
 
-  async #executePivot () {
+  async #executePivot ({ poolAddress, bestProtocol, bestChain }) {
     /* 
 			Will place a pivot logic here
-			
+			We can access to contractAddresses from this.#deployments
 			* * *
 
 		*/
