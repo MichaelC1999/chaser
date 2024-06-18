@@ -142,7 +142,9 @@ class StrategyPivotBot {
             const marketData = await this.#fetchMarketData(protocolMarket)
             const condition = await strategy.checkConditions(
               marketData,
-              protocolMarket
+              protocolMarket.protocol,
+              protocolMarket.chain,
+              protocolMarket.marketId,
             )
             
             if (condition) {
