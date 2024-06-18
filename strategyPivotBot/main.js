@@ -3,17 +3,17 @@ const StrategyPivotBot = require('./strategyPivotBot')
 const {
   getReturnRate: getReturnRateOfLiquidationRisk,
   checkConditions: checkConditionsOfLiquidationRisk
-} = require('../strategies/liquidationRisk')
+} = require('../strategies/liquidationRisk/liquidationRisk')
 
 const {
   getReturnRate: getReturnRateOfLowVolHighYield,
   checkConditions: checkConditionsOfLowVolHighYield
-} = require('../strategies/lowVolHighYield')
+} = require('../strategies/lowVolHighYield/lowVolHighYield')
 
 const {
   getReturnRate: getReturnRateOfHighYield3Month,
   checkConditions: checkConditionsOfHighYield3Month
-} = require('../strategies/highYield3Month')
+} = require('../strategies/highYield3Month/highYield3Month')
 
 const deployments = require('../scripts/contractAddresses.json')
 
