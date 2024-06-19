@@ -78,7 +78,8 @@ class StrategyPivotBot {
     return marketData
   }
 
-  async #getStrategyByPoolAddress (poolAddress) {
+  // async #getStrategyByPoolAddress (poolAddress) {
+    async #getStrategyByPoolAddress (poolAddress, strategyId) {      // choose the strategyId for now
 		if (!poolAddress) return null
     try {
       let strategyIndex = 0
@@ -88,7 +89,7 @@ class StrategyPivotBot {
         * * *
 
       */
-      return this.#strategies[strategyIndex]
+      return this.#strategies[strategyId]
 			
 		} catch (error) {
 			this.#handleError(error)			
@@ -132,7 +133,7 @@ class StrategyPivotBot {
         let bestChain = curChain
         
         // Get a target strategy for the given poolAddress
-        const strategy = await this.#getStrategyByPoolAddress(poolAddress)
+        const strategy = await this.#getStrategyByPoolAddress(poolAddress, 0)     //0: liquidationRisk, 1: lowVolHighYield, 2: highYield3Month
 
         // Validate the target strategy
         if (strategy && curMarketId) {
@@ -141,7 +142,9 @@ class StrategyPivotBot {
             const marketData = await this.#fetchMarketData(protocolMarket)
             const condition = await strategy.checkConditions(
               marketData,
-              protocolMarket
+              protocolMarket.protocol,
+              protocolMarket.chain,
+              protocolMarket.marketId,
             )
             
             if (condition) {

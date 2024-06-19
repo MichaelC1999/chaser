@@ -1,0 +1,11 @@
+{
+  "name": "liquidationrisk",
+  "version": "1.0.0",
+  "description": "A strategy for chaser",
+  "main": "liquidationrisk.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Chaser Tech Team",
+  "license": "ISC"
+}
