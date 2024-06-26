@@ -59,6 +59,11 @@ contract Integrator is OwnableUpgradeable {
         }
 
         if (_operation == hasher("deposit")) {
+            IERC20(trueAsset).transferFrom(
+                bridgeLogicAddress,
+                address(this),
+                _amount
+            );
             IERC20(_assetAddress).approve(_marketAddress, _amount);
 
             IAavePool(_marketAddress).supply(
@@ -109,6 +114,12 @@ contract Integrator is OwnableUpgradeable {
         }
 
         if (_operation == hasher("deposit")) {
+            IERC20(trueAsset).transferFrom(
+                bridgeLogicAddress,
+                address(this),
+                _amount
+            );
+
             IERC20(_assetAddress).approve(_marketAddress, _amount);
 
             IComet(_marketAddress).supplyTo(
@@ -167,7 +178,9 @@ contract Integrator is OwnableUpgradeable {
     ) external view returns (uint256) {
         address brokerAddress = IChaserRegistry(registryAddress)
             .poolAddressToBroker(_poolAddress);
-
+        if (_protocolHash == bytes32("") || _marketAddress == address(0)) {
+            return IERC20(_assetAddress).balanceOf(brokerAddress);
+        }
         if (_protocolHash == hasher("aave-v3")) {
             // Default to the AAVE pool contract
             if (chainId == 11155111) {
@@ -204,6 +217,8 @@ contract Integrator is OwnableUpgradeable {
 
             return uint256(collateral);
         }
+
+        return 0;
     }
 
     /// @notice Generates a keccak256 hash of the provided string

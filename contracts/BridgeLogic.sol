@@ -10,11 +10,11 @@ import {IPoolControl} from "./interfaces/IPoolControl.sol";
 import {IChaserTreasury} from "./interfaces/IChaserTreasury.sol";
 import {IIntegrator} from "./interfaces/IIntegrator.sol";
 import {IPoolCalculations} from "./interfaces/IPoolCalculations.sol";
+import {IPoolBroker} from "./interfaces/IPoolBroker.sol";
 import {AggregatorV3Interface} from "./interfaces/IAggregatorV3.sol";
-
+import {IAToken} from "./interfaces/IAToken.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IAToken} from "./interfaces/IAToken.sol";
 
 /// @title Logic for Managing Positional State and processing interactions
 /// @notice This contract manages handling deposits, withdrawals, and pivots for Chaser pools on the positional side
@@ -119,8 +119,8 @@ contract BridgeLogic is OwnableUpgradeable {
 
         userDepositNonce[userPoolHash] += 1;
         userCumulativeDeposits[userPoolHash] += _amount;
-        setNonceCumulative(_poolAddress, _amount, true);
-        receiveDepositFromPool(_amount, _poolAddress);
+        setNonceCumulative(_poolAddress, _amount, 1, true);
+        receiveDepositFromPool(_amount, _poolAddress, true);
         sendPositionInitialized(_poolAddress, _depositId, _amount);
     }
 
@@ -134,27 +134,20 @@ contract BridgeLogic is OwnableUpgradeable {
             "Only callable by the BridgeReceiver"
         );
 
+        IERC20(_tokenSent).transferFrom(
+            bridgeReceiverAddress,
+            address(this),
+            _amount
+        );
+
+        if (poolToAsset[_poolAddress] == address(0)) {
+            poolToAsset[_poolAddress] = _tokenSent;
+        }
+
         poolToEscrowAmount[_tokenSent][_poolAddress] += _amount;
 
         if (currentChainId == managerChainId) {
-            IPoolControl pool = IPoolControl(_poolAddress);
-            poolToAsset[_poolAddress] = pool.asset();
-
-            IPoolCalculations poolCalc = IPoolCalculations(
-                pool.poolCalculations()
-            );
-            //PIVOT CASE 2, if position to enter is on same chain as manager, get the target position from poolCalc and set position here, then enter
-            bytes32 protocolHash = poolCalc.targetPositionProtocolHash(
-                _poolAddress
-            );
-            bytes memory marketId = poolCalc.targetPositionMarketId(
-                _poolAddress
-            );
-            address marketAddress = poolCalc.getMarketAddressFromId(
-                marketId,
-                protocolHash
-            );
-            updatePositionState(_poolAddress, protocolHash, marketAddress);
+            localPositionSetting(_poolAddress);
         }
 
         uint256 usableEscrowAmount = poolToEscrowAmount[
@@ -166,24 +159,9 @@ contract BridgeLogic is OwnableUpgradeable {
             usableEscrowAmount > 0
         ) {
             setPivotEntranceFundsToPosition(_poolAddress);
-        }
-    }
-
-    function setPivotEntranceFundsToPosition(address _poolAddress) internal {
-        uint256 escrowAmount = poolToEscrowAmount[poolToAsset[_poolAddress]][
-            _poolAddress
-        ];
-        poolToEscrowAmount[poolToAsset[_poolAddress]][_poolAddress] = 0;
-        setEntranceState(escrowAmount, _poolAddress);
-        receiveDepositFromPool(escrowAmount, _poolAddress);
-
-        if (managerChainId == currentChainId) {
-            IPoolControl(_poolAddress).pivotCompleted(
-                poolToCurrentPositionMarket[_poolAddress],
-                escrowAmount
-            ); // If the Pool is on this same chain, directly call the proper functions on this chain no CCIP
         } else {
-            sendPivotCompleted(_poolAddress, escrowAmount); // If the Pool is on a different chain, use CCIP to notify the pool
+            address poolBroker = registry.poolAddressToBroker(_poolAddress);
+            IERC20(_tokenSent).transfer(poolBroker, _amount);
         }
     }
 
@@ -201,8 +179,15 @@ contract BridgeLogic is OwnableUpgradeable {
             "Only callable by the Messenger"
         );
 
-        (address asset, bytes32 protocolHash, address marketAddress) = abi
-            .decode(_data, (address, bytes32, address));
+        (
+            address asset,
+            bytes32 protocolHash,
+            address marketAddress,
+            uint256 depositNonce,
+            uint256 withdrawNonce
+        ) = abi.decode(_data, (address, bytes32, address, uint256, uint256));
+        poolAddressToDepositNonce[_poolAddress] = depositNonce;
+        poolAddressToWithdrawNonce[_poolAddress] = withdrawNonce;
         //ccip message from pool sends the asset address
         //Registry convert this address to the local equivalent
         if (poolToAsset[_poolAddress] == address(0)) {
@@ -226,6 +211,7 @@ contract BridgeLogic is OwnableUpgradeable {
         address _poolAddress,
         bytes32 _depositId,
         uint256 _withdrawNonce,
+        uint256 _depositNonce,
         uint256 _amount
     ) external {
         //IMPORTANT - simply going off of the withdraw nonce passed in the bridge is vulnerable to user manipulation
@@ -237,8 +223,14 @@ contract BridgeLogic is OwnableUpgradeable {
         //IF THEY PUT A HIGHER NONCE, THERE IS NO PENDING BALANCE. THIS WOULD MAKE THE CURRENT BALANCE HIGHER, MINTING LESS POOL TOKENS THEN DESERVED
         //THIS MEANS NOT VULNERABLE TO MANIPULATION, WOULD ONLY BE A NEGATIVE FOR THE MALICIOUS USER
         require(
-            _withdrawNonce >= poolAddressToWithdrawNonce[_poolAddress],
+            _withdrawNonce >= poolAddressToWithdrawNonce[_poolAddress] ||
+                _withdrawNonce == 0,
             "PoolControl and BridgeLogic withdraw nonce mismatch. The bridge transaction timed out."
+        );
+
+        require(
+            _depositNonce > poolAddressToDepositNonce[_poolAddress],
+            "PoolControl and BridgeLogic deposit nonce mismatch. The deposit nonce must be higher than previous"
         );
 
         require(
@@ -247,8 +239,8 @@ contract BridgeLogic is OwnableUpgradeable {
             "Only callable by the BridgeReceiver"
         );
 
-        setNonceCumulative(_poolAddress, _amount, true);
-        receiveDepositFromPool(_amount, _poolAddress);
+        setNonceCumulative(_poolAddress, _amount, _depositNonce, true);
+        receiveDepositFromPool(_amount, _poolAddress, false);
         uint256 currentPositionBalance = getNonPendingPositionBalance(
             _poolAddress,
             poolAddressToDepositNonce[_poolAddress],
@@ -319,6 +311,53 @@ contract BridgeLogic is OwnableUpgradeable {
         registry.sendMessage(managerChainId, method, _poolAddress, data);
     }
 
+    function localPositionSetting(address _poolAddress) internal {
+        IPoolControl pool = IPoolControl(_poolAddress);
+        poolToAsset[_poolAddress] = pool.asset();
+
+        IPoolCalculations poolCalc = IPoolCalculations(pool.poolCalculations());
+        //PIVOT CASE 2, if position to enter is on same chain as manager, get the target position from poolCalc and set position here, then enter
+        bytes32 protocolHash = poolCalc.targetPositionProtocolHash(
+            _poolAddress
+        );
+        bytes memory marketId = poolCalc.targetPositionMarketId(_poolAddress);
+        address marketAddress = poolCalc.getMarketAddressFromId(
+            marketId,
+            protocolHash
+        );
+        poolAddressToDepositNonce[_poolAddress] = poolCalc
+            .poolDepositFinishedNonce(_poolAddress);
+        poolAddressToWithdrawNonce[_poolAddress] = poolCalc.poolWithdrawNonce(
+            _poolAddress
+        );
+
+        updatePositionState(_poolAddress, protocolHash, marketAddress);
+    }
+
+    function setPivotEntranceFundsToPosition(address _poolAddress) internal {
+        uint256 escrowAmount = poolToEscrowAmount[poolToAsset[_poolAddress]][
+            _poolAddress
+        ];
+        poolToEscrowAmount[poolToAsset[_poolAddress]][_poolAddress] = 0;
+        setEntranceState(escrowAmount, _poolAddress);
+        address poolBroker = registry.poolAddressToBroker(_poolAddress);
+        uint256 poolBrokerBalance = IERC20(poolToAsset[_poolAddress]).balanceOf(
+            poolBroker
+        );
+
+        IPoolBroker(poolBroker).forwardHeldFunds(poolBrokerBalance);
+        receiveDepositFromPool(escrowAmount, _poolAddress, true);
+
+        if (managerChainId == currentChainId) {
+            IPoolControl(_poolAddress).pivotCompleted(
+                poolToCurrentPositionMarket[_poolAddress],
+                escrowAmount
+            );
+        } else {
+            sendPivotCompleted(_poolAddress, escrowAmount);
+        }
+    }
+
     /// @notice Updates the internal state related to a pool's current position
     /// @dev Adjusts records of a pool's current market and protocol based on new data
     /// @param _poolAddress Address of the pool
@@ -330,7 +369,12 @@ contract BridgeLogic is OwnableUpgradeable {
         address _marketAddress
     ) internal {
         if (_protocolHash == keccak256(abi.encode("aave-v3"))) {
-            _marketAddress = IAToken(_marketAddress).POOL();
+            try IAToken(_marketAddress).POOL() returns (address aavePool) {
+                _marketAddress = aavePool;
+            } catch {
+                _marketAddress = address(0);
+                _protocolHash = bytes32("");
+            }
         }
         poolToCurrentPositionMarket[_poolAddress] = _marketAddress;
         poolToCurrentProtocolHash[_poolAddress] = _protocolHash;
@@ -359,6 +403,7 @@ contract BridgeLogic is OwnableUpgradeable {
         crossChainBridge(
             _amount,
             poolToAsset[_poolAddress],
+            _poolAddress,
             _destinationBridgeReceiver,
             _destinationChainId,
             message
@@ -384,11 +429,14 @@ contract BridgeLogic is OwnableUpgradeable {
             uint256 destinationChainId,
             address destinationBridgeReceiver,
             uint256 protocolFeePct,
-            uint256 proposerRewardUSDC
+            uint256 proposerRewardUSDC,
+            address asset
         ) = abi.decode(
                 _data,
-                (bytes32, address, uint256, address, uint256, uint256)
+                (bytes32, address, uint256, address, uint256, uint256, address)
             );
+
+        poolToAsset[_poolAddress] = registry.localEquivalent(asset);
 
         uint256 amount = getPositionBalance(_poolAddress);
         integratorWithdraw(_poolAddress, amount);
@@ -491,6 +539,7 @@ contract BridgeLogic is OwnableUpgradeable {
             crossChainBridge(
                 amount,
                 poolToAsset[_poolAddress],
+                _poolAddress,
                 destinationBridgeReceiver,
                 managerChainId,
                 message
@@ -504,7 +553,7 @@ contract BridgeLogic is OwnableUpgradeable {
     /// @param _poolAddress Address of the pool
     /// @param _amount Amount of assets involved in the pivot
     function localPivot(address _poolAddress, uint256 _amount) internal {
-        receiveDepositFromPool(_amount, _poolAddress);
+        receiveDepositFromPool(_amount, _poolAddress, true);
         if (managerChainId == currentChainId) {
             address marketAddress = poolToCurrentPositionMarket[_poolAddress];
             IPoolControl(_poolAddress).pivotCompleted(marketAddress, _amount);
@@ -523,13 +572,14 @@ contract BridgeLogic is OwnableUpgradeable {
     function crossChainBridge(
         uint256 _amount,
         address _asset,
+        address _poolAddress,
         address _destinationBridgeReceiver,
         uint256 _destinationChainId,
         bytes memory _message
     ) internal {
         address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
         IERC20(_asset).approve(acrossSpokePool, _amount);
-        address poolBroker = address(this); //IMPORTANT
+        address poolBroker = registry.poolAddressToBroker(_poolAddress);
         ISpokePool(acrossSpokePool).depositV3(
             poolBroker,
             _destinationBridgeReceiver,
@@ -586,8 +636,8 @@ contract BridgeLogic is OwnableUpgradeable {
 
         userWithdraw(
             amountToWithdraw,
-            currentPositionValue,
             userMaxWithdraw,
+            poolWithdrawNonce,
             _poolAddress,
             withdrawId
         );
@@ -596,14 +646,13 @@ contract BridgeLogic is OwnableUpgradeable {
     /// @notice Executes the withdrawal of funds for a user, handling asset transfers and notifications
     /// @dev Internal function that calls integrator to send back position funds, updates states, and puts into motion the deposit callback
     /// @param _amount Amount to be withdrawn
-    /// @param _currentPositionValue Current total value of the pool's position
     /// @param _userMaxWithdraw Maximum amount the user can withdraw based on their pool token ratio
     /// @param _poolAddress Address of the pool
     /// @param _withdrawId Withdrawal identifier
     function userWithdraw(
         uint256 _amount,
-        uint256 _currentPositionValue,
         uint256 _userMaxWithdraw,
+        uint256 _poolWithdrawNonce,
         address _poolAddress,
         bytes32 _withdrawId
     ) internal {
@@ -614,9 +663,9 @@ contract BridgeLogic is OwnableUpgradeable {
         bytes4 method = bytes4(keccak256(abi.encode("BaBridgeWithdrawFunds")));
 
         integratorWithdraw(_poolAddress, _amount);
-        setNonceCumulative(_poolAddress, _amount, false);
+        setNonceCumulative(_poolAddress, _amount, _poolWithdrawNonce, false);
 
-        uint256 positionBalance = _currentPositionValue - _amount;
+        uint256 positionBalance = getPositionBalance(_poolAddress);
 
         bytes memory message = abi.encode(
             method,
@@ -646,6 +695,7 @@ contract BridgeLogic is OwnableUpgradeable {
             crossChainBridge(
                 _amount,
                 poolToAsset[_poolAddress],
+                _poolAddress,
                 destinationBridgeReceiver,
                 managerChainId,
                 message
@@ -667,27 +717,59 @@ contract BridgeLogic is OwnableUpgradeable {
     /// @param _poolAddress Address of the pool making the deposit
     function receiveDepositFromPool(
         uint256 _amount,
-        address _poolAddress
-    ) internal {
+        address _poolAddress,
+        bool _positionEntrance
+    ) internal returns (bool) {
         bytes32 operation = keccak256(abi.encode("deposit"));
 
         address marketAddress = poolToCurrentPositionMarket[_poolAddress];
         bytes32 protocolHash = poolToCurrentProtocolHash[_poolAddress];
+        address poolBroker = registry.poolAddressToBroker(_poolAddress);
+        if (poolBroker == address(0)) {
+            poolBroker = registry.deployPoolBroker(
+                _poolAddress,
+                poolToAsset[_poolAddress]
+            );
+        }
 
-        bool success = IERC20(poolToAsset[_poolAddress]).transfer(
-            integratorAddress,
-            _amount
-        );
-        require(success, "Token transfer failure");
+        if (marketAddress != address(0)) {
+            IERC20(poolToAsset[_poolAddress]).approve(
+                integratorAddress,
+                _amount
+            );
 
-        IIntegrator(integratorAddress).routeExternalProtocolInteraction(
-            protocolHash,
-            operation,
+            try
+                IIntegrator(integratorAddress).routeExternalProtocolInteraction(
+                    protocolHash,
+                    operation,
+                    _amount,
+                    _poolAddress,
+                    poolToAsset[_poolAddress],
+                    marketAddress
+                )
+            {
+                return true;
+            } catch {}
+        }
+        handleInvalidMarketDeposit(
             _amount,
             _poolAddress,
-            poolToAsset[_poolAddress],
-            marketAddress
+            poolBroker,
+            _positionEntrance
         );
+        return false;
+    }
+
+    function handleInvalidMarketDeposit(
+        uint256 _amount,
+        address _poolAddress,
+        address _poolBroker,
+        bool _positionEntrance
+    ) internal {
+        IERC20(poolToAsset[_poolAddress]).transfer(_poolBroker, _amount);
+        if (_positionEntrance == true) {
+            updatePositionState(_poolAddress, bytes32(""), address(0));
+        }
     }
 
     /// @notice Manages the withdrawal of funds from external protocols
@@ -708,6 +790,13 @@ contract BridgeLogic is OwnableUpgradeable {
                 poolToCurrentPositionMarket[_poolAddress]
             );
         }
+        address poolBroker = registry.poolAddressToBroker(_poolAddress);
+        uint256 poolBrokerBalance = IERC20(poolToAsset[_poolAddress]).balanceOf(
+            poolBroker
+        );
+        if (poolBrokerBalance > 0) {
+            IPoolBroker(poolBroker).forwardHeldFunds(_amount);
+        }
     }
 
     /// @notice Updates cumulative deposit or withdrawal totals for a pool based on transaction nonces
@@ -718,19 +807,19 @@ contract BridgeLogic is OwnableUpgradeable {
     function setNonceCumulative(
         address _poolAddress,
         uint256 _txAmount,
+        uint256 _newNonce,
         bool _isDepo
     ) internal {
-        //CAN MAKE ASSUMPTION THAT IF SETTING A USER DEPOSIT AND THE POOL NONCE IS MORE THAN
         if (_isDepo) {
             uint256 oldNonce = poolAddressToDepositNonce[_poolAddress];
-            poolAddressToDepositNonce[_poolAddress] += 1;
-            poolToNonceToCumulativeDeposits[_poolAddress][oldNonce + 1] =
+            poolAddressToDepositNonce[_poolAddress] = _newNonce;
+            poolToNonceToCumulativeDeposits[_poolAddress][_newNonce] =
                 poolToNonceToCumulativeDeposits[_poolAddress][oldNonce] +
                 _txAmount;
         } else {
             uint256 oldNonce = poolAddressToWithdrawNonce[_poolAddress];
-            poolAddressToWithdrawNonce[_poolAddress] += 1;
-            poolToNonceToCumulativeWithdraw[_poolAddress][oldNonce + 1] =
+            poolAddressToWithdrawNonce[_poolAddress] = _newNonce;
+            poolToNonceToCumulativeWithdraw[_poolAddress][_newNonce] =
                 poolToNonceToCumulativeWithdraw[_poolAddress][oldNonce] +
                 _txAmount;
         }
@@ -747,9 +836,6 @@ contract BridgeLogic is OwnableUpgradeable {
     ) public view returns (uint256) {
         if (poolToAsset[_poolAddress] == address(0)) {
             return 0;
-        }
-        if (poolToCurrentProtocolHash[_poolAddress] == bytes32("")) {
-            return IERC20(poolToAsset[_poolAddress]).balanceOf(address(this));
         }
         return
             IIntegrator(integratorAddress).getCurrentPosition(

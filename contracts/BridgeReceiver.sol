@@ -57,10 +57,15 @@ contract BridgeReceiver is OwnableUpgradeable {
             poolToAsset[poolAddress] = tokenSent;
         }
 
+        address poolBroker = registry.poolAddressToBroker(poolAddress);
+        if (poolBroker == address(0)) {
+            poolBroker = registry.deployPoolBroker(poolAddress, tokenSent);
+        }
+
         if (
             method == bytes4(keccak256(abi.encode("BbPivotBridgeMovePosition")))
         ) {
-            receivePivotFunds(method, tokenSent, amount, poolAddress, data);
+            receivePivotFunds(poolBroker, tokenSent, amount, poolAddress, data);
         }
         if (method == bytes4(keccak256(abi.encode("AbBridgeDepositUser")))) {
             userDeposit(method, tokenSent, amount, poolAddress, data);
@@ -154,10 +159,8 @@ contract BridgeReceiver is OwnableUpgradeable {
         address _poolAddress,
         bytes memory _data
     ) internal {
-        (bytes32 depositId, uint256 withdrawNonce) = abi.decode(
-            _data,
-            (bytes32, uint256)
-        );
+        (bytes32 depositId, uint256 withdrawNonce, uint256 depositNonce) = abi
+            .decode(_data, (bytes32, uint256, uint256));
 
         bool success = IERC20(_tokenSent).transfer(
             address(bridgeLogic),
@@ -169,27 +172,32 @@ contract BridgeReceiver is OwnableUpgradeable {
             _poolAddress,
             depositId,
             withdrawNonce,
+            depositNonce,
             _amount
         );
     }
 
     function receivePivotFunds(
-        bytes4 _method,
+        address _poolBroker,
         address _tokenSent,
         uint256 _amount,
         address _poolAddress,
         bytes memory _data
     ) internal {
-        bool success = IERC20(_tokenSent).transfer(
+        bool success = IERC20(_tokenSent).approve(
             address(bridgeLogic),
             _amount
         );
         require(success, "Token transfer failure");
 
-        bridgeLogic.receivePivotEntranceFunds(
-            _amount,
-            _poolAddress,
-            _tokenSent
-        );
+        try
+            bridgeLogic.receivePivotEntranceFunds(
+                _amount,
+                _poolAddress,
+                _tokenSent
+            )
+        {} catch {
+            IERC20(_tokenSent).transfer(_poolBroker, _amount);
+        }
     }
 }

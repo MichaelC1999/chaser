@@ -3,11 +3,12 @@ pragma solidity ^0.8.9;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IOptimisticOracleV3} from "./interfaces/IOptimisticOracleV3.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
-
+import {IChaserTreasury} from "./interfaces/IChaserTreasury.sol";
 import {IPoolControl} from "./interfaces/IPoolControl.sol";
 import {ISpokePool} from "./interfaces/ISpokePool.sol";
 import {AncillaryData} from "./libraries/AncillaryData.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {IPoolCalculations} from "./interfaces/IPoolCalculations.sol";
 
 /// @title ArbitrationContract
 /// @dev This contract integrates with UMA Optimistic Oracle and handles assertion behaviors
@@ -97,6 +98,14 @@ contract ArbitrationContract is OwnableUpgradeable {
         uint256 _requestChainId,
         uint256 _proposalRewardUSDC
     ) external returns (bytes32) {
+        uint256 poolDepoNonce = IPoolCalculations(
+            registry.poolCalculationsAddress()
+        ).poolDepositFinishedNonce(msg.sender);
+        require(
+            poolDepoNonce > 0,
+            "The initial deposit and position set must be the first position interaction on a pool"
+        );
+
         require(
             registry.poolEnabled(msg.sender),
             "queryMovePosition() may only be called by a valid pool."
@@ -119,6 +128,9 @@ contract ArbitrationContract is OwnableUpgradeable {
             block.timestamp - 10800 >= poolPivotedTimestamp[msg.sender],
             "A new pivot may only be proposed 3 hours after resolving the previous pivot"
         );
+
+        uint256 rewardDebt = IChaserTreasury(registry.treasuryAddress())
+            .poolToRewardDebt(msg.sender);
 
         uint64 liveness = 360; //IMPORTANT - PRODUCTION 7200
         if (poolLiveness[msg.sender] > 0) {
@@ -149,7 +161,7 @@ contract ArbitrationContract is OwnableUpgradeable {
             ((liveness * 3) / 5);
         assertionToSettleTime[assertionId] = block.timestamp + liveness;
         assertionToOpeningTime[assertionId] = block.timestamp;
-        assertionToReward[assertionId] = _proposalRewardUSDC;
+        assertionToReward[assertionId] = _proposalRewardUSDC + rewardDebt;
         poolHasAssertionOpen[msg.sender] = true;
         return assertionId;
     }
@@ -402,6 +414,9 @@ contract ArbitrationContract is OwnableUpgradeable {
     function inAssertionBlockWindow(
         bytes32 assertionId
     ) external view returns (bool) {
-        return (assertionToBlockTime[assertionId] < block.timestamp);
+        bool assertionTimedOut = (assertionToBlockTime[assertionId] + 360000) <
+            block.timestamp;
+        return (assertionToBlockTime[assertionId] < block.timestamp &&
+            !assertionTimedOut);
     }
 }

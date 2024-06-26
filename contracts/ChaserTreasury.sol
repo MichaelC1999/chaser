@@ -12,6 +12,7 @@ contract ChaserTreasury is OwnableUpgradeable {
     IChaserRegistry public registry;
 
     mapping(address => uint256) public poolAddressToCumulativeProtocolFees;
+    mapping(address => uint256) public poolToRewardDebt;
     address managerAddress;
     uint256 currentChainId;
 
@@ -48,7 +49,7 @@ contract ChaserTreasury is OwnableUpgradeable {
         if (rewardUSDC > usdcReceived) {
             debt = rewardUSDC - usdcReceived;
         }
-        IPoolControl(_poolAddress).setRewardDebt(debt);
+        poolToRewardDebt[_poolAddress] = (debt);
     }
 
     function _swapTreasuryAsset(

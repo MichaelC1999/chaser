@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
+import {IPoolControl} from "./interfaces/IPoolControl.sol";
 import {IArbitrationContract} from "./interfaces/IArbitrationContract.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
@@ -13,18 +14,21 @@ contract PoolCalculations is OwnableUpgradeable {
 
     mapping(bytes32 => address) public depositIdToDepositor;
     mapping(bytes32 => uint256) public depositIdToDepositAmount;
+    mapping(bytes32 => uint256) public depositIdToDepoNonce;
     mapping(bytes32 => bool) public depositIdToTokensMinted;
-    mapping(bytes32 => uint256) public depositIdToPoolTokenSupply;
-    mapping(address => uint256) public poolToPendingDeposits;
 
     mapping(bytes32 => address) public withdrawIdToDepositor;
     mapping(bytes32 => uint256) public withdrawIdToAmount;
     mapping(bytes32 => uint256) public withdrawIdToOutputAmount;
     mapping(bytes32 => uint256) public withdrawIdToUserPoolTokens;
+    mapping(bytes32 => uint256) public withdrawIdToWithNonce;
     mapping(bytes32 => bool) public withdrawIdToTokensBurned;
-    mapping(address => uint256) public poolToPendingWithdraws;
 
-    mapping(address => uint256) public poolDepositNonce;
+    mapping(address => uint256) public poolToPendingDeposits;
+    mapping(address => uint256) public poolToPendingWithdraws;
+    mapping(address => uint256) public poolToTimeout;
+    mapping(address => uint256) public poolDepositOpenedNonce;
+    mapping(address => uint256) public poolDepositFinishedNonce;
     mapping(address => uint256) public poolWithdrawNonce;
     mapping(address => uint256) public poolPivotNonce;
     mapping(address => bool) public poolToPivotPending;
@@ -40,6 +44,9 @@ contract PoolCalculations is OwnableUpgradeable {
     mapping(address => string) public currentPositionProtocol;
     mapping(address => uint256) public currentRecordPositionValue; //This holds the most recently position value as of the last finalized transaction, not real-time.
     mapping(address => uint256) public currentPositionValueTimestamp;
+
+    mapping(address => mapping(address => uint256))
+        public poolToUserWithdrawTimeout;
 
     event DepositRecorded(bytes32, uint256);
     event WithdrawRecorded(bytes32, uint256);
@@ -98,6 +105,11 @@ contract PoolCalculations is OwnableUpgradeable {
         noPending(_sender, _openAssertion)
         returns (bytes memory)
     {
+        require(
+            poolToUserWithdrawTimeout[msg.sender][_sender] < block.timestamp,
+            "Cannot open withdraw when user already has a valid withdraw open."
+        );
+
         bytes32 withdrawId = keccak256(
             abi.encode(msg.sender, _sender, _amount, block.timestamp)
         );
@@ -107,8 +119,11 @@ contract PoolCalculations is OwnableUpgradeable {
         withdrawIdToUserPoolTokens[withdrawId] = IERC20(_poolToken).balanceOf(
             _sender
         );
-        poolToPendingWithdraws[msg.sender] += _amount;
+        poolToTimeout[msg.sender] = block.timestamp + 4200;
+        poolToUserWithdrawTimeout[msg.sender][_sender] = block.timestamp + 4200;
+        poolToPendingWithdraws[msg.sender] += 1;
         poolWithdrawNonce[msg.sender] += 1;
+        withdrawIdToWithNonce[withdrawId] = poolWithdrawNonce[msg.sender];
         emit WithdrawRecorded(withdrawId, _amount);
 
         uint256 scaledRatio = getScaledRatio(_poolToken, _sender);
@@ -116,7 +131,7 @@ contract PoolCalculations is OwnableUpgradeable {
         bytes memory data = abi.encode(
             withdrawId,
             _amount,
-            poolDepositNonce[msg.sender],
+            poolDepositFinishedNonce[msg.sender],
             poolWithdrawNonce[msg.sender],
             scaledRatio
         );
@@ -140,8 +155,9 @@ contract PoolCalculations is OwnableUpgradeable {
         address poolAddress = msg.sender;
         address depositor = withdrawIdToDepositor[_withdrawId];
         uint256 inputAmount = withdrawIdToAmount[_withdrawId];
-        poolToPendingWithdraws[poolAddress] -= inputAmount;
+        poolToPendingWithdraws[poolAddress] -= 1;
         currentPositionValueTimestamp[poolAddress] = block.timestamp;
+        poolToUserWithdrawTimeout[msg.sender][depositor] = 0;
         currentRecordPositionValue[poolAddress] = _positionValue;
 
         if (_totalAvailableForUser < inputAmount) {
@@ -179,7 +195,15 @@ contract PoolCalculations is OwnableUpgradeable {
         string memory _targetProtocol,
         uint256 _targetChainId
     ) external onlyValidPool returns (address) {
+        if (poolToPivotPending[msg.sender] == true) {
+            currentPositionAddress[msg.sender] = address(0);
+            currentPositionMarketId[msg.sender] = abi.encode(0);
+            currentPositionProtocolHash[msg.sender] = bytes32("");
+            currentPositionProtocol[msg.sender] = "";
+        }
+        poolTimeout();
         poolToPivotPending[msg.sender] = true;
+        poolToTimeout[msg.sender] = block.timestamp + 7200;
         poolPivotNonce[msg.sender] += 1;
         targetPositionMarketId[msg.sender] = _targetPositionMarketId;
         targetPositionProtocolHash[msg.sender] = keccak256(
@@ -210,9 +234,8 @@ contract PoolCalculations is OwnableUpgradeable {
         external
         onlyValidPool
         noPending(_sender, _openAssertion)
-        returns (bytes32, uint256)
+        returns (bytes32, uint256, uint256)
     {
-        IERC20 poolToken = IERC20(_poolToken);
         bytes32 depositId = bytes32(
             keccak256(abi.encode(msg.sender, _sender, _amount, block.timestamp))
         );
@@ -220,15 +243,17 @@ contract PoolCalculations is OwnableUpgradeable {
         depositIdToDepositor[depositId] = _sender;
         depositIdToDepositAmount[depositId] = _amount;
         depositIdToTokensMinted[depositId] = false;
-        poolToPendingDeposits[msg.sender] += _amount;
-        poolDepositNonce[msg.sender] += 1;
-
-        if (_poolToken != address(0)) {
-            depositIdToPoolTokenSupply[depositId] = poolToken.totalSupply();
-        }
+        poolToTimeout[msg.sender] = block.timestamp + 4200;
+        poolToPendingDeposits[msg.sender] += 1;
+        poolDepositOpenedNonce[msg.sender] += 1;
+        depositIdToDepoNonce[depositId] = poolDepositOpenedNonce[msg.sender];
 
         emit DepositRecorded(depositId, _amount);
-        return (depositId, poolWithdrawNonce[msg.sender]);
+        return (
+            depositId,
+            poolWithdrawNonce[msg.sender],
+            poolDepositOpenedNonce[msg.sender]
+        );
     }
 
     /// @notice Callback for deposit processing. Updates pool state
@@ -250,10 +275,10 @@ contract PoolCalculations is OwnableUpgradeable {
         );
         currentRecordPositionValue[msg.sender] = _positionAmount;
         currentPositionValueTimestamp[msg.sender] = block.timestamp;
-
-        poolToPendingDeposits[msg.sender] -= depositIdToDepositAmount[
-            _depositId
-        ];
+        poolDepositFinishedNonce[msg.sender] = depositIdToDepoNonce[_depositId];
+        if (poolToPendingDeposits[msg.sender] > 0) {
+            poolToPendingDeposits[msg.sender] -= 1;
+        }
         depositIdToDepositAmount[_depositId] = _depositAmountReceived;
         depositIdToTokensMinted[_depositId] = true;
     }
@@ -275,70 +300,38 @@ contract PoolCalculations is OwnableUpgradeable {
             msg.sender
         ];
 
-        clearPivotTarget();
-
+        targetPositionMarketId[msg.sender] = abi.encode(0);
+        targetPositionChain[msg.sender] = 0;
+        targetPositionProtocol[msg.sender] = "";
+        targetPositionProtocolHash[msg.sender] = bytes32("");
+        poolToPivotPending[msg.sender] = false;
+        poolToTimeout[msg.sender] = 0;
         currentPositionAddress[msg.sender] = marketAddress;
         currentRecordPositionValue[msg.sender] = positionAmount;
         currentPositionValueTimestamp[msg.sender] = block.timestamp;
     }
 
-    /// @notice Reverts an initial position setup in case of an error
-    /// @param _depositId Identifier for the deposit linked to the position setup
-    /// @return Address of the original depositor
-    function undoPositionInitializer(
-        bytes32 _depositId
-    ) external onlyValidPool returns (address) {
-        emit HandleUndo("HandleUndo - Initialize");
-        address originalSender = depositIdToDepositor[_depositId];
-        targetPositionMarketId[msg.sender] = abi.encode(0);
-        targetPositionChain[msg.sender] = 0;
-        targetPositionProtocol[msg.sender] = "";
-        targetPositionProtocolHash[msg.sender] = bytes32("");
-
-        poolToPivotPending[msg.sender] = false;
-        depositIdToDepositor[_depositId] = address(0);
-        depositIdToDepositAmount[_depositId] = 0;
-        poolDepositNonce[msg.sender] = 0;
-        return originalSender;
+    function poolTimeout() internal {
+        uint256 pendCount = 0;
+        pendCount += poolToPendingDeposits[msg.sender];
+        pendCount += poolToPendingWithdraws[msg.sender];
+        if (pendCount > 0 || poolToPivotPending[msg.sender] == true) {
+            bool blocked = checkPivotBlock(msg.sender);
+            require(blocked == false, "Still Awaiting Pending transactions.");
+        }
+        poolToPendingDeposits[msg.sender] = 0;
+        poolToPendingWithdraws[msg.sender] = 0;
     }
 
-    /// @notice Cancels a deposit order, clearing any associated pending states
-    /// @param _depositId Identifier of the deposit to be undone
-    /// @return Address of the depositor
-    function undoDeposit(
-        bytes32 _depositId,
-        uint256 _amount
-    ) external onlyValidPool returns (address) {
-        emit HandleUndo("HandleUndo - Deposit");
-        address originalSender = depositIdToDepositor[_depositId];
-        // If amount returned in bridge is at least 97% of the original deposit, unblock user's transactions
-        // This prevents malicious users front running
-
-        // depositIdToDepositor[_depositId] = address(0);
-        // depositIdToDepositAmount[_depositId] = 0;
-        return originalSender;
-    }
-
-    /// @notice Reverts a pivot operation, resetting related state
-    /// @param _positionAmount Amount of the position before the pivot was attempted
-    function undoPivot(uint256 _positionAmount) external onlyValidPool {
-        emit HandleUndo("HandleUndo - Pivot");
-        currentPositionAddress[msg.sender] = msg.sender;
-        currentPositionMarketId[msg.sender] = abi.encode(0);
-        currentPositionProtocol[msg.sender] = "";
-        currentPositionProtocolHash[msg.sender] = bytes32("");
-        currentRecordPositionValue[msg.sender] = _positionAmount;
-        currentPositionValueTimestamp[msg.sender] = block.timestamp;
-        clearPivotTarget();
-    }
-
-    /// @dev Clears the target position data after a pivot operation or failure
-    function clearPivotTarget() internal {
-        targetPositionMarketId[msg.sender] = abi.encode(0);
-        targetPositionChain[msg.sender] = 0;
-        targetPositionProtocol[msg.sender] = "";
-        targetPositionProtocolHash[msg.sender] = bytes32("");
-        poolToPivotPending[msg.sender] = false;
+    function checkPivotBlock(address _poolAddress) public view returns (bool) {
+        bool pivotBlocked = false;
+        // if ( // IMPORTANT - UNCOMMENT AFTER TESTING
+        //     poolToPivotPending[_poolAddress] == true &&
+        //     poolToTimeout[msg.sender] > block.timestamp
+        // ) {
+        //     pivotBlocked = true;
+        // }
+        return pivotBlocked;
     }
 
     /// @notice Provides the current position data of a pool
@@ -346,11 +339,18 @@ contract PoolCalculations is OwnableUpgradeable {
     /// @return Current position details including protocol, market ID, and pivot pending status
     function getCurrentPositionData(
         address _poolAddress
-    ) external view onlyValidPool returns (string memory, bytes memory, bool) {
+    )
+        external
+        view
+        onlyValidPool
+        returns (string memory, bytes memory, bool, bool)
+    {
+        bool pivotBlocked = checkPivotBlock(_poolAddress);
         return (
             currentPositionProtocol[_poolAddress],
             currentPositionMarketId[_poolAddress],
-            poolToPivotPending[_poolAddress]
+            poolToPivotPending[_poolAddress],
+            pivotBlocked
         );
     }
 
@@ -380,7 +380,8 @@ contract PoolCalculations is OwnableUpgradeable {
     /// @return Encoded data including protocol hash, market address, destination chain ID and BridgeReceiver address on the destination chain
     function createPivotExitMessage(
         address _destinationBridgeReceiver,
-        uint256 _proposalRewardUSDC
+        uint256 _proposalRewardUSDC,
+        address _asset
     ) external view returns (bytes memory) {
         address marketAddress = getMarketAddressFromId(
             targetPositionMarketId[msg.sender],
@@ -392,7 +393,8 @@ contract PoolCalculations is OwnableUpgradeable {
             targetPositionChain[msg.sender],
             _destinationBridgeReceiver,
             protocolFeePct,
-            _proposalRewardUSDC
+            _proposalRewardUSDC,
+            _asset
         );
         return data;
     }
@@ -423,24 +425,25 @@ contract PoolCalculations is OwnableUpgradeable {
     /// @notice Calculates the amount of pool tokens to mint for a deposit
     /// @dev On the first deposit of a pool, mint 10**x tokens
     /// @param _depositId Identifier for the deposit
-    /// @param _totalPoolPositionAmount Total amount of the pool's position post-deposit
+    /// @param _poolAddress Address of pool to calculate for
+    /// @param _poolToken Address of token used on pool for accounting purposes
     /// @return Number of pool tokens to mint and the address of the depositor
     function calculatePoolTokensToMint(
         bytes32 _depositId,
-        uint256 _totalPoolPositionAmount
+        address _poolAddress,
+        address _poolToken
     ) external view returns (uint256, address) {
         uint256 assetAmount = depositIdToDepositAmount[_depositId];
         address depositor = depositIdToDepositor[_depositId];
         uint256 poolTokensToMint;
-        if (_totalPoolPositionAmount == assetAmount) {
+        if (_poolToken == address(0)) {
             uint256 supplyFactor = (Math.log10(assetAmount));
             poolTokensToMint = 10 ** supplyFactor;
         } else {
+            IERC20 poolToken = IERC20(_poolToken);
             uint256 ratio = (assetAmount * (10 ** 18)) /
-                (_totalPoolPositionAmount - assetAmount);
-            poolTokensToMint =
-                (ratio * depositIdToPoolTokenSupply[_depositId]) /
-                (10 ** 18);
+                (currentRecordPositionValue[_poolAddress] - assetAmount);
+            poolTokensToMint = (ratio * poolToken.totalSupply()) / (10 ** 18);
         }
 
         return (poolTokensToMint, depositor);
@@ -506,7 +509,7 @@ contract PoolCalculations is OwnableUpgradeable {
         address _poolAddress
     ) external view returns (uint256, uint256, bool) {
         return (
-            poolDepositNonce[_poolAddress],
+            poolDepositOpenedNonce[_poolAddress],
             poolWithdrawNonce[_poolAddress],
             poolToPivotPending[_poolAddress]
         );

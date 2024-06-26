@@ -25,10 +25,10 @@ contract PoolControl {
     bytes32 public openAssertion = bytes32("");
     uint256 public currentPositionChain;
     uint256 public proposalRewardUSDC;
-    uint256 public rewardDebt;
     address public assertionSender;
 
     address public localBridgeReceiver;
+    bool pivotExitsFromPrevTarget;
     IBridgeLogic public localBridgeLogic;
     address public manager;
     IChaserRegistry public registry;
@@ -96,64 +96,6 @@ contract PoolControl {
         _;
     }
 
-    /// @notice Callback to process the initial position data from cross-chain or local transactions
-    /// @dev Decodes and updates the position state based on the data received; initializes the pool token if not already done
-    /// @param _data Encoded data containing position details including the market address and deposit amounts
-    function receivePositionInitialized(
-        bytes memory _data
-    ) external messageSource {
-        (
-            uint256 positionAmount,
-            uint256 depositAmountReceived,
-            address marketAddress,
-            bytes32 depositId
-        ) = abi.decode(_data, (uint256, uint256, address, bytes32));
-
-        poolCalculations.updateDepositReceived(
-            depositId,
-            positionAmount,
-            depositAmountReceived
-        );
-        _pivotCompleted(marketAddress, positionAmount);
-
-        if (poolToken == address(0)) {
-            poolToken = address(
-                new PoolToken(deployingUser, positionAmount, poolName)
-            );
-        }
-    }
-
-    /// @notice Initiates a withdrawal order for a user, handling local or cross-chain processes
-    /// @param _amount The amount the user wishes to withdraw, denominated in the pool's asset
-    /// @dev Creates withdrawal data and sends it to the appropriate bridge logic through CCIP
-    function userWithdrawOrder(uint256 _amount) external {
-        require(
-            IPoolToken(poolToken).balanceOf(msg.sender) > 0,
-            "User has no position"
-        );
-
-        bytes memory data = poolCalculations.createWithdrawOrder(
-            _amount,
-            poolToken,
-            msg.sender,
-            openAssertion
-        );
-
-        bytes4 method = bytes4(keccak256(abi.encode("AbWithdrawOrderUser")));
-
-        if (currentPositionChain == localChain) {
-            localBridgeLogic.userWithdrawSequence(address(this), data);
-        } else {
-            emit WithdrawCrossChain(msg.sender);
-            registry.sendMessage(
-                currentPositionChain,
-                method,
-                address(this),
-                data
-            );
-        }
-    }
-
     /// @notice Allows the deploying user to make an initial deposit and establish the first position of the pool
     /// @param _amount Amount of the asset to deposit
     /// @param _totalFee Total fee to cover cross-chain message relaying
@@ -172,11 +114,12 @@ contract PoolControl {
             "Only deploying user can set position and deposit"
         );
         require(
-            poolCalculations.poolDepositNonce(address(this)) == 0,
+            poolCalculations.poolDepositFinishedNonce(address(this)) == 0 &&
+                poolCalculations.checkPivotBlock(address(this)) == false,
             "The position may only be set before the first deposit has settled"
         );
 
-        (bytes32 depositId, ) = poolCalculations.createDepositOrder(
+        (bytes32 depositId, , ) = poolCalculations.createDepositOrder(
             msg.sender,
             poolToken,
             _amount,
@@ -216,13 +159,7 @@ contract PoolControl {
                 keccak256(abi.encode("AbBridgePositionInitializer"))
             );
             bytes memory message = abi.encode(method, address(this), data);
-            enterFundsCrossChain(
-                depositId,
-                _amount,
-                msg.sender,
-                _totalFee,
-                message
-            );
+            enterFundsCrossChain(_amount, msg.sender, _totalFee, message);
         }
     }
 
@@ -231,12 +168,20 @@ contract PoolControl {
     /// @param _totalFee Across Bridging fee calculated off chain to handle cross-chain transfers, set to 0 if local
     function userDeposit(uint256 _amount, uint256 _totalFee) external {
         require(
-            poolCalculations.poolDepositNonce(address(this)) > 0,
+            poolCalculations.poolDepositFinishedNonce(address(this)) > 0,
             "Deposits can only be made after the first deposit + position set has finished"
         );
 
-        (bytes32 depositId, uint256 withdrawNonce) = poolCalculations
-            .createDepositOrder(msg.sender, poolToken, _amount, openAssertion);
+        (
+            bytes32 depositId,
+            uint256 withdrawNonce,
+            uint256 depositNonce
+        ) = poolCalculations.createDepositOrder(
+                msg.sender,
+                poolToken,
+                _amount,
+                openAssertion
+            );
 
         if (currentPositionChain == localChain) {
             bool success = asset.transferFrom(
@@ -250,6 +195,7 @@ contract PoolControl {
                 address(this),
                 depositId,
                 withdrawNonce,
+                depositNonce,
                 _amount
             );
         } else {
@@ -260,27 +206,276 @@ contract PoolControl {
             bytes memory message = abi.encode(
                 method,
                 address(this),
-                abi.encode(depositId, withdrawNonce)
+                abi.encode(depositId, withdrawNonce, depositNonce)
             );
 
-            enterFundsCrossChain(
-                depositId,
-                _amount,
-                msg.sender,
-                _totalFee,
-                message
+            enterFundsCrossChain(_amount, msg.sender, _totalFee, message);
+        }
+    }
+
+    /// @notice Initiates a withdrawal order for a user, handling local or cross-chain processes
+    /// @param _amount The amount the user wishes to withdraw, denominated in the pool's asset
+    /// @dev Creates withdrawal data and sends it to the appropriate bridge logic through CCIP
+    function userWithdrawOrder(uint256 _amount) external {
+        require(
+            IPoolToken(poolToken).balanceOf(msg.sender) > 0,
+            "User has no position"
+        );
+
+        bytes memory data = poolCalculations.createWithdrawOrder(
+            _amount,
+            poolToken,
+            msg.sender,
+            openAssertion
+        );
+
+        bytes4 method = bytes4(keccak256(abi.encode("AbWithdrawOrderUser")));
+
+        if (currentPositionChain == localChain) {
+            localBridgeLogic.userWithdrawSequence(address(this), data);
+        } else {
+            emit WithdrawCrossChain(msg.sender);
+            registry.sendMessage(
+                currentPositionChain,
+                method,
+                address(this),
+                data
             );
         }
     }
 
+    /// @notice Proposes a pivot of the pool position to a new market by generating an UMA claim and opening an assertion through the arbitration contract
+    /// @param _requestProtocol The protocol for the new position
+    /// @param _requestMarketId Market identifier for the new position
+    /// @param _requestChainId Chain ID where the new position will be established
+    function queryMovePosition(
+        string memory _requestProtocol,
+        bytes memory _requestMarketId,
+        uint256 _requestChainId,
+        bool _fundsOnTargetChain
+    ) external {
+        (
+            string memory positionProtocol,
+            bytes memory positionMarketId,
+            uint256 positionChain
+        ) = positionLocationForQuery(_fundsOnTargetChain);
+        bytes memory claim = arbitrationContract.generateClaim(
+            _requestChainId,
+            _requestProtocol,
+            _requestMarketId,
+            positionChain,
+            positionProtocol,
+            positionMarketId
+        );
+        openAssertion = arbitrationContract.queryMovePosition(
+            msg.sender,
+            claim,
+            _requestMarketId,
+            _requestProtocol,
+            _requestChainId,
+            proposalRewardUSDC
+        );
+
+        assertionSender = msg.sender;
+    }
+
+    /// @notice Executes a change in the pool's position following a successful pivot proposal
+    /// @dev Only callable from the Abritration contract
+    /// @param _targetPositionMarketId Market ID of the new target position
+    /// @param _targetPositionProtocol Protocol of the new target position
+    /// @param _targetPositionChain Chain ID of the new target position
+    function sendPositionChange(
+        bytes memory _targetPositionMarketId,
+        string memory _targetPositionProtocol,
+        uint256 _targetPositionChain
+    ) external {
+        // IMPORTANT - THIS SHOULD REQUIRE MSG.SENDER TO BE THE ARBITRATION CONTRACT
+        openAssertion = bytes32("");
+        uint256 positionLocationChain = currentPositionChain;
+        if (pivotExitsFromPrevTarget) {
+            positionLocationChain = poolCalculations.targetPositionChain(
+                address(this)
+            );
+            pivotExitsFromPrevTarget = false;
+        }
+
+        poolCalculations.openSetPosition(
+            _targetPositionMarketId,
+            _targetPositionProtocol,
+            _targetPositionChain
+        );
+
+        uint256 pivotNonce = poolCalculations.poolPivotNonce(address(this));
+
+        emit ExecutePivot(positionLocationChain, pivotNonce);
+
+        address targetChainBridgeReceiver = registry.chainIdToBridgeReceiver(
+            _targetPositionChain
+        );
+
+        bytes memory pivotMessage = poolCalculations.createPivotExitMessage(
+            targetChainBridgeReceiver,
+            proposalRewardUSDC,
+            address(asset)
+        );
+
+        if (positionLocationChain == localChain) {
+            uint256 amount = asset.balanceOf(address(this));
+            if (amount > 0) {
+                bool success = asset.transfer(
+                    address(localBridgeLogic),
+                    amount
+                );
+                require(success, "Token transfer failure");
+            }
+
+            localBridgeLogic.executeExitPivot(address(this), pivotMessage);
+        } else {
+            // PIVOT CASE 2 currentPositionChain == _targetPositionChain
+            //PIVOT CASE 2: Send CCIP to current position chain. Executes exit pivot.
+            //If localChain, executes entrance and sends callback.
+            //Or bridges to manager chain and needs to separate fees.
+            //PIVOT CASE 2 needs exactly the same CCIP message as before. Only updates are upon receiving bridge, bridgeLogic getting position from poolCalc
+
+            //PIVOT CASE 3  currentPositionChain != _targetPositionChain AND NEITHER ARE MANAGER CHAIN
+            //Send CCIP to current position chain to exit position and bridge to different chain, send a bridge to manager chain for fees/rewards
+            // Needs data _targetPositionChain,targetChainBridgeReceiver,protocolFee,proposalRewardUSDC
+            //For case 3, must avoid exiting the position and instead . Then bridges to the correct chain
+            //Send CCIP to target position chain to call handleEnterPositionState
+            //passes targetPositionProtocolHash[msg.sender],marketAddress, asset
+
+            registry.sendMessage(
+                positionLocationChain,
+                bytes4(keccak256(abi.encode("AbPivotMovePosition"))),
+                address(this),
+                pivotMessage
+            );
+        }
+
+        if (
+            _targetPositionChain != localChain &&
+            _targetPositionChain != positionLocationChain
+        ) {
+            // PIVOT CASE 1 and 3 SENDS ADDITIONAL MESSAGE TO TARGET POSITION CHAIN TO SET POSITION
+            address marketAddress = poolCalculations.getMarketAddressFromId(
+                _targetPositionMarketId,
+                keccak256(abi.encode(_targetPositionProtocol))
+            );
+            registry.sendMessage(
+                _targetPositionChain,
+                bytes4(keccak256(abi.encode("AbPivotSetPosition"))),
+                address(this),
+                abi.encode(
+                    asset,
+                    keccak256(abi.encode(_targetPositionProtocol)),
+                    marketAddress,
+                    poolCalculations.poolDepositFinishedNonce(address(this)),
+                    poolCalculations.poolWithdrawNonce(address(this))
+                )
+            );
+        }
+        address rewardRecipient = msg.sender;
+        if (assertionSender != address(0)) {
+            rewardRecipient = assertionSender;
+        }
+        bool success = IERC20(registry.addressUSDC(localChain)).transfer(
+            rewardRecipient,
+            proposalRewardUSDC
+        );
+        require(success, "Reward transfer failed");
+    }
+
+    /// @notice Callback to process the initial position data from cross-chain or local transactions
+    /// @dev Decodes and updates the position state based on the data received; initializes the pool token if not already done
+    /// @param _data Encoded data containing position details including the market address and deposit amounts
+    function receivePositionInitialized(
+        bytes memory _data
+    ) external messageSource {
+        (
+            uint256 positionAmount,
+            uint256 depositAmountReceived,
+            address marketAddress,
+            bytes32 depositId
+        ) = abi.decode(_data, (uint256, uint256, address, bytes32));
+
+        poolCalculations.updateDepositReceived(
+            depositId,
+            positionAmount,
+            depositAmountReceived
+        );
+        _pivotCompleted(marketAddress, positionAmount);
+
+        if (poolToken == address(0)) {
+            poolToken = address(
+                new PoolToken(deployingUser, positionAmount, poolName)
+            );
+        }
+    }
+
+    /// @notice Finalizes the pivot process
+    /// @dev Called externally to execute _pivotCompleted
+    /// @param marketAddress Address of the market where the new position is held
+    /// @param positionAmount The amount involved in the new position
+    function pivotCompleted(
+        address marketAddress,
+        uint256 positionAmount
+    ) external messageSource {
+        _pivotCompleted(marketAddress, positionAmount);
+    }
+
+    /// @dev Internal helper function of common logic for completing a pivot
+    /// @param marketAddress Address of the market where the new position is held
+    /// @param positionAmount The amount involved in the new position
+    function _pivotCompleted(
+        address marketAddress,
+        uint256 positionAmount
+    ) internal {
+        currentPositionChain = poolCalculations.targetPositionChain(
+            address(this)
+        );
+        poolCalculations.pivotCompleted(marketAddress, positionAmount);
+    }
+
+    function setWithdrawReceived(
+        bytes32 _withdrawId,
+        uint256 _outputAmount
+    ) external {
+        address user = poolCalculations.setWithdrawReceived(
+            _withdrawId,
+            _outputAmount
+        );
+        bool success = IERC20(asset).transfer(user, _outputAmount);
+        require(success, "Token transfer failure");
+    }
+
+    /// @notice Updates the current position's valuation based on data received
+    /// @param _data Encoded data detailing the current position value and associated deposit ID
+    function receivePositionBalanceWithdraw(
+        bytes memory _data
+    ) external messageSource {
+        (
+            uint256 currentPositionBalance,
+            ,
+            uint256 totalAvailableForUser,
+            bytes32 withdrawId
+        ) = abi.decode(_data, (uint256, uint256, uint256, bytes32));
+
+        (address depositor, uint256 poolTokensToBurn) = poolCalculations
+            .fulfillWithdrawOrder(
+                withdrawId,
+                currentPositionBalance,
+                totalAvailableForUser
+            );
+
+        IPoolToken(poolToken).burn(depositor, poolTokensToBurn);
+    }
+
     /// @notice Manages the transfer of funds across chains for deposit or position initialization
-    /// @param _depositId Identifier for the deposit transaction
     /// @param _amount Amount of assets to be transferred
     /// @param _sender Address of the user making the transaction
     /// @param _feeTotal Total fee percentage for the cross-chain bridging paid to Across
     /// @param _message Encoded message details needed by BridgeLogic cross chain
     function enterFundsCrossChain(
-        bytes32 _depositId,
         uint256 _amount,
         address _sender,
         uint256 _feeTotal,
@@ -346,218 +541,40 @@ contract PoolControl {
         );
     }
 
-    /// @notice Proposes a pivot of the pool position to a new market by generating an UMA claim and opening an assertion through the arbitration contract
-    /// @param _requestProtocol The protocol for the new position
-    /// @param _requestMarketId Market identifier for the new position
-    /// @param _requestChainId Chain ID where the new position will be established
-    function queryMovePosition(
-        string memory _requestProtocol,
-        bytes memory _requestMarketId,
-        uint256 _requestChainId
-    ) external {
+    function positionLocationForQuery(
+        bool _fundsOnTargetChain
+    ) internal returns (string memory, bytes memory, uint256) {
         (
             string memory currentPositionProtocol,
             bytes memory currentPositionMarketId,
-            bool pivotPending
+            bool pivotPending,
+            bool pivotBlocked
         ) = poolCalculations.getCurrentPositionData(address(this));
+
         require(
-            !pivotPending,
+            !pivotBlocked,
             "Cannot propose new move while pivot is pending"
         );
-        bytes memory claim = arbitrationContract.generateClaim(
-            _requestChainId,
-            _requestProtocol,
-            _requestMarketId,
-            currentPositionChain,
-            currentPositionProtocol,
-            currentPositionMarketId
-        );
-        openAssertion = arbitrationContract.queryMovePosition(
-            msg.sender,
-            claim,
-            _requestMarketId,
-            _requestProtocol,
-            _requestChainId,
-            proposalRewardUSDC + rewardDebt
-        );
-        assertionSender = msg.sender;
-    }
-
-    /// @notice Executes a change in the pool's position following a successful pivot proposal
-    /// @dev Only callable from the Abritration contract
-    /// @param _targetPositionMarketId Market ID of the new target position
-    /// @param _targetPositionProtocol Protocol of the new target position
-    /// @param _targetPositionChain Chain ID of the new target position
-    function sendPositionChange(
-        bytes memory _targetPositionMarketId,
-        string memory _targetPositionProtocol,
-        uint256 _targetPositionChain
-    ) external {
-        // IMPORTANT - THIS SHOULD REQUIRE MSG.SENDER TO BE THE ARBITRATION CONTRACT
-        openAssertion = bytes32("");
-        uint256 currentPendingDeposits = poolCalculations.poolToPendingDeposits(
-            address(this)
-        );
-        uint256 currentPendingWithdraws = poolCalculations
-            .poolToPendingWithdraws(address(this));
-
-        require(
-            currentPendingDeposits == 0 && currentPendingWithdraws == 0,
-            "Transactions still pending on this pool, try to resolve the pivot again soon"
-        );
-
-        poolCalculations.openSetPosition(
-            _targetPositionMarketId,
-            _targetPositionProtocol,
-            _targetPositionChain
-        );
-
-        uint256 pivotNonce = poolCalculations.poolPivotNonce(address(this));
-
-        emit ExecutePivot(currentPositionChain, pivotNonce);
-
-        address targetChainBridgeReceiver = registry.chainIdToBridgeReceiver(
-            _targetPositionChain
-        );
-
-        bytes memory pivotMessage = poolCalculations.createPivotExitMessage(
-            targetChainBridgeReceiver,
-            proposalRewardUSDC
-        );
-
-        if (currentPositionChain == localChain) {
-            uint256 amount = asset.balanceOf(address(this));
-            if (amount > 0) {
-                bool success = asset.transfer(
-                    address(localBridgeLogic),
-                    amount
-                );
-                require(success, "Token transfer failure");
+        uint256 positionChain = currentPositionChain;
+        string memory positionProtocol = currentPositionProtocol;
+        bytes memory positionMarketId = currentPositionMarketId;
+        if (pivotPending == true) {
+            positionProtocol = "";
+            positionMarketId = abi.encode("");
+            positionChain = 0;
+            if (_fundsOnTargetChain) {
+                pivotExitsFromPrevTarget = true;
             }
-
-            localBridgeLogic.executeExitPivot(address(this), pivotMessage);
-        } else {
-            // PIVOT CASE 2 currentPositionChain == _targetPositionChain
-            //PIVOT CASE 2: Send CCIP to current position chain. Executes exit pivot.
-            //If localChain, executes entrance and sends callback.
-            //Or bridges to manager chain and needs to separate fees.
-            //PIVOT CASE 2 needs exactly the same CCIP message as before. Only updates are upon receiving bridge, bridgeLogic getting position from poolCalc
-
-            //PIVOT CASE 3  currentPositionChain != _targetPositionChain AND NEITHER ARE MANAGER CHAIN
-            //Send CCIP to current position chain to exit position and bridge to different chain, send a bridge to manager chain for fees/rewards
-            // Needs data _targetPositionChain,targetChainBridgeReceiver,protocolFee,proposalRewardUSDC
-            //For case 3, must avoid exiting the position and instead . Then bridges to the correct chain
-            //Send CCIP to target position chain to call handleEnterPositionState
-            //passes targetPositionProtocolHash[msg.sender],marketAddress, asset
-
-            registry.sendMessage(
-                currentPositionChain,
-                bytes4(keccak256(abi.encode("AbPivotMovePosition"))),
-                address(this),
-                pivotMessage
-            );
         }
 
-        if (
-            _targetPositionChain != localChain &&
-            _targetPositionChain != currentPositionChain
-        ) {
-            // PIVOT CASE 1 and 3 SENDS ADDITIONAL MESSAGE TO TARGET POSITION CHAIN TO SET POSITION
-            address marketAddress = poolCalculations.getMarketAddressFromId(
-                _targetPositionMarketId,
-                keccak256(abi.encode(_targetPositionProtocol))
-            );
-            registry.sendMessage(
-                _targetPositionChain,
-                bytes4(keccak256(abi.encode("AbPivotSetPosition"))),
-                address(this),
-                abi.encode(
-                    asset,
-                    keccak256(abi.encode(_targetPositionProtocol)),
-                    marketAddress
-                )
-            );
-        }
-        address rewardRecipient = msg.sender;
-        if (assertionSender != address(0)) {
-            rewardRecipient = assertionSender;
-        }
-        bool success = IERC20(registry.addressUSDC(localChain)).transfer(
-            rewardRecipient,
-            proposalRewardUSDC
-        );
-        require(success, "Reward transfer failed");
-    }
-
-    /// @notice Finalizes the pivot process
-    /// @dev Called externally to execute _pivotCompleted
-    /// @param marketAddress Address of the market where the new position is held
-    /// @param positionAmount The amount involved in the new position
-    function pivotCompleted(
-        address marketAddress,
-        uint256 positionAmount
-    ) external messageSource {
-        _pivotCompleted(marketAddress, positionAmount);
-    }
-
-    /// @dev Internal helper function of common logic for completing a pivot
-    /// @param marketAddress Address of the market where the new position is held
-    /// @param positionAmount The amount involved in the new position
-    function _pivotCompleted(
-        address marketAddress,
-        uint256 positionAmount
-    ) internal {
-        currentPositionChain = poolCalculations.targetPositionChain(
-            address(this)
-        );
-        poolCalculations.pivotCompleted(marketAddress, positionAmount);
-    }
-
-    /// @notice Reverts the initialization of a position in case of failures on the target chain
-    /// @param _depositId Identifier of the deposit associated with the position
-    /// @param _amount Amount of the asset to revert
-    function handleUndoPositionInitializer(
-        bytes32 _depositId,
-        uint256 _amount
-    ) external callerSource {
-        address originalSender = poolCalculations.undoPositionInitializer(
-            _depositId
-        );
-        bool success = asset.transferFrom(msg.sender, originalSender, _amount);
-        require(success, "Token transfer failure");
-    }
-
-    /// @notice Handles the undoing of a deposit operation in case of a failed transaction
-    /// @param _depositId Identifier of the failed deposit
-    /// @param _amount Amount of the deposit to revert
-    function handleUndoDeposit(
-        bytes32 _depositId,
-        uint256 _amount
-    ) external callerSource {
-        address originalSender = poolCalculations.undoDeposit(
-            _depositId,
-            _amount
-        );
-        bool success = asset.transferFrom(msg.sender, originalSender, _amount);
-        require(success, "Token transfer failure");
-    }
-
-    /// @notice Reverts a pivot operation, resetting the position to its original state before the pivot
-    /// @param _positionAmount Amount involved in the pivot to be reverted
-    function handleUndoPivot(uint256 _positionAmount) external callerSource {
-        currentPositionChain = localChain;
-        poolCalculations.undoPivot(_positionAmount);
+        return (positionProtocol, positionMarketId, positionChain);
     }
 
     /// @notice Mints pool tokens for a user based on their deposit and the current pool position value
     /// @param _depositId Identifier of the deposit for which tokens are minted
-    /// @param _poolPositionAmount Current value of the pool's position used to calculate the minting amount
-    function mintUserPoolTokens(
-        bytes32 _depositId,
-        uint256 _poolPositionAmount
-    ) internal {
+    function mintUserPoolTokens(bytes32 _depositId) internal {
         (uint256 poolTokensToMint, address depositor) = poolCalculations
-            .calculatePoolTokensToMint(_depositId, _poolPositionAmount);
+            .calculatePoolTokensToMint(_depositId, address(this), poolToken);
         IPoolToken(poolToken).mint(depositor, poolTokensToMint);
     }
 
@@ -567,15 +584,15 @@ contract PoolControl {
     function spokePoolPreparation(address _sender, uint256 _amount) internal {
         address acrossSpokePool = registry.chainIdToSpokePoolAddress(0);
         require(acrossSpokePool != address(0), "SPOKE ADDR");
-        uint256 senderAssetBalance = asset.balanceOf(_sender);
-        require(
-            senderAssetBalance >= _amount,
-            "Sender has insufficient asset balance"
+        uint256 poolAssetBalance = asset.balanceOf(address(this));
+        bool success = asset.transferFrom(
+            _sender,
+            address(this),
+            (_amount + poolAssetBalance)
         );
-        bool success = asset.transferFrom(_sender, address(this), _amount);
         require(success, "Token transfer failure");
 
-        asset.approve(acrossSpokePool, _amount);
+        asset.approve(acrossSpokePool, (_amount + poolAssetBalance));
     }
 
     /// @notice Updates the current position's valuation based on data received
@@ -595,47 +612,6 @@ contract PoolControl {
             currentPositionBalance,
             outputAmount
         );
-        mintUserPoolTokens(depositId, currentPositionBalance);
-    }
-
-    function setWithdrawReceived(
-        bytes32 _withdrawId,
-        uint256 _outputAmount
-    ) external {
-        address user = poolCalculations.setWithdrawReceived(
-            _withdrawId,
-            _outputAmount
-        );
-        bool success = IERC20(asset).transfer(user, _outputAmount);
-        require(success, "Token transfer failure");
-    }
-
-    /// @notice Updates the current position's valuation based on data received
-    /// @param _data Encoded data detailing the current position value and associated deposit ID
-    function receivePositionBalanceWithdraw(
-        bytes memory _data
-    ) external messageSource {
-        (
-            uint256 currentPositionBalance,
-            ,
-            uint256 totalAvailableForUser,
-            bytes32 withdrawId
-        ) = abi.decode(_data, (uint256, uint256, uint256, bytes32));
-
-        (address depositor, uint256 poolTokensToBurn) = poolCalculations
-            .fulfillWithdrawOrder(
-                withdrawId,
-                currentPositionBalance,
-                totalAvailableForUser
-            );
-
-        IPoolToken(poolToken).burn(depositor, poolTokensToBurn);
-    }
-    function setRewardDebt(uint256 _rewardDebtAmount) external {
-        require(
-            msg.sender == registry.treasuryAddress(),
-            "Only treasury may set reward debt"
-        );
-        rewardDebt = _rewardDebtAmount;
+        mintUserPoolTokens(depositId);
     }
 }

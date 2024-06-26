@@ -7,4 +7,6 @@ interface IChaserTreasury {
         address,
         address
     ) external;
+
+    function poolToRewardDebt(address) external view returns (uint256);
 }

@@ -51,6 +51,8 @@ contract Registry is OwnableUpgradeable {
 
     address public receiverAddress;
 
+    address public poolCalculationsAddress;
+
     address public integratorAddress;
 
     address public arbitrationContract; // The address of the arbitrationContract on the pool chain
@@ -293,6 +295,12 @@ contract Registry is OwnableUpgradeable {
         poolEnabled[_poolAddress] = false;
     }
 
+    function addPoolCalculationsAddress(
+        address _poolCalculationsAddress
+    ) external onlyOwner {
+        poolCalculationsAddress = _poolCalculationsAddress;
+    }
+
     function addBridgeReceiver(
         uint _chainId,
         address _receiver
@@ -339,17 +347,22 @@ contract Registry is OwnableUpgradeable {
         address _poolAddress,
         address _assetAddress
     ) external returns (address) {
+        if (poolAddressToBroker[_poolAddress] != address(0)) {
+            return poolAddressToBroker[_poolAddress];
+        }
         require(
-            poolAddressToBroker[_poolAddress] == address(0),
-            "Pool already has a broker on this chain"
-        );
-        require(
-            msg.sender == integratorAddress,
-            "Only the integrator may deploy a broker"
+            msg.sender == chainIdToBridgeReceiver[currentChainId] ||
+                msg.sender == integratorAddress ||
+                msg.sender == bridgeLogicAddress,
+            "Only the BridgeReceiver, BridgeLogic, or Integrator may deploy a broker"
         );
 
         PoolBroker poolBroker = new PoolBroker();
-        poolBroker.addConfig(_poolAddress, _assetAddress, integratorAddress);
+        poolBroker.addConfig(
+            _poolAddress,
+            integratorAddress,
+            bridgeLogicAddress
+        );
         poolAddressToBroker[_poolAddress] = address(poolBroker);
 
         return poolAddressToBroker[_poolAddress];

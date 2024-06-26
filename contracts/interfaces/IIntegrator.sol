@@ -17,4 +17,9 @@ interface IIntegrator {
         address,
         bytes32
     ) external view returns (uint256);
+
+    function marketIdAddressToTrueAddress(
+        bytes32,
+        address
+    ) external view returns (address);
 }

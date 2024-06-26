@@ -4,9 +4,7 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {PoolControl} from "./PoolControl.sol";
 import {IChaserRegistry} from "./interfaces/IChaserRegistry.sol";
 import {IArbitrationContract} from "./interfaces/IArbitrationContract.sol";
-import {ISwapRouter} from "./interfaces/ISwapRouter.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IPoolControl} from "./interfaces/IPoolControl.sol";
 
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
@@ -14,7 +12,6 @@ contract ChaserManager is OwnableUpgradeable {
     IChaserRegistry public registry;
 
     uint256 currentChainId;
-    address poolCalculationsAddress;
 
     event PoolCreated(address indexed poolAddress);
 
@@ -25,12 +22,6 @@ contract ChaserManager is OwnableUpgradeable {
 
     function addRegistry(address registryAddress) external onlyOwner {
         registry = IChaserRegistry(registryAddress);
-    }
-
-    function addPoolCalculationsAddress(
-        address _poolCalculationsAddress
-    ) external onlyOwner {
-        poolCalculationsAddress = _poolCalculationsAddress;
     }
 
     function createNewPool(
@@ -51,7 +42,7 @@ contract ChaserManager is OwnableUpgradeable {
             "Need to approve USDC for pre-depositing reward"
         );
         address arbitrationAddress = registry.arbitrationContract();
-
+        address poolCalculationsAddress = registry.poolCalculationsAddress();
         PoolControl pool = new PoolControl(
             msg.sender,
             poolAsset,

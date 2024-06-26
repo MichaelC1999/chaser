@@ -41,6 +41,7 @@ interface IChaserRegistry {
     function uniswapFactory(uint256) external view returns (address);
     function treasuryAddress() external view returns (address);
     function bridgeLogicAddress() external view returns (address);
+    function poolCalculationsAddress() external view returns (address);
     function receiverAddress() external view returns (address);
     function integratorAddress() external view returns (address);
     function arbitrationContract() external view returns (address);
