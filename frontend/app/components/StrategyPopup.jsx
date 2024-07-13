@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { hexToString, numberToHex, stringToBytes, zeroAddress } from 'viem';
 import contractAddresses from '../JSON/contractAddresses.json'
 import InvestmentStrategyABI from '../ABI/InvestmentStrategyABI.json'; // Adjust the path as needed
