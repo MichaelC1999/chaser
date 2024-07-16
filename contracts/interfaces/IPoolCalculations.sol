@@ -69,7 +69,7 @@ interface IPoolCalculations {
         address,
         address,
         bytes32
-    ) external returns (bytes memory);
+    ) external returns (bytes32, bytes memory);
 
     function fulfillWithdrawOrder(
         bytes32,

@@ -36,7 +36,9 @@ contract PoolControl {
     IArbitrationContract public arbitrationContract;
     IERC20 public asset;
 
-    event ExecutionMessage(string);
+    event DepositRecorded(address indexed, bytes32, uint256);
+    event WithdrawRecorded(address indexed, bytes32, uint256);
+
     event ExecutePivot(uint256, uint256);
     event DepositCrossChain(address);
     event WithdrawCrossChain(address);
@@ -126,6 +128,8 @@ contract PoolControl {
             openAssertion
         );
 
+        emit DepositRecorded(msg.sender, depositId, _amount);
+
         address targetMarketAddress = poolCalculations.openSetPosition(
             _targetPositionMarketId,
             _targetPositionProtocol,
@@ -183,6 +187,8 @@ contract PoolControl {
                 openAssertion
             );
 
+        emit DepositRecorded(msg.sender, depositId, _amount);
+
         if (currentPositionChain == localChain) {
             bool success = asset.transferFrom(
                 msg.sender,
@@ -222,12 +228,10 @@ contract PoolControl {
             "User has no position"
         );
 
-        bytes memory data = poolCalculations.createWithdrawOrder(
-            _amount,
-            poolToken,
-            msg.sender,
-            openAssertion
-        );
+        (bytes32 withdrawId, bytes memory data) = poolCalculations
+            .createWithdrawOrder(_amount, poolToken, msg.sender, openAssertion);
+
+        emit WithdrawRecorded(msg.sender, withdrawId, _amount);
 
         bytes4 method = bytes4(keccak256(abi.encode("AbWithdrawOrderUser")));
 

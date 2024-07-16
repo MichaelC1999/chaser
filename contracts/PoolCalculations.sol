@@ -48,8 +48,6 @@ contract PoolCalculations is OwnableUpgradeable {
     mapping(address => mapping(address => uint256))
         public poolToUserWithdrawTimeout;
 
-    event DepositRecorded(bytes32, uint256);
-    event WithdrawRecorded(bytes32, uint256);
     event HandleUndo(string);
 
     IChaserRegistry public registry;
@@ -103,7 +101,7 @@ contract PoolCalculations is OwnableUpgradeable {
         external
         onlyValidPool
         noPending(_sender, _openAssertion)
-        returns (bytes memory)
+        returns (bytes32, bytes memory)
     {
         require(
             poolToUserWithdrawTimeout[msg.sender][_sender] < block.timestamp,
@@ -124,7 +122,6 @@ contract PoolCalculations is OwnableUpgradeable {
         poolToPendingWithdraws[msg.sender] += 1;
         poolWithdrawNonce[msg.sender] += 1;
         withdrawIdToWithNonce[withdrawId] = poolWithdrawNonce[msg.sender];
-        emit WithdrawRecorded(withdrawId, _amount);
 
         uint256 scaledRatio = getScaledRatio(_poolToken, _sender);
 
@@ -135,7 +132,7 @@ contract PoolCalculations is OwnableUpgradeable {
             poolWithdrawNonce[msg.sender],
             scaledRatio
         );
-        return data;
+        return (withdrawId, data);
     }
 
     /// @notice Completes a withdrawal order, calculating pool tokens to burn
@@ -248,7 +245,6 @@ contract PoolCalculations is OwnableUpgradeable {
         poolDepositOpenedNonce[msg.sender] += 1;
         depositIdToDepoNonce[depositId] = poolDepositOpenedNonce[msg.sender];
 
-        emit DepositRecorded(depositId, _amount);
         return (
             depositId,
             poolWithdrawNonce[msg.sender],
