@@ -26,15 +26,6 @@ module.exports = {
       },
       accounts: { privateKey: process.env.WALLET_PK, balance: "1000000000000000000000" }
     },
-    goerli: {
-      url: "https://goerli.infura.io/v3/" + process.env.INFURA_API_KEY,
-      chainId: 5,
-      accounts: [process.env.WALLET_PK]
-    },
-    localhost: {
-      chainId: 31337,
-      allowUnlimitedContractSize: true
-    },
     sepolia: {
       url: "https://sepolia.infura.io/v3/" + process.env.INFURA_API_KEY,
       chainId: 11155111,
